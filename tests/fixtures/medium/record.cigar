@@ -1,0 +1,2 @@
+strength medium
+record Move { from: Path, to: Path }
