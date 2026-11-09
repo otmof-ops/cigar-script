@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="140" viewBox="0 0 600 140" role="img" aria-label="CigarScript: CigScript grown deeper, one strength at a time. A lit cigar with an orange band, ash and three wisps of smoke.">
+  <title>CigarScript</title>
+  <defs>
+    <!-- the family ember -->
+    <radialGradient id="ember" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff7ed"/>
+      <stop offset="45%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#ea580c" stop-opacity="0.9"/>
+    </radialGradient>
+    <!-- tobacco-leaf wrapper, lit from above -->
+    <linearGradient id="leaf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a0703d"/>
+      <stop offset="50%" stop-color="#85582c"/>
+      <stop offset="100%" stop-color="#5e3d1e"/>
+    </linearGradient>
+  </defs>
+  <!-- the mark, level with the wordmark -->
+  <g transform="translate(0 -16)">
+    <!-- the cigar body: thicker than a cigarette, same rounded-rect language -->
+    <rect x="24" y="86" width="190" height="32" rx="9" fill="url(#leaf)" stroke="#6b4423" stroke-width="1.5"/>
+    <!-- faint leaf veins -->
+    <g fill="none" stroke="#c89560" stroke-width="1.1" stroke-linecap="round" opacity="0.45">
+      <path d="M 84 92 C 100 98, 112 96, 130 102"/>
+      <path d="M 120 110 C 138 106, 152 108, 170 100"/>
+      <path d="M 150 91 C 164 95, 176 94, 196 98"/>
+      <path d="M 74 112 C 90 108, 98 110, 108 108"/>
+    </g>
+    <!-- the head: a slightly lighter cut cap -->
+    <rect x="24" y="86" width="12" height="32" rx="6" fill="#c8a25f" opacity="0.55"/>
+    <!-- the band: family orange, edged in filter tan -->
+    <rect x="48" y="86" width="22" height="32" fill="#f97316"/>
+    <rect x="48" y="86" width="22" height="32" fill="none" stroke="#d6b370" stroke-width="2.2"/>
+    <!-- the lit foot: ring of grey ash, then the ember -->
+    <rect x="206" y="88" width="20" height="28" rx="7" fill="#d1d5db"/>
+    <rect x="206" y="88" width="20" height="28" rx="7" fill="none" stroke="#9ca3af" stroke-width="1.2"/>
+    <g stroke="#9ca3af" stroke-width="1" opacity="0.7"><path d="M 212 92 L 212 112"/><path d="M 219 91 L 219 113"/></g>
+    <circle cx="228" cy="102" r="20" fill="#f97316" opacity="0.14"/>
+    <circle cx="228" cy="102" r="13" fill="url(#ember)"/>
+    <!-- three wisps of smoke -->
+    <g fill="none" stroke="#9ca3af" stroke-width="2.2" stroke-linecap="round" opacity="0.85">
+      <path d="M 228 80 C 218 70, 240 62, 228 52"/>
+      <path d="M 237 78 C 249 68, 227 62, 239 48"/>
+      <path d="M 220 82 C 210 74, 222 66, 216 56"/>
+    </g>
+  </g>
+  <!-- wordmark -->
+  <text x="268" y="86" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="38" font-weight="700" fill="#6b7280" letter-spacing="-1">Cigar<tspan fill="#f97316">Script</tspan></text>
+  <text x="270" y="114" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14" fill="#9ca3af">CigScript grown deeper, one strength at a time</text>
+</svg>

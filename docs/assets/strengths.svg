@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="440" viewBox="0 0 820 440" role="img" aria-label="Three strengths of CigarScript, drawn as cigars of rising ring gauge. Mild is CigScript as it is: every .cig file is mild, forever; it is built today. Medium adds types, records, enums, match and modules: designed, not built yet. Full adds ownership, concurrency and calls into Rust and C: designed, not built yet. Turning up is additive: raising a file's strength never breaks it. Turning down is checked: cigar check --strength mild names every feature above mild.">
+  <title>Three strengths, chosen per file</title>
+  <defs>
+    <radialGradient id="ember" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff7ed"/>
+      <stop offset="45%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#ea580c" stop-opacity="0.9"/>
+    </radialGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a0703d"/>
+      <stop offset="50%" stop-color="#85582c"/>
+      <stop offset="100%" stop-color="#5e3d1e"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .h { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 15px; font-weight: 700; fill: #f97316; }
+    .k { font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 12.5px; fill: #9ca3af; }
+    .d { font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13px; fill: #6b7280; }
+    .lab { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 20px; font-weight: 700; fill: #f97316; }
+    .code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 700; fill: #6b7280; }
+    .chip-t { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; font-weight: 700; }
+    .panel { fill: none; stroke: #d1d5db; stroke-width: 1.2; }
+  </style>
+  <text x="24" y="34" class="h">three strengths, chosen per file</text>
+  <text x="24" y="54" class="k">a file declares mild, medium or full; each strength adds to the one below it, and the ring gauge grows with it</text>
+
+  <!-- mild: built. A slim cigar, lit, with a ring of ash and one wisp of smoke -->
+  <g>
+    <rect x="24" y="121" width="178" height="18" rx="6" fill="url(#leaf)" stroke="#6b4423" stroke-width="1.2"/>
+    <path d="M 70 125 C 90 129, 104 127, 126 132" fill="none" stroke="#c89560" stroke-width="1" opacity="0.45"/>
+    <rect x="52" y="121" width="12" height="18" fill="#f97316" stroke="#d6b370" stroke-width="1.6"/>
+    <rect x="190" y="122" width="14" height="16" rx="5" fill="#d1d5db" stroke="#9ca3af" stroke-width="1"/>
+    <circle cx="206" cy="130" r="14" fill="#f97316" opacity="0.14"/>
+    <circle cx="206" cy="130" r="9" fill="url(#ember)"/>
+    <path d="M 206 114 C 198 106, 214 100, 206 92" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+    <path d="M 213 112 C 222 104, 206 98, 215 88" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+  </g>
+
+  <!-- medium: not built. Thicker, drawn unlit with a dashed outline -->
+  <g opacity="0.8">
+    <rect x="292" y="116" width="190" height="28" rx="9" fill="url(#leaf)" fill-opacity="0.5" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <rect x="322" y="116" width="16" height="28" fill="#f97316" fill-opacity="0.5" stroke="#d6b370" stroke-width="1.8" stroke-dasharray="4 3"/>
+  </g>
+
+  <!-- full: not built. Thickest, same dashed treatment -->
+  <g opacity="0.8">
+    <rect x="560" y="110" width="200" height="40" rx="12" fill="url(#leaf)" fill-opacity="0.5" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <rect x="594" y="110" width="20" height="40" fill="#f97316" fill-opacity="0.5" stroke="#d6b370" stroke-width="1.8" stroke-dasharray="4 3"/>
+  </g>
+
+  <!-- labels, chips and what each strength adds -->
+  <text x="24" y="196" class="lab">mild</text>
+  <rect x="82" y="181" width="84" height="20" rx="10" fill="#2ea44f"/>
+  <text x="124" y="195" text-anchor="middle" class="chip-t" fill="#ffffff">built today</text>
+  <text x="24" y="222" class="d">CigScript as it is.</text>
+  <text x="24" y="240" class="d">Every .cig file is mild, forever.</text>
+
+  <text x="292" y="196" class="lab">medium</text>
+  <rect x="368" y="181" width="104" height="20" rx="10" fill="none" stroke="#9ca3af" stroke-width="1.2"/>
+  <text x="420" y="195" text-anchor="middle" class="chip-t" fill="#6b7280">not built yet</text>
+  <text x="292" y="222" class="d">types, records, enums,</text>
+  <text x="292" y="240" class="d">match, modules.</text>
+  <text x="292" y="258" class="k">designed, not built yet</text>
+
+  <text x="560" y="196" class="lab">full</text>
+  <rect x="610" y="181" width="104" height="20" rx="10" fill="none" stroke="#9ca3af" stroke-width="1.2"/>
+  <text x="662" y="195" text-anchor="middle" class="chip-t" fill="#6b7280">not built yet</text>
+  <text x="560" y="222" class="d">ownership, concurrency,</text>
+  <text x="560" y="240" class="d">calls into Rust and C.</text>
+  <text x="560" y="258" class="k">designed, not built yet</text>
+
+  <!-- the two rules -->
+  <rect x="24" y="290" width="388" height="86" rx="10" class="panel"/>
+  <text x="42" y="316" class="h">turning up is additive</text>
+  <text x="42" y="340" class="d">Raising a file's strength never breaks it:</text>
+  <text x="42" y="358" class="d">mild to medium to full only adds features.</text>
+
+  <rect x="428" y="290" width="368" height="86" rx="10" class="panel"/>
+  <text x="446" y="316" class="h">turning down is checked</text>
+  <text x="446" y="340" class="code">cigar check --strength mild</text>
+  <text x="446" y="358" class="d">names every feature above mild.</text>
+
+  <text x="24" y="408" class="k">built today: strength declarations and the feature gate in cigar check. Medium and full features are named, not yet implemented.</text>
+</svg>

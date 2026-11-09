@@ -38,13 +38,17 @@ impl Kind {
 
 /// The outcome of a check: the effective strength, the source cigscript
 /// saw (the blanked source for a `.cigar` file, the original for a
-/// `.cig` file), and all the diagnostics.
+/// `.cig` file), the source as written, and all the diagnostics.
 pub struct Checked {
     pub kind: Kind,
     pub strength: Strength,
     /// What cigscript saw. Diagnostics with a span are measured against
     /// this: it has the same byte positions and lines as the input.
     pub source_as_cigscript_saw_it: String,
+    /// The file as written, for showing a diagnostic's line. Blanking keeps
+    /// every byte position, so a span points at the same place in both;
+    /// only this one shows the `strength` declaration as it is.
+    pub source_as_written: String,
     pub errors: Vec<Diagnostic>,
     pub warnings: Vec<Diagnostic>,
 }
@@ -74,6 +78,7 @@ fn check_cig(source: &str) -> Checked {
         kind: Kind::Cig,
         strength: Strength::Mild,
         source_as_cigscript_saw_it: source.to_string(),
+        source_as_written: source.to_string(),
         errors,
         warnings,
     }
@@ -89,6 +94,7 @@ fn check_cigar(source: &str, override_strength: Option<Strength>) -> Checked {
                 kind: Kind::Cigar,
                 strength: Strength::Mild,
                 source_as_cigscript_saw_it: source.to_string(),
+                source_as_written: source.to_string(),
                 errors: vec![d],
                 warnings: Vec::new(),
             };
@@ -112,6 +118,7 @@ fn check_cigar(source: &str, override_strength: Option<Strength>) -> Checked {
             kind: Kind::Cigar,
             strength: effective,
             source_as_cigscript_saw_it: decl.blanked,
+            source_as_written: source.to_string(),
             errors,
             warnings: Vec::new(),
         };
@@ -123,6 +130,7 @@ fn check_cigar(source: &str, override_strength: Option<Strength>) -> Checked {
         kind: Kind::Cigar,
         strength: effective,
         source_as_cigscript_saw_it: decl.blanked,
+        source_as_written: source.to_string(),
         errors,
         warnings,
     }

@@ -115,3 +115,42 @@ fn a_folder_checks_every_top_level_file() {
         .unwrap();
     assert_eq!(out.status.code(), Some(2));
 }
+
+/// A diagnostic shows its line as written: the `strength` declaration is
+/// blanked for the checker, never in what the reader sees.
+#[test]
+fn a_declaration_error_shows_the_line_as_written() {
+    let f = fixtures().join("declaration/spicy.cigar");
+    let out = Command::new(cigar_bin())
+        .args(["check", "--no-color"])
+        .arg(&f)
+        .output()
+        .unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("1 | strength spicy"), "{err}");
+}
+
+/// Usage errors carry cig's own codes, so `cig explain` says what they mean:
+/// E800 for a command line that names nothing to check, E801 for a path
+/// that cannot be read.
+#[test]
+fn usage_errors_carry_cigs_codes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let txt = tmp.path().join("a.txt");
+    std::fs::write(&txt, "x\n").unwrap();
+    let missing = tmp.path().join("nope.cigar");
+    for (path, code) in [(&txt, "E800"), (&missing, "E801")] {
+        let out = Command::new(cigar_bin())
+            .args(["--json", "check"])
+            .arg(path)
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(3), "{}", path.display());
+        let said = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(said.contains(&format!("\"code\":\"{code}\"")), "{said}");
+    }
+}
