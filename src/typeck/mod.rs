@@ -552,10 +552,10 @@ impl<'a> Ck<'a> {
         let ps: Vec<String> = s
             .params
             .iter()
-            .map(|p| {
-                p.ty.as_ref()
-                    .map(|t| t.to_string())
-                    .unwrap_or_else(|| "Any".into())
+            .map(|p| match &p.ty {
+                Some(t) => t.to_string(),
+                None if p.name == "self" => "self".into(),
+                None => "Any".into(),
             })
             .collect();
         format!(

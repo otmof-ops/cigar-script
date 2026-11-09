@@ -2970,7 +2970,13 @@ impl<'a> L<'a> {
                     format!(", {}", params.join(", "))
                 };
                 let mut body = String::new();
-                for imp in self.prog.impls.iter().filter(|i| i.interface == *iname) {
+                // Only the impls that define the method (one that does not
+                // is E1311, reported by the checker).
+                for imp in
+                    self.prog.impls.iter().filter(|i| {
+                        i.interface == *iname && i.methods.iter().any(|x| x.name == m.name)
+                    })
+                {
                     let f = impl_fn_name(iname, &imp.for_ty, &m.name);
                     let test = match &imp.for_ty {
                         Ty::Record(n, _) => format!("_cg_is_record(self, \"{n}\")"),

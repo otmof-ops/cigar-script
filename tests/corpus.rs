@@ -96,6 +96,16 @@ fn every_check_case_fails_first_with_its_error() {
         let mut lines = err.lines();
         let (code, part) = (lines.next().unwrap_or(""), lines.next().unwrap_or(""));
         let checked = check(&case);
+        // A file with a mistake in it is the user's: never cigar's own.
+        for d in &checked.errors {
+            if d.kind == cigscript::diagnostics::Kind::Internal {
+                wrong.push(format!(
+                    "{}: an internal error too: {}",
+                    shown(&case),
+                    d.message
+                ));
+            }
+        }
         match checked.errors.first() {
             Some(d) if d.code == code && d.message.contains(part) => {}
             Some(d) => wrong.push(format!(
