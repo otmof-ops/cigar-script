@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="820" height="440" viewBox="0 0 820 440" role="img" aria-label="Three strengths of CigarScript, drawn as cigars of rising ring gauge. Mild is CigScript as it is: every .cig file is mild, forever; it is built today. Medium adds types, records, enums, match and modules: designed, not built yet. Full adds ownership, concurrency and calls into Rust and C: designed, not built yet. Turning up is additive: raising a file's strength never breaks it. Turning down is checked: cigar check --strength mild names every feature above mild.">
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="440" viewBox="0 0 820 440" role="img" aria-label="Three strengths, each including the one below: mild is CigScript as it is, medium adds types, records, enums, match, modules and interfaces, and full adds ownership, parallel loops, channels, sized numbers and layered meanings. The burn rule holds at every strength. Mild and medium are built; full is built except calls into Rust and C, unchecked blocks and some within contexts.">
   <title>Three strengths, chosen per file</title>
   <defs>
     <radialGradient id="ember" cx="50%" cy="50%" r="50%">
@@ -36,38 +36,50 @@
     <path d="M 213 112 C 222 104, 206 98, 215 88" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
   </g>
 
-  <!-- medium: not built. Thicker, drawn unlit with a dashed outline -->
-  <g opacity="0.8">
-    <rect x="292" y="116" width="190" height="28" rx="9" fill="url(#leaf)" fill-opacity="0.5" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
-    <rect x="322" y="116" width="16" height="28" fill="#f97316" fill-opacity="0.5" stroke="#d6b370" stroke-width="1.8" stroke-dasharray="4 3"/>
+  <!-- medium: built. Thicker, lit -->
+  <g>
+    <rect x="292" y="116" width="182" height="28" rx="9" fill="url(#leaf)" stroke="#6b4423" stroke-width="1.2"/>
+    <path d="M 350 121 C 380 126, 404 123, 436 129" fill="none" stroke="#c89560" stroke-width="1" opacity="0.45"/>
+    <rect x="322" y="116" width="16" height="28" fill="#f97316" stroke="#d6b370" stroke-width="1.8"/>
+    <rect x="462" y="117.5" width="16" height="25" rx="7" fill="#d1d5db" stroke="#9ca3af" stroke-width="1"/>
+    <circle cx="481" cy="130" r="18" fill="#f97316" opacity="0.14"/>
+    <circle cx="481" cy="130" r="12" fill="url(#ember)"/>
+    <path d="M 481 109 C 473 101, 489 95, 481 87" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+    <path d="M 488 107 C 497 99, 481 93, 490 83" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
   </g>
 
-  <!-- full: not built. Thickest, same dashed treatment -->
-  <g opacity="0.8">
-    <rect x="560" y="110" width="200" height="40" rx="12" fill="url(#leaf)" fill-opacity="0.5" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
-    <rect x="594" y="110" width="20" height="40" fill="#f97316" fill-opacity="0.5" stroke="#d6b370" stroke-width="1.8" stroke-dasharray="4 3"/>
+  <!-- full: mostly built. Thickest, lit -->
+  <g>
+    <rect x="560" y="110" width="190" height="40" rx="12" fill="url(#leaf)" stroke="#6b4423" stroke-width="1.2"/>
+    <path d="M 630 117 C 664 123, 690 119, 724 126" fill="none" stroke="#c89560" stroke-width="1" opacity="0.45"/>
+    <rect x="594" y="110" width="20" height="40" fill="#f97316" stroke="#d6b370" stroke-width="1.8"/>
+    <rect x="738" y="112" width="18" height="36" rx="9" fill="#d1d5db" stroke="#9ca3af" stroke-width="1"/>
+    <circle cx="759" cy="130" r="23" fill="#f97316" opacity="0.14"/>
+    <circle cx="759" cy="130" r="16" fill="url(#ember)"/>
+    <path d="M 759 102 C 751 94, 767 88, 759 80" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+    <path d="M 766 100 C 775 92, 759 86, 768 76" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
   </g>
 
   <!-- labels, chips and what each strength adds -->
   <text x="24" y="196" class="lab">mild</text>
-  <rect x="82" y="181" width="84" height="20" rx="10" fill="#2ea44f"/>
-  <text x="124" y="195" text-anchor="middle" class="chip-t" fill="#ffffff">built today</text>
+  <rect x="82" y="181" width="56" height="20" rx="10" fill="#2ea44f"/>
+  <text x="110" y="195" text-anchor="middle" class="chip-t" fill="#ffffff">built</text>
   <text x="24" y="222" class="d">CigScript as it is.</text>
   <text x="24" y="240" class="d">Every .cig file is mild, forever.</text>
 
   <text x="292" y="196" class="lab">medium</text>
-  <rect x="368" y="181" width="104" height="20" rx="10" fill="none" stroke="#9ca3af" stroke-width="1.2"/>
-  <text x="420" y="195" text-anchor="middle" class="chip-t" fill="#6b7280">not built yet</text>
+  <rect x="368" y="181" width="56" height="20" rx="10" fill="#2ea44f"/>
+  <text x="396" y="195" text-anchor="middle" class="chip-t" fill="#ffffff">built</text>
   <text x="292" y="222" class="d">types, records, enums,</text>
-  <text x="292" y="240" class="d">match, modules.</text>
-  <text x="292" y="258" class="k">designed, not built yet</text>
+  <text x="292" y="240" class="d">match, modules, interfaces.</text>
+  <text x="292" y="258" class="k">checked and run by cigar</text>
 
   <text x="560" y="196" class="lab">full</text>
-  <rect x="610" y="181" width="104" height="20" rx="10" fill="none" stroke="#9ca3af" stroke-width="1.2"/>
-  <text x="662" y="195" text-anchor="middle" class="chip-t" fill="#6b7280">not built yet</text>
-  <text x="560" y="222" class="d">ownership, concurrency,</text>
-  <text x="560" y="240" class="d">calls into Rust and C.</text>
-  <text x="560" y="258" class="k">designed, not built yet</text>
+  <rect x="610" y="181" width="96" height="20" rx="10" fill="#f59e0b"/>
+  <text x="658" y="195" text-anchor="middle" class="chip-t" fill="#ffffff">mostly built</text>
+  <text x="560" y="222" class="d">ownership, parallel loops,</text>
+  <text x="560" y="240" class="d">channels, sized numbers, layers.</text>
+  <text x="560" y="258" class="k">foreign, unchecked: not built yet</text>
 
   <!-- the two rules -->
   <rect x="24" y="290" width="388" height="86" rx="10" class="panel"/>
@@ -80,5 +92,5 @@
   <text x="446" y="340" class="code">cigar check --strength mild</text>
   <text x="446" y="358" class="d">names every feature above mild.</text>
 
-  <text x="24" y="408" class="k">built today: strength declarations and the feature gate in cigar check. Medium and full features are named, not yet implemented.</text>
+  <text x="24" y="408" class="k">built today: all three strengths, checked and run by cigar. Not yet: calls into Rust and C, unchecked blocks, some within contexts.</text>
 </svg>

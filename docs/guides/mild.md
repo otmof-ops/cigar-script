@@ -122,18 +122,20 @@ chain release { fetch, build }
 
 ## Running it
 
-`cigar` has one command today, `cigar check`. It does not run a program.
-To run a mild program, save it as a `.cig` file (leave out the `strength`
-line, which a `.cig` file does not take) and use `cig`:
+`cigar run` checks a file and then runs it, with every `burn` journaled and
+rolled back if the script fails. Everything after `--` is the script's `args`:
 
 ```sh
-cig run --dry-run tidy.cig -- ~/Downloads     # the plan; nothing changes
-cig run tidy.cig -- ~/Downloads               # for real, every move journaled
-cig unburn <run-id>                           # changed your mind
+cigar run --dry-run tidy.cigar -- ~/Downloads     # the plan; nothing changes
+cigar run tidy.cigar -- ~/Downloads               # for real, every move journaled
+cig unburn <run-id>                               # changed your mind
 ```
 
-Compiling a `.cigar` file to a program is [CigCompile's](https://github.com/otmof-ops/cig-compile)
-job, and it is not built yet; see the [roadmap](../roadmap.md).
+The run is `cig run`'s: plans, journals, rollback and run records are cig's, and
+`cig runs` lists them. A `.cig` file runs the same way (`cigar run tidy.cig`),
+or under `cig` directly. Compiling a `.cigar` file to a program is
+[CigCompile's](https://github.com/otmof-ops/cig-compile) job, and it is not
+built yet; see the [roadmap](../roadmap.md).
 
 ## Where mild stops
 
@@ -178,8 +180,7 @@ is not affected; it keeps every name it has. The
 
 ## Next
 
-- [Medium](medium.md): types and records, and what `cigar check` says about
-  them today.
-- [Commands](../commands.md): `cigar check` and every flag.
+- [Medium](medium.md): types, records, enums, `match` and modules.
+- [Commands](../commands.md): `cigar check`, `cigar run` and every flag.
 - [The language](../LANGUAGE.md): the strengths, the feature table and the
   grammar.
