@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
+// SPDX-License-Identifier: Apache-2.0
 //! Fixture tests for issue #7's stated feature table.
 
 mod common;

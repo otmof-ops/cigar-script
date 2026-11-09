@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
+// SPDX-License-Identifier: Apache-2.0
 //! The feature table, generated at build time from docs/LANGUAGE.md.
 
 use std::fmt;

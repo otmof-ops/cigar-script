@@ -1,4 +1,6 @@
 #!/usr/bin/env sh
+# SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
+# SPDX-License-Identifier: Apache-2.0
 # Generate the 1,000-line mild fixture, plus one with a `strength
 # medium` declaration and one with `strength full`. The content is
 # plain CigScript (mild CigarScript): a thousand sticks numbered in

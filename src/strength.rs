@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
+// SPDX-License-Identifier: Apache-2.0
 //! Reading a `.cigar` file's `strength` declaration.
 //!
 //! The declaration is the first statement of the file: the identifier

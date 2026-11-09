@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
+// SPDX-License-Identifier: Apache-2.0
 //! Shared helpers for the integration tests.
 
 #![allow(dead_code)]
@@ -73,7 +75,7 @@ pub fn cigscript_corpus(root: &std::path::Path) -> Vec<std::path::PathBuf> {
 pub fn cigscript_src() -> Option<std::path::PathBuf> {
     let p = std::env::var_os("CIGSCRIPT_SRC")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| std::path::PathBuf::from("/home/jay/CigScript"));
+        .unwrap_or_else(|| std::path::PathBuf::from("../cig-script"));
     if p.is_dir() {
         Some(p)
     } else {

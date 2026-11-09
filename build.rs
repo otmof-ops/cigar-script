@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
+// SPDX-License-Identifier: Apache-2.0
 // The checker's feature table is the docs table. Parse the rows between
 // <!-- features:begin --> and <!-- features:end --> in docs/LANGUAGE.md
 // into a generated Rust table, written to $OUT_DIR/features.rs.

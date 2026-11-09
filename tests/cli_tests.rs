@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
+// SPDX-License-Identifier: Apache-2.0
 //! CLI smoke tests: exit codes and a `--json` shape check.
 
 use std::process::Command;

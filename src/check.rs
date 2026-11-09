@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
+// SPDX-License-Identifier: Apache-2.0
 //! Checking one file: the pipeline cigscript's `check` sits inside.
 //!
 //! A `.cig` file goes straight to cigscript's parse + check. A `.cigar`

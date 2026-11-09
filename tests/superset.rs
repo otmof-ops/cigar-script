@@ -1,7 +1,9 @@
+// SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
+// SPDX-License-Identifier: Apache-2.0
 //! Every CigScript script is mild CigarScript (issue #1, the superset).
 //!
 //! These tests look for the CigScript source checkout at
-//! `CIGSCRIPT_SRC` (default `/home/jay/CigScript`) and skip, printing a
+//! `CIGSCRIPT_SRC` (default `../cig-script`) and skip, printing a
 //! note, when it is missing.
 
 mod common;
