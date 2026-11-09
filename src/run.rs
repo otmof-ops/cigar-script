@@ -294,27 +294,54 @@ fn built(program: &Program) -> io::Result<PathBuf> {
     // The script's hash, and which cigar built it.
     let key = format!("{}-{:x}-{:x}", &program.sha256[..16], meta.len(), stamp);
     let dir = cache_dir();
-    fs::create_dir_all(&dir)?;
+    private_dir(&dir)?;
     let path = dir.join(format!(
         "{}-{key}{}",
         program.name,
         std::env::consts::EXE_SUFFIX
     ));
-    if path.is_file() {
+    if fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
         return Ok(path);
     }
     let runtime = fs::read(&me)?;
     let bytes = cigscript::program::append(&runtime, program);
     let tmp = dir.join(format!(".{}-{key}.{}", program.name, std::process::id()));
-    fs::write(&tmp, bytes)?;
+    // A new file, never one already there (nor what a link there points at).
+    let mut open = fs::OpenOptions::new();
+    open.write(true).create_new(true);
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755))?;
+        use std::os::unix::fs::OpenOptionsExt;
+        open.mode(0o700);
     }
+    let mut f = open.open(&tmp)?;
+    f.write_all(&bytes)?;
+    drop(f);
     fs::rename(&tmp, &path)?;
     prune(&dir, &path);
     Ok(path)
+}
+
+/// The folder built programs are kept in, made if need be: a real folder
+/// only its owner can write to, so nothing else can put a program there for
+/// cigar to start.
+fn private_dir(dir: &Path) -> io::Result<()> {
+    fs::create_dir_all(dir)?;
+    let m = fs::symlink_metadata(dir)?;
+    if !m.is_dir() {
+        return Err(io::Error::other(format!(
+            "{} is not a folder",
+            dir.display()
+        )));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // Only its owner can change its mode: this fails on a folder that
+        // is someone else's.
+        fs::set_permissions(dir, fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(())
 }
 
 /// Keep the newest built programs, and the one about to run.
