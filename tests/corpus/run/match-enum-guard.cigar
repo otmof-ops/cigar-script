@@ -1,0 +1,14 @@
+strength medium
+
+enum Status { ok, failed(reason: Text), skipped }
+
+pull label(s: Status) -> Text {
+  match s {
+    failed(reason) if reason != "" => snuff "failed: ${reason}"
+    failed(_) => snuff "failed"
+    ok => snuff "ok"
+    skipped => snuff "skipped"
+  }
+}
+
+exhale label(Status.failed("x")), label(Status.failed("")), label(Status.ok), label(Status.skipped)

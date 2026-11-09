@@ -1,0 +1,4 @@
+Task { id: 1, status: Status.failed(reason: "x") }
+[Task { id: 1, status: Status.failed(reason: "x") }]
+Task { id: 1, status: Status.failed(reason: "x") } and Status.ok
+Status.ok

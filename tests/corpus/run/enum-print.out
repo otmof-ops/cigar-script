@@ -1,0 +1,5 @@
+Status.ok
+Status.failed(reason: "disk full")
+Status.failed(reason: "x")
+[Status.ok, Status.failed(reason: "disk full")]
+true false

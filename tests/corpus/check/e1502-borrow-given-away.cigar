@@ -1,0 +1,8 @@
+strength full
+
+pull consume(owned xs: List<Int>) -> Int { snuff xs.len() }
+
+pull peek(borrow xs: List<Int>) -> Int {
+  snuff consume(xs)
+}
+exhale peek([1])

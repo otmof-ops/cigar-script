@@ -48,23 +48,26 @@ right strength gets `E1102` (*not built yet*) instead of a result.
 <!-- features:begin -->
 | feature | strength | detect | issue | built |
 |---|---|---|---|---|
-| type annotations | medium | annotation | #8 | no |
-| typed coughs | medium | word:coughs | #8 | no |
-| records | medium | word:record | #9 | no |
-| enums | medium | word:enum | #9 | no |
-| pattern matching | medium | word:match | #9 | no |
-| modules | medium | word:use | #10 | no |
-| interfaces | medium | word:interface | #10 | no |
-| `into` on built-in types | medium | word:into | #13 | no |
-| `measure` on built-in types | medium | word:measure | #13 | no |
-| owned values | full | word:owned | #12 | no |
-| borrows | full | word:borrow | #12 | no |
-| moves | full | word:move | #12 | no |
-| parallel loops | full | word:parallel | #12 | no |
-| channels | full | word:channel | #12 | no |
-| context blocks | full | word:within | #13 | no |
-| calls into Rust and C | full | word:foreign | #5 | no |
-| new layers | full | word:layer | #13 | no |
+| type annotations | medium | annotation | #8 | yes |
+| typed coughs | medium | word:coughs | #8 | yes |
+| records | medium | word:record | #9 | yes |
+| enums | medium | word:enum | #9 | yes |
+| pattern matching | medium | word:match | #9 | yes |
+| modules | medium | word:use | #10 | yes |
+| exports | medium | word:pub | #10 | yes |
+| interfaces | medium | word:interface | #10 | yes |
+| implementations | medium | word:impl | #10 | yes |
+| `into` on built-in types | medium | word:into | #13 | yes |
+| `measure` on built-in types | medium | word:measure | #13 | yes |
+| owned values | full | word:owned | #12 | yes |
+| borrows | full | word:borrow | #12 | yes |
+| moves | full | word:move | #12 | yes |
+| parallel loops | full | word:parallel | #12 | yes |
+| channels | full | word:channel | #12 | yes |
+| unchecked blocks | full | word:unchecked | #12 | no |
+| context blocks | full | word:within | #13 | yes |
+| calls into Rust and C (`foreign`) | full | word:foreign | #5 | no |
+| new layers | full | word:layer | #13 | yes |
 <!-- features:end -->
 
 Everything CigScript has is mild: `stick`, `roll`, `pull`, `burn`,

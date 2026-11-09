@@ -1,0 +1,10 @@
+strength medium
+
+enum Status { ok, failed(reason: Text) }
+record Task { id: Int, status: Status }
+
+stick t = Task { id: 1, status: Status.failed("x") }
+exhale t
+exhale [t]
+exhale "${t} and ${Status.ok}"
+exhale str(Status.ok)

@@ -1,0 +1,4 @@
+{"from":"a","to":"b"}
+[{"from":"a","to":"b"},{"from":"a","to":"b"}]
+{"id":1,"step":{"from":"a","to":"b"}}
+Job { id: 1, step: Move { from: "a", to: "b" } }

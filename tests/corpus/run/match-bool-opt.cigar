@@ -1,0 +1,17 @@
+strength medium
+
+pull yn(b: Bool) -> Text {
+  match b {
+    true => snuff "yes"
+    false => snuff "no"
+  }
+}
+
+pull orv(x: Int?) -> Int {
+  match x {
+    null => snuff 0
+    v => snuff v
+  }
+}
+
+exhale yn(true), yn(false), orv(null), orv(5)

@@ -1,0 +1,4 @@
+strength medium
+
+stick xs: List<Text> = [1, 2]
+exhale xs

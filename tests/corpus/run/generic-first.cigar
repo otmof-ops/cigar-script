@@ -1,0 +1,13 @@
+strength medium
+
+pull first<T>(xs: List<T>) -> T? {
+  if xs.len() == 0 { snuff null }
+  snuff xs[0]
+}
+
+pull identity<T>(x: T) -> T { snuff x }
+
+exhale first([1, 2, 3]) ?? 0
+exhale first([]) ?? 0
+exhale first(["a"]) ?? "none"
+exhale identity(5), identity("s")

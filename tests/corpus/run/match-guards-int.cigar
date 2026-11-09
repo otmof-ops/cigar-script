@@ -1,0 +1,12 @@
+strength medium
+
+pull grade(n: Int) -> Text {
+  match n {
+    0 => snuff "zero"
+    x if x < 0 => snuff "negative"
+    x if x < 10 => snuff "small"
+    _ => snuff "big"
+  }
+}
+
+exhale grade(0), grade(-5), grade(7), grade(70)

@@ -32,16 +32,23 @@ fn record_in_mild_is_e1101_with_the_hint() {
 }
 
 #[test]
-fn record_in_medium_is_e1102_naming_issue_9() {
+fn record_in_medium_checks() {
     let source = read("tests/fixtures/medium/record.cigar");
+    let checked = as_cigar(&source, None);
+    assert!(checked.ok(), "errors: {:?}", checked.errors);
+}
+
+#[test]
+fn foreign_in_full_is_e1102_naming_issue_5() {
+    let source = read("tests/fixtures/full/foreign.cigar");
     let checked = as_cigar(&source, None);
     let d = checked
         .errors
         .iter()
         .find(|d| d.code == "E1102")
         .expect("expected E1102");
-    assert!(d.message.contains("records"), "message: {}", d.message);
-    assert!(d.message.contains("#9"), "message: {}", d.message);
+    assert!(d.message.contains("foreign"), "message: {}", d.message);
+    assert!(d.message.contains("#5"), "message: {}", d.message);
 }
 
 #[test]

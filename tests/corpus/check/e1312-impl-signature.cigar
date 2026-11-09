@@ -1,0 +1,11 @@
+strength medium
+
+interface Sized {
+  pull size(self) -> Int
+}
+
+record Move { from: Path, to: Path }
+
+impl Sized for Move {
+  pull size(self) -> Text { snuff "two" }
+}

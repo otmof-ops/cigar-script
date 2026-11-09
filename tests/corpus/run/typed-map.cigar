@@ -1,0 +1,7 @@
+strength medium
+
+stick m: Map<Int> = {a: 1, b: 2}
+exhale m.get("a", 0) + m.get("b", 0)
+for k in m {
+  exhale k
+}

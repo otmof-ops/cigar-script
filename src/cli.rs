@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use cigscript::cli::Ctx;
 use cigscript::diagnostics::{usage, Diagnostic};
 
-use crate::check::{check_source, Checked, Kind as FileKind};
+use crate::check::{check_file_source, Checked, Kind as FileKind};
 use crate::features::Strength;
 
 /// Exit codes, matching `cigcompile build`'s check path (otmof-ops/cig-compile).
@@ -124,7 +124,7 @@ fn check_file(ctx: &Ctx, path: &Path, strength: Option<Strength>) -> FileOutcome
     } else {
         strength
     };
-    let checked: Checked = check_source(kind, &source, effective);
+    let checked: Checked = check_file_source(kind, &source, effective, Some(path));
     let name = path.to_string_lossy().to_string();
     report_checked(ctx, &name, &checked);
     if checked.ok() {
@@ -134,7 +134,7 @@ fn check_file(ctx: &Ctx, path: &Path, strength: Option<Strength>) -> FileOutcome
     }
 }
 
-fn report_checked(ctx: &Ctx, name: &str, checked: &Checked) {
+pub fn report_checked(ctx: &Ctx, name: &str, checked: &Checked) {
     if ctx.json {
         // One diagnostic per line, each carrying the file. Matches the
         // shape cig's reports emit.

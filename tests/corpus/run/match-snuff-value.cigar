@@ -1,0 +1,9 @@
+strength medium
+
+enum Status { ok, failed(reason: Text), skipped }
+
+pull code(s: Status) -> Int {
+  snuff match s { ok => 0, failed(r) => 1, skipped => 2 }
+}
+
+exhale code(Status.ok), code(Status.failed("x")), code(Status.skipped)

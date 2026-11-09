@@ -1,0 +1,15 @@
+strength medium
+
+enum Status { ok, failed(reason: Text), skipped }
+
+pull describe(s: Status) -> Text {
+  match s {
+    ok => snuff "fine"
+    failed(reason) => snuff reason
+    skipped => snuff "skipped"
+  }
+}
+
+for s in [Status.ok, Status.failed("disk full"), Status.skipped] {
+  exhale describe(s)
+}

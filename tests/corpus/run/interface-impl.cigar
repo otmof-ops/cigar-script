@@ -1,0 +1,20 @@
+strength medium
+
+interface Sized {
+  pull size(self) -> Int
+}
+
+record Move { from: Path, to: Path }
+
+impl Sized for Move {
+  pull size(self) -> Int { snuff 2 }
+}
+
+impl Sized for Int {
+  pull size(self) -> Int { snuff self }
+}
+
+stick m = Move { from: "a", to: "b" }
+stick n = 7
+exhale m.size()
+exhale n.size()

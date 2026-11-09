@@ -1,0 +1,10 @@
+strength full
+
+pull total(owned xs: List<Int>) -> Int { snuff xs.sum() }
+pull peek(borrow xs: List<Int>) -> Int { snuff xs.len() }
+
+stick data = [1, 2, 3]
+exhale peek(data)
+exhale peek(data)
+stick moved = move data
+exhale total(moved)

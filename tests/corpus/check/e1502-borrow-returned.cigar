@@ -1,0 +1,6 @@
+strength full
+
+pull keep(borrow xs: List<Int>) -> List<Int> {
+  snuff xs
+}
+exhale keep([1])

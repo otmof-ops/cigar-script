@@ -1,0 +1,12 @@
+strength medium
+
+enum Status { ok, failed(reason: Text), skipped }
+
+stick a = Status.ok
+stick b = Status.failed("disk full")
+stick c = Status.failed(reason: "x")
+exhale a
+exhale b
+exhale c
+exhale [a, b]
+exhale a == Status.ok, a == b

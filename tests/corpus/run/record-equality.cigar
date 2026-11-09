@@ -1,0 +1,10 @@
+strength medium
+
+record Point { x: Int, y: Int }
+
+stick a = Point { x: 1, y: 2 }
+stick b = Point { x: 1, y: 2 }
+stick c = Point { x: 2, y: 1 }
+stick d = Point { y: 2, x: 1 }
+exhale a == b, a == c, a != c
+exhale d == a, d

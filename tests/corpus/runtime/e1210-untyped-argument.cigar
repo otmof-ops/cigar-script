@@ -1,0 +1,6 @@
+strength medium
+
+pull double(n: Int) -> Int { snuff n * 2 }
+
+stick v = json.parse('"x"')
+exhale double(v)

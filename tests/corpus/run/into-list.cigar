@@ -1,0 +1,6 @@
+strength medium
+
+roll seen = []
+1 into seen
+"x" into seen
+exhale seen

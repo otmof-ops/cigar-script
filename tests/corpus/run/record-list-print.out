@@ -1,0 +1,5 @@
+[Move { from: "a", to: "b" }, Move { from: "c", to: "d" }]
+2
+a -> b
+c -> d
+Move { from: "a", to: "b" }

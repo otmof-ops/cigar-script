@@ -12,7 +12,6 @@
 //! spans and line numbers stay exact.
 
 use cigscript::diagnostics::{Diagnostic, Kind};
-use cigscript::syntax::lexer::tokenize;
 use cigscript::syntax::span::Span;
 use cigscript::syntax::token::{Token, TokenKind};
 
@@ -33,7 +32,8 @@ pub struct Declaration {
 /// Read a `.cigar` file's declaration.
 #[allow(clippy::result_large_err)]
 pub fn read(source: &str) -> Result<Declaration, Diagnostic> {
-    let tokens = tokenize(source)?;
+    // A lone `?` (as in `Int?`) is CigarScript's, not cig's: read past it.
+    let (_, tokens, _) = crate::lower::mask(source)?;
     Ok(scan(source, &tokens))
 }
 

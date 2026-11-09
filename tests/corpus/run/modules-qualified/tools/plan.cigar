@@ -1,0 +1,12 @@
+strength medium
+# A module: not run on its own.
+
+pub stick limit = 3
+
+pub pull double(n: Int) -> Int {
+  snuff n * 2
+}
+
+pull private_helper() -> Int {
+  snuff 0
+}

@@ -1,0 +1,8 @@
+strength medium
+
+pull f(b: Bool) -> Int {
+  match b {
+    true => snuff 1
+  }
+}
+exhale f(true)

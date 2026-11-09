@@ -1,0 +1,12 @@
+strength medium
+
+pull word(v) {
+  match v {
+    "a" => snuff 1
+    true => snuff 2
+    null => snuff 3
+    _ => snuff 0
+  }
+}
+
+exhale word("a"), word(true), word(null), word("z")

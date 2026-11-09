@@ -1,0 +1,9 @@
+strength medium
+# RUN THIS FILE (run/modules-two-file/main.cigar); tools/plan.cigar is its module.
+
+use tools.plan.{Move, plan_moves}
+
+for m in plan_moves(["a.txt", "b.txt"]) {
+  exhale m
+}
+exhale plan_moves([]).len()

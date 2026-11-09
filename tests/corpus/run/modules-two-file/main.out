@@ -1,0 +1,3 @@
+Move { from: "a.txt", to: "out/a.txt" }
+Move { from: "b.txt", to: "out/b.txt" }
+0

@@ -1,0 +1,4 @@
+strength medium
+
+stick x: Int = null
+exhale x

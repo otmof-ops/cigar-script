@@ -1,0 +1,13 @@
+strength medium
+
+record Move { from: Text, to: Text }
+
+pull move_cost(m: Move) -> Int {
+  snuff m.from.len() + m.to.len()
+}
+
+measure for Move = move_cost
+
+stick m = Move { from: "ab", to: "cde" }
+exhale measure m
+exhale measure [m, m]
