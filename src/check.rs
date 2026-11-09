@@ -114,6 +114,9 @@ fn check_cigar(source: &str, override_strength: Option<Strength>) -> Checked {
     }
 
     if !errors.is_empty() {
+        // One list in the order the findings sit in the file: a late
+        // declaration's E1103 among the features it came after.
+        errors.sort_by_key(|d| (d.line.unwrap_or(0), d.col.unwrap_or(0)));
         return Checked {
             kind: Kind::Cigar,
             strength: effective,

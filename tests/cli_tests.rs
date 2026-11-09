@@ -71,6 +71,41 @@ fn unknown_strength_exits_three() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(3));
+    // A usage error like the others: E800, and one JSON object under --json.
+    let json = Command::new(cigar_bin())
+        .args(["--json", "check", "--strength", "spicy"])
+        .arg(&f)
+        .output()
+        .unwrap();
+    assert_eq!(json.status.code(), Some(3));
+    let said = String::from_utf8_lossy(&json.stdout);
+    let v: serde_json::Value = serde_json::from_str(said.trim()).expect("one JSON object");
+    assert_eq!(v["code"], "E800", "{said}");
+}
+
+/// Findings come in the order they sit in the file, a late declaration's
+/// E1103 among the features above it.
+#[test]
+fn findings_come_in_file_order() {
+    let tmp = tempfile::tempdir().unwrap();
+    let f = tmp.path().join("late.cigar");
+    std::fs::write(&f, "record A { x: Int }\nstick b = 1\nstrength medium\n").unwrap();
+    let out = Command::new(cigar_bin())
+        .args(["--json", "check"])
+        .arg(&f)
+        .output()
+        .unwrap();
+    let codes: Vec<String> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .map(|v| format!("{}@{}", v["code"].as_str().unwrap_or(""), v["line"]))
+        .collect();
+    assert_eq!(
+        codes.first().map(String::as_str),
+        Some("E1101@1"),
+        "{codes:?}"
+    );
+    assert!(codes.iter().any(|c| c == "E1103@3"), "{codes:?}");
 }
 
 #[test]

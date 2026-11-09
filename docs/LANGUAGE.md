@@ -88,9 +88,14 @@ explain E1101` has a page; until then the message carries the whole
 explanation.
 
 ```
+Don't see any cigarettes.
 error[E1101 check]: using records needs strength medium; this file is mild
-  --> plan.cigar:3:1
+  --> moves.cigar:3:1
+  |
+3 | record Move {
+  | ^^^^^^
   = hint: to use it, put `strength medium` at the top of the file
+  = explain: cig explain E1101
 ```
 
 ## Grammar

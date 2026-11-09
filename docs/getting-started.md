@@ -81,8 +81,8 @@ what to do.
 A feature the file's strength does not allow. This file is mild and uses a
 record:
 
+<!-- expect: E1101 -->
 ```cigar
-# expect: E1101
 strength mild
 
 record Move {
@@ -95,25 +95,23 @@ record Move {
 $ cigar check moves.cigar
 Don't see any cigarettes.
 error[E1101 check]: using records needs strength medium; this file is mild
-  --> moves.cigar:4:1
+  --> moves.cigar:3:1
   |
-4 | record Move {
+3 | record Move {
   | ^^^^^^
   = hint: to use it, put `strength medium` at the top of the file
   = explain: cig explain E1101
 ```
 
 The first line of an error is cig's: *Don't see any cigarettes* means
-something you asked for isn't allowed here. The hint is the fix. (The
-`# expect:` line is a comment the docs test reads; it is line 1, so the
-record is on line 4. Leave it out and the line is 3.)
+something you asked for isn't allowed here. The hint is the fix.
 
 ### E1102: at the file's strength, not built yet
 
 Do what the hint said and the next error is the honest one:
 
+<!-- expect: E1102 -->
 ```cigar
-# expect: E1102
 strength medium
 
 record Move {
@@ -126,9 +124,9 @@ record Move {
 $ cigar check typed.cigar
 Don't see any cigarettes.
 error[E1102 check]: using records is medium-strength CigarScript, not built yet in this version (otmof-ops/cigar-script#9)
-  --> typed.cigar:4:1
+  --> typed.cigar:3:1
   |
-4 | record Move {
+3 | record Move {
   | ^^^^^^
   = explain: cig explain E1102
 ```
@@ -142,8 +140,8 @@ file at medium or full that uses a medium or full feature stops here, and
 
 A `strength` line that is not the first statement of the file:
 
+<!-- expect: E1103 -->
 ```cigar
-# expect: E1103
 stick a = 1
 stick b = 2
 strength medium
@@ -153,17 +151,17 @@ strength medium
 $ cigar check late.cigar
 Don't see any cigarettes.
 error[E1103 check]: `strength` declarations must be the first statement of the file
-  --> late.cigar:4:1
+  --> late.cigar:3:1
   |
-4 | strength medium
+3 | strength medium
   | ^^^^^^^^
   = explain: cig explain E1103
 ```
 
 Or a word that is not one of the three:
 
+<!-- expect: E1103 -->
 ```cigar
-# expect: E1103
 strength spicy
 ```
 
@@ -171,9 +169,9 @@ strength spicy
 $ cigar check spicy.cigar
 Don't see any cigarettes.
 error[E1103 check]: `strength` names no strength: `spicy` is not `mild`, `medium` or `full`
-  --> spicy.cigar:2:10
+  --> spicy.cigar:1:10
   |
-2 | strength spicy
+1 | strength spicy
   |          ^^^^^
   = explain: cig explain E1103
 ```
@@ -196,9 +194,9 @@ strength:
 $ cigar check --strength mild typed.cigar
 Don't see any cigarettes.
 error[E1101 check]: using records needs strength medium; this file is mild
-  --> typed.cigar:4:1
+  --> typed.cigar:3:1
   |
-4 | record Move {
+3 | record Move {
   | ^^^^^^
   = hint: to use it, put `strength medium` at the top of the file
   = explain: cig explain E1101
@@ -213,7 +211,8 @@ files, which are always mild.
 
 `cigar check` exits `0` when every file checked, `2` when a check failed,
 and `3` when it could not check (no path, a path that does not exist, a
-file that is not `.cig` or `.cigar`, a bad `--strength`). Any nonzero exit
+file that is not `.cig` or `.cigar`, a bad `--strength`: each `E800` or
+`E801`). Any nonzero exit
 fails a CI step, so this is the whole job:
 
 ```sh
@@ -231,7 +230,7 @@ true}` for each file that passed.
 
 ```sh
 $ cigar --json check moves.cigar
-{"code":"E1101","kind":"check","message":"using records needs strength medium; this file is mild","hint":"to use it, put `strength medium` at the top of the file","line":4,"col":1,"file":"moves.cigar"}
+{"code":"E1101","kind":"check","message":"using records needs strength medium; this file is mild","hint":"to use it, put `strength medium` at the top of the file","line":3,"col":1,"file":"moves.cigar"}
 ```
 
 Turn that into one line per failure with `jq`:
@@ -241,10 +240,10 @@ cigar --json check . | jq -r 'select(.code) | "\(.file):\(.line):\(.col) \(.code
 ```
 
 ```
-./late.cigar:4:1 E1103
-./moves.cigar:4:1 E1101
-./spicy.cigar:2:10 E1103
-./typed.cigar:4:1 E1102
+./late.cigar:3:1 E1103
+./moves.cigar:3:1 E1101
+./spicy.cigar:1:10 E1103
+./typed.cigar:3:1 E1102
 ```
 
 `--plain` drops the catchphrases for logs, and `--no-color` (or

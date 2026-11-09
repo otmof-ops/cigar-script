@@ -141,11 +141,14 @@ Mild stops where CigScript stops. The moment a file uses a word or a form
 that belongs to a higher strength, `cigar check` says which strength allows
 it and the line to add:
 
+<!-- expect: E1101 -->
 ```cigar
-# expect: E1101
 strength mild
 
-record Move { from: Path, to: Path }
+record Move {
+  from: Path
+  to: Path
+}
 ```
 
 ```sh

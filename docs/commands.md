@@ -108,7 +108,7 @@ These are cigcompile's codes too, so a CI step reads them the same way.
 | `E1101` | check | a feature above the file's strength |
 | `E1102` | check | a feature at or below the file's strength that is not built yet in this version |
 | `E1103` | check | a `strength` declaration that is not the first statement, or names no strength |
-| `E800` | usage | no path given, a file that is not `.cig` or `.cigar`, a folder with no such files, or a path that is neither a file nor a folder |
+| `E800` | usage | no path given, a file that is not `.cig` or `.cigar`, a folder with no such files, a path that is neither a file nor a folder, or a bad `--strength` |
 | `E801` | usage | a path that cannot be read, including one that does not exist |
 
 Anything else is cig's: `cigar check` reports what `cig check` would. `E800` and `E801` are cig's own, and `cig explain E800` and `cig explain E801`
@@ -119,7 +119,9 @@ says all of it.
 ### The JSON shape
 
 `--json` writes one JSON object per line on stdout. Nothing else is
-written to stdout. A file that passed is one object:
+written to stdout. The one exception is an argument the command line itself
+rejects before `cigar` reads it (a flag it does not know, a command that does
+not exist): that is the argument parser's own text on stderr, with exit `3`. A file that passed is one object:
 
 ```json
 {"file":"hello.cigar","ok":true}
