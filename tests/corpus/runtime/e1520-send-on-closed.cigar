@@ -1,0 +1,5 @@
+strength full
+
+stick ch = channel<Int>()
+ch.close()
+ch.send(3)

@@ -1,0 +1,6 @@
+strength medium
+
+enum Status { ok, skipped }
+
+stick s = Status.broken
+exhale s

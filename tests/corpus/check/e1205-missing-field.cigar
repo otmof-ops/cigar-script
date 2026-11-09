@@ -1,0 +1,6 @@
+strength medium
+
+record P { x: Int, y: Int }
+
+stick p = P { x: 1 }
+exhale p

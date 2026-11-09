@@ -1,0 +1,9 @@
+strength full
+
+stick ch = channel<Int>()
+ch.send(1)
+ch.send(2)
+exhale ch.receive()
+exhale ch.receive()
+exhale ch.receive()
+ch.close()

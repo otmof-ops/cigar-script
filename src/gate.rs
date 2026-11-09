@@ -9,7 +9,6 @@
 //! are sorted by position.
 
 use cigscript::diagnostics::{Diagnostic, Kind};
-use cigscript::syntax::lexer::tokenize;
 use cigscript::syntax::span::Span;
 use cigscript::syntax::token::{Token, TokenKind};
 
@@ -18,7 +17,7 @@ use crate::features::{Detect, Feature, Strength, FEATURES};
 /// Scan a blanked `.cigar` source at the given effective strength.
 #[allow(clippy::result_large_err)]
 pub fn scan(source: &str, effective: Strength) -> Result<Vec<Diagnostic>, Diagnostic> {
-    let tokens = tokenize(source)?;
+    let (_, tokens, _) = crate::lower::mask(source)?;
     let mut findings: Vec<(Span, Diagnostic)> = Vec::new();
     for f in FEATURES {
         match f.detect {

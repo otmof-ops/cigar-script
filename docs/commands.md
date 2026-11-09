@@ -2,6 +2,7 @@
 
 ```
 cigar check <path>... [--strength mild|medium|full]
+cigar run <file> [--dry-run] [--no-rollback] [--max-steps <n>] [--strength mild|medium|full] [-- <args>...]
 cigar --version
 cigar help [command]
 ```
@@ -9,11 +10,11 @@ cigar help [command]
 Global flags apply to every command: `--json` for machine-readable output
 on stdout, `--plain` for the same information without the catchphrases
 (also `CIG_PLAIN`), `--no-color` to turn color off (also `NO_COLOR`). They
-go before or after `check`.
+go before or after the command.
 
-`cigar check` is the only command. `cigar` does not run, compile, format or
-package anything yet; see the [roadmap](roadmap.md) for what comes and in
-what order.
+`cigar check` and `cigar run` are the two commands. `cigar` does not compile,
+format or package anything yet; see the [roadmap](roadmap.md) for what comes
+and in what order.
 
 ## `cigar check`
 
@@ -35,7 +36,7 @@ run reports every file.
 | file | what `cigar check` does |
 |---|---|
 | `.cig` | exactly what `cig check` does, of the cig version `cigar` is built on: the same parse, the same check, the same errors. A `.cig` file is always mild, and never gets a new error |
-| `.cigar` | reads its `strength` declaration, finds every feature above or beyond that strength, and only if there is none hands the file to the same parse and check |
+| `.cigar` | reads its `strength` declaration, finds every feature above or beyond that strength, and then, at medium and full, checks its types and (at full) its ownership. Then it hands the CigScript it lowers to to the same parse and check |
 
 For a `.cigar` file that is, in order:
 
@@ -46,11 +47,21 @@ For a `.cigar` file that is, in order:
    [feature table](LANGUAGE.md#the-feature-table): a reserved word, or a type
    written on a `stick`, a `roll` or a `pull`. A feature above the file's
    strength is `E1101`; one the strength allows but this version has not
-   built is `E1102`.
-3. If steps 1 and 2 found nothing, CigScript's own check runs on the file,
-   and anything it finds is `cig`'s error, with `cig`'s code.
+   built is `E1102`. If this step finds anything, the check stops there.
+3. At mild, the file goes to CigScript's own check as it is. At medium and
+   full the file is **lowered** to CigScript, keeping every line where it
+   was; the modules it uses are read from the folder of the file; the
+   type checker reads the result (`E1200` to `E1399`); at full the
+   ownership checker does too (`E1501`, `E1502`); and last, CigScript's own
+   check reads what will run, and anything it finds is `cig`'s error, with
+   `cig`'s code. Every error is reported where it sits in the file as
+   written.
 
-Findings are listed in the order they sit in the file.
+Findings are listed in the order they sit in the file. A file that
+cigar cannot lower correctly reports `E1104` with kind `internal`: that is a
+bug in `cigar`, and the message says to report it. A `.cigar` file may not
+use a name that starts `_cg_` or `__cg_`, which are the lowering's; that is
+`E1104` too.
 
 ### Flags
 
@@ -87,41 +98,149 @@ Any other extension is a usage error: `cigar check a.txt` says `a.txt: not a
 have one of the two extensions; the extension decides which of the two
 checks it gets.
 
-### Exit codes
+## `cigar run`
 
-| code | meaning |
+Check a file, then run it. The check is the one `cigar check` makes, with the
+same flags (`--strength`) and the same errors; a file that fails it is
+reported, exits `2`, and does not run.
+
+```sh
+cigar run tidy.cigar -- ~/Downloads     # for real: every burn journaled
+cigar run --dry-run tidy.cigar          # the plan; nothing changes
+```
+
+A file that checks is run as CigScript. `cigar` builds a program from it
+(cig's [program](https://github.com/otmof-ops/cig-script/blob/main/docs/PROGRAMS.md)
+format: `cigar` itself, which carries cig's runtime, with the lowered script
+appended) and runs that, so the run is exactly what `cig run` does:
+
+- **Burns are journaled**, and when the script fails, rolled back, newest
+  op first. The rule is cig's and does not change at any strength: nothing
+  touches the world outside a `burn { }`.
+- **`--dry-run`** simulates every burn and prints the plan. The script's
+  reads and `exhale`s still happen.
+- **Run records are cig's.** Each run is a record in cig's state folder, and
+  `cig runs` lists them and `cig unburn <run-id>` puts the world back. The
+  record names the `.cigar` file and the line, not the lowered text.
+- **`.cig` files run too**, exactly as `cig run` runs them.
+
+A script that fails looks like this. The `burn` moved a file, then coughed,
+and the move was put back:
+
+```cigar
+strength medium
+
+record Move { from: Path, to: Path }
+
+stick moves = [Move { from: "inbox/a.txt", to: "inbox/docs/a.txt" }]
+burn {
+  for m in moves {
+    fs.mkdir(path.dir(m.to))
+    fs.mv(m.from, m.to)
+  }
+  cough "stop here"
+}
+```
+
+```sh
+$ mkdir inbox
+$ touch inbox/a.txt
+$ cigar run fail.cigar
+Don't see any cigarettes.
+error[E600 cough]: stop here
+  --> fail.cigar:11:3
+   |
+11 |   cough "stop here"
+   |   ^^^^^^^^^^^^^^^^^
+  = explain: cig explain E600
+unburn: rolling back this run's burns
+  restored move inbox/a.txt -> inbox/docs/a.txt (moved back: inbox/a.txt)
+  restored move inbox/a.txt -> inbox/docs/a.txt (removed inbox/docs/a.txt)
+  restored mkdir inbox/docs (removed inbox/docs)
+$ find inbox
+inbox
+inbox/a.txt
+```
+
+### Run-time errors show the line as written
+
+A run-time error names the `.cigar` file and the line, shows the line as you
+wrote it, and puts a caret under the statement or expression. The checks the
+lowering inserts (`E1210`, `E1510`, `E1520`) report at the statement that
+holds them: a value passed to a typed parameter is checked where it is
+passed, and the parameter's own check is at its `pull` line. One limit is
+known: an error inside a module's code is reported at a line past the end of
+your file, with the lowered text in the snippet.
+
+### Flags
+
+| flag | does |
 |---|---|
-| `0` | every file checked |
-| `2` | at least one file failed its check |
-| `3` | `cigar` could not check: no path given, a path that does not exist or cannot be read, a file that is not `.cig` or `.cigar`, a folder with none, or a bad `--strength` |
+| `--dry-run` | simulate every burn and print the plan instead of executing it |
+| `--no-rollback` | leave burns in place if the script fails |
+| `--max-steps <n>` | the step budget before "your loop never ends" (`E515`); `0` disables it. Also `CIG_MAX_STEPS` |
+| `--strength <mild\|medium\|full>` | check as if the file declared this strength, as `cigar check` does |
+| `--json`, `--plain`, `--no-color` | as for `check`. With `--json`, the script's output is followed by one JSON object, cig's run record |
+| `-- <args>...` | everything after `--` is the script's `args`, as text |
 
-A run that has both a failed check and a usage problem exits `3`.
+```sh
+cigar run args.cigar -- one two     # args is ["one", "two"]
+```
+
+### Where programs are kept
+
+A built program is `cigar` with the script appended. It is kept in
+`$XDG_CACHE_HOME/cigar/run` (`~/.cache/cigar/run` without it), named by the
+script and the `cigar` that built it, so running the same file again starts at
+once. The newest 12 are kept and older ones are removed. If the folder cannot be written,
+`cigar run` says so with `E802` and exits `3`.
+
+## Exit codes
+
+| code | `cigar check` | `cigar run` |
+|---|---|---|
+| `0` | every file checked | the script ran to the end |
+| `1` | not used | the script failed: a cough, a run-time error, an exceeded step budget. Burns were rolled back, unless `--no-rollback` |
+| `2` | at least one file failed its check | the check failed: nothing ran |
+| `3` | `cigar` could not check: no path given, a path that does not exist or cannot be read, a file that is not `.cig` or `.cigar`, a folder with none, or a bad `--strength` | `cigar` could not run: no file, a file that does not exist or cannot be read, a file that is not `.cig` or `.cigar`, a bad `--strength`, or a program that could not be built or started |
+
+A `check` run that has both a failed check and a usage problem exits `3`.
 Argument errors from the command line itself exit `3` as well; `--help` and
-`--version` exit `0`.
+`--version` exit `0`. The check codes are cigcompile's codes too, so a CI
+step reads them the same way.
 
-These are cigcompile's codes too, so a CI step reads them the same way.
-
-### Errors
+## Errors
 
 | code | kind | when |
 |---|---|---|
 | `E1101` | check | a feature above the file's strength |
 | `E1102` | check | a feature at or below the file's strength that is not built yet in this version |
 | `E1103` | check | a `strength` declaration that is not the first statement, or names no strength |
+| `E1104` | check, or internal | a name that starts `_cg_` or `__cg_`; or, as kind `internal`, a file that lowers to CigScript cig refuses (a bug in `cigar`) |
+| `E1200` to `E1399` | check | medium's type, record, `match`, module and interface errors |
+| `E1401`, `E1402` | check | layers: two meanings for a type, or none |
+| `E1403` | check | `break` or `continue` that would leave a `within retry` block |
+| `E1501`, `E1502` | check | ownership, at full |
+| `E303` | check | `into` a path outside a burn (a warning inside a function), as `fs.write_text` is |
+| `E1210`, `E1510`, `E1205`, `E1206`, `E1208`, `E1520` | cough, at run time | a boundary, a sized number, a record's or a variant's fields given at run time, and a send on a closed channel; the message starts with the code |
 | `E800` | usage | no path given, a file that is not `.cig` or `.cigar`, a folder with no such files, a path that is neither a file nor a folder, or a bad `--strength` |
 | `E801` | usage | a path that cannot be read, including one that does not exist |
+| `E802` | usage | `cigar run` could not build or start its program |
 
-Anything else is cig's: `cigar check` reports what `cig check` would. `E800` and `E801` are cig's own, and `cig explain E800` and `cig explain E801`
-have pages. The three `E110x` codes are registered in cig's error registry
-when CigarScript ships, so `cig explain E1101` has no page yet; the message
-says all of it.
+[The language](LANGUAGE.md#errors) says when each of the `E11xx` to `E15xx`
+codes comes. Anything else is cig's: `cigar check` reports what `cig check`
+would, and `cigar run` what `cig run` would. `E800` and `E801` are cig's own,
+and `cig explain E800` and `cig explain E801` have pages. The `E11xx` to
+`E15xx` codes are registered in cig's error registry when CigarScript ships,
+so `cig explain E1101` has no page yet; the message says all of it.
 
-### The JSON shape
+## The JSON shape
 
 `--json` writes one JSON object per line on stdout. Nothing else is
-written to stdout. The one exception is an argument the command line itself
-rejects before `cigar` reads it (a flag it does not know, a command that does
-not exist): that is the argument parser's own text on stderr, with exit `3`. A file that passed is one object:
+written to stdout by `cigar check`. The one exception is an argument the
+command line itself rejects before `cigar` reads it (a flag it does not
+know, a command that does not exist): that is the argument parser's own
+text on stderr, with exit `3`. A file that passed is one object:
 
 ```json
 {"file":"hello.cigar","ok":true}
@@ -137,31 +256,37 @@ A file that failed is one object per error, the same shape `cig check
 | field | is |
 |---|---|
 | `code` | the error code, stable |
-| `kind` | `check` for `E1101` to `E1103`; `usage` for `E800` and `E801`; cig's own kinds for what it reports |
+| `kind` | `check` for the codes `cigar` adds; `internal` for a lowering bug; `usage` for `E800` to `E802`; cig's own kinds for what it reports |
 | `message` | the one-line message |
 | `hint` | the line to type next; absent when there is none |
 | `line`, `col` | where the error is, 1-based; absent for a usage error |
 | `file` | the path as given (a folder's files carry the folder as a prefix, `./late.cigar`); absent for a usage error |
 
-The exit code is the same with and without `--json`.
+The exit code is the same with and without `--json`. With `cigar run
+--json`, a check that fails writes these objects; a check that passes writes
+the script's output and then cig's run record as one JSON object.
 
-### Environment
+## Environment
 
 | variable | does |
 |---|---|
 | `NO_COLOR` | color off, as `--no-color` |
 | `CIG_PLAIN` | plain output, as `--plain` |
+| `CIG_MAX_STEPS` | the step budget of `cigar run`, as `--max-steps` |
+| `XDG_CACHE_HOME` | where `cigar run` keeps its built programs |
+| `CIGSCRIPT_HOME` | cig's state folder, where run records are kept |
 
 ## `cigar --version`
 
 Prints `cigar <version>` and exits `0`:
 
-```
+```sh
+$ cigar --version
 cigar 0.1.0
 ```
 
 ## `cigar help`
 
 `cigar help` and `cigar --help` list the commands and global flags;
-`cigar help check` and `cigar check --help` list the flags above. Both exit
-`0`. With no command, `cigar` prints that help and exits `0`.
+`cigar help check`, `cigar help run` and `cigar check --help` list the flags
+above. All exit `0`. With no command, `cigar` prints that help and exits `0`.

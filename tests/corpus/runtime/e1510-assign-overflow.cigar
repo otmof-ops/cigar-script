@@ -1,0 +1,6 @@
+strength full
+
+roll n = 250
+n += 50
+stick b: u8 = n
+exhale b

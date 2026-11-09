@@ -1,0 +1,5 @@
+strength medium
+
+use tools.b
+
+pub stick a = 1

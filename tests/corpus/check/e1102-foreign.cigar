@@ -1,0 +1,5 @@
+strength full
+
+foreign "c" {
+  pull strlen(s: Text) -> Int pure
+}

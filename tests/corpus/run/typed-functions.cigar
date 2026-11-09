@@ -1,0 +1,14 @@
+strength medium
+
+pull add(a: Int, b: Int) -> Int { snuff a + b }
+pull shout(t: Text) -> Text { snuff t.upper() }
+stick f = pack(a: Int, b: Int) => a + b
+
+exhale add(2, 3), shout("hi"), f(4, 5)
+
+stick names: List<Text> = ["a", "bcd"]
+roll total: Int = 0
+for n in names {
+  total += n.len()
+}
+exhale total

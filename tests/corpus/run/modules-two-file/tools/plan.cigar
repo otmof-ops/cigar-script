@@ -1,0 +1,12 @@
+strength medium
+# A module: not run on its own.
+
+pub record Move { from: Path, to: Path }
+
+pub pull plan_moves(names: List<Text>) -> List<Move> {
+  roll out: List<Move> = []
+  for n in names {
+    out.push(Move { from: n, to: "out/${n}" })
+  }
+  snuff out
+}

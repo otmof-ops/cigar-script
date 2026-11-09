@@ -1,0 +1,6 @@
+strength medium
+
+pull load() { snuff "seven" }
+
+stick n: Int = load()
+exhale n

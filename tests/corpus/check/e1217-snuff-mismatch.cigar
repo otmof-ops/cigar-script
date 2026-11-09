@@ -1,0 +1,6 @@
+strength medium
+
+pull f() -> Int {
+  snuff "a"
+}
+exhale f()

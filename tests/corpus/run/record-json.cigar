@@ -1,0 +1,11 @@
+strength medium
+
+record Move { from: Path, to: Path }
+record Job { id: Int, step: Move }
+
+stick m = Move { from: "a", to: "b" }
+stick j = Job { id: 1, step: m }
+exhale json.stringify(m)
+exhale json.stringify([m, m])
+exhale json.stringify(j)
+exhale j

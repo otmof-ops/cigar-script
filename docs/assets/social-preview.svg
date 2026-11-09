@@ -58,5 +58,5 @@
   <rect x="120" y="498" width="86" height="38" rx="19" fill="none" stroke="#30363d" stroke-width="2"/><text x="163.0" y="523" text-anchor="middle" class="chip">mild</text>
   <rect x="218" y="498" width="116" height="38" rx="19" fill="none" stroke="#30363d" stroke-width="2"/><text x="276.0" y="523" text-anchor="middle" class="chip">medium</text>
   <rect x="346" y="498" width="76" height="38" rx="19" fill="none" stroke="#30363d" stroke-width="2"/><text x="384.0" y="523" text-anchor="middle" class="chip">full</text>
-  <text x="120" y="590" class="sub">mild is built; medium and full are designed, not built yet</text>
+  <text x="120" y="590" class="sub">mild and medium are built; most of full is built</text>
 </svg>

@@ -1,0 +1,7 @@
+strength full
+
+roll results = []
+parallel(threads: 4) for n in 1..6 {
+  results.push(n * n)
+}
+exhale results

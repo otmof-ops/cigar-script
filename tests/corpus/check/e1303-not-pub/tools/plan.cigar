@@ -1,0 +1,5 @@
+strength medium
+
+pull hidden() -> Int { snuff 1 }
+
+pub pull shown() -> Int { snuff 2 }

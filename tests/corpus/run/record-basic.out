@@ -1,0 +1,3 @@
+a.txt
+b/a.txt
+Move { from: "a.txt", to: "b/a.txt" }

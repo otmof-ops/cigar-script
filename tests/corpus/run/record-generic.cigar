@@ -1,0 +1,8 @@
+strength medium
+
+record Pair<A, B> { first: A, second: B }
+
+stick p: Pair<Int, Text> = Pair { first: 1, second: "x" }
+exhale p, p.first + 1
+stick q: Pair<Int, Text> = p
+exhale q.second

@@ -1,0 +1,7 @@
+strength medium
+# RUN THIS FILE; tools/lib.cigar is its module.
+
+use tools.lib
+use tools.lib.{add1}
+
+exhale add1(1), lib.add1(2)

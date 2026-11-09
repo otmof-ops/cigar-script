@@ -1,0 +1,8 @@
+strength medium
+
+record Move { from: Path, to: Path }
+
+stick m = Move { from: "a.txt", to: "b/a.txt" }
+exhale m.from
+exhale m.to
+exhale m

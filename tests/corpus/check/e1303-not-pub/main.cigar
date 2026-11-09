@@ -1,0 +1,6 @@
+strength medium
+# CHECK THIS FILE; tools/plan.cigar has a name that is not pub.
+
+use tools.plan.{hidden}
+
+exhale hidden()

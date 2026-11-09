@@ -1,0 +1,12 @@
+strength medium
+
+interface Named {
+  pull name(self) -> Text
+  pull id(self) -> Int
+}
+
+record Move { from: Path, to: Path }
+
+impl Named for Move {
+  pull name(self) -> Text { snuff "move" }
+}

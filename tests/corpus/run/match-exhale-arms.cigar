@@ -1,0 +1,8 @@
+strength medium
+
+for k in [1, 2] {
+  match k {
+    1 => exhale "one", "uno"
+    _ => exhale "other", "otro"
+  }
+}

@@ -1,0 +1,14 @@
+strength medium
+
+record Move { from: Path, to: Path }
+
+pull show(m: Move) -> Text {
+  match m {
+    Move { from: "a", to } => snuff "from a to ${to}"
+    Move { from, to } => snuff "${from} to ${to}"
+    _ => snuff "other"
+  }
+}
+
+exhale show(Move { from: "a", to: "b" })
+exhale show(Move { from: "c", to: "d" })

@@ -1,0 +1,14 @@
+strength full
+
+stick ch = channel<Int>()
+parallel(threads: 4) for n in 1..5 {
+  ch.send(n * 10)
+}
+roll got = []
+roll v = ch.receive()
+while v != null {
+  got.push(v)
+  v = ch.receive()
+}
+ch.close()
+exhale got

@@ -1,0 +1,11 @@
+strength full
+
+roll tries = 0
+within retry(3) {
+  tries += 1
+  if tries < 2 {
+    cough "flaky"
+  }
+  exhale "ok after ${tries}"
+}
+exhale tries

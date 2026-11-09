@@ -1,0 +1,12 @@
+strength medium
+
+enum Shape { circle(Float), rect(w: Float, h: Float) }
+
+pull area(s: Shape) -> Float {
+  match s {
+    circle(r) => snuff 3.0 * r * r
+    rect(w, h) => snuff w * h
+  }
+}
+
+exhale area(Shape.circle(2.0)), area(Shape.rect(w: 3.0, h: 4.0)), Shape.rect(h: 4.0, w: 3.0)

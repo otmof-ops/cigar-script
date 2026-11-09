@@ -1,0 +1,6 @@
+strength full
+
+stick a: u8 = 200
+stick b: u8 = 100
+stick c = a + b
+exhale c

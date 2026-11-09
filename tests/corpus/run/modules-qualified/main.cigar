@@ -1,0 +1,7 @@
+strength medium
+# RUN THIS FILE (run/modules-qualified/main.cigar); tools/plan.cigar is its module.
+
+use tools.plan
+
+exhale plan.limit
+exhale plan.double(4)

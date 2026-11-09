@@ -1,0 +1,10 @@
+strength medium
+
+record P { x: Int }
+interface Named { pull name(self) -> Text }
+impl Named for P { pull name(self) -> Text { snuff "P${self.x}" } }
+
+stick n: P? = null
+exhale n?.name() ?? "none"
+pull f(v) { snuff v?.name() ?? "none" }
+exhale f(null), f(P { x: 2 })

@@ -1,0 +1,9 @@
+strength medium
+
+record User { name: Text, nick: Text? }
+
+stick none: User? = null
+stick ann: User? = User { name: "ann", nick: null }
+exhale none?.name ?? "anon"
+exhale ann?.name ?? "anon"
+exhale ann?.nick ?? "no nick"

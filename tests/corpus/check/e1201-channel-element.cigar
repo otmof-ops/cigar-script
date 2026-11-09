@@ -1,0 +1,4 @@
+strength full
+
+stick ch = channel<Int>()
+ch.send("text")

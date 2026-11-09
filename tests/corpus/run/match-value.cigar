@@ -1,0 +1,8 @@
+strength medium
+
+enum Status { ok, failed(reason: Text), skipped }
+
+for s in [Status.skipped, Status.ok, Status.failed("x")] {
+  stick n = match s { ok => 0, failed(r) => 1, skipped => 2 }
+  exhale n
+}

@@ -1,0 +1,11 @@
+strength medium
+
+record Move { from: Path, to: Path }
+
+stick moves = [Move { from: "a", to: "b" }, Move { from: "c", to: "d" }]
+exhale moves
+exhale moves.len()
+for m in moves {
+  exhale "${m.from} -> ${m.to}"
+}
+exhale "${moves[0]}"

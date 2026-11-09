@@ -1,0 +1,12 @@
+strength medium
+
+enum Status { ok, skipped }
+
+stick s = Status.ok
+stick n = match s {
+  ok => {
+    exhale "x"
+  }
+  skipped => 1
+}
+exhale n

@@ -1,0 +1,6 @@
+strength medium
+
+enum Status { ok, failed(reason: Text) }
+
+stick s = Status.failed()
+exhale s

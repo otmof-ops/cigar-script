@@ -1,0 +1,17 @@
+strength medium
+
+record ParseError { message: Text }
+
+pull parse(t: Text) -> Int coughs ParseError {
+  if t == "" {
+    cough ParseError { message: "empty" }
+  }
+  snuff t.to_int()
+}
+
+exhale parse("42")
+try {
+  parse("")
+} ashtray err {
+  exhale "caught", err.message
+}

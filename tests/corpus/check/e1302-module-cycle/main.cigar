@@ -1,0 +1,6 @@
+strength medium
+# CHECK THIS FILE; tools/a.cigar and tools/b.cigar use each other.
+
+use tools.a
+
+exhale 1

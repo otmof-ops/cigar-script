@@ -1,0 +1,9 @@
+strength medium
+
+record ParseError { message: Text }
+record IoError { message: Text }
+
+pull f() -> Int coughs ParseError {
+  cough IoError { message: "x" }
+}
+exhale f()

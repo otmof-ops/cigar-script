@@ -1,0 +1,6 @@
+strength medium
+
+pull id<T>(x: T) -> T { snuff x }
+exhale id<List<Int>>([1, 2])
+stick m: Map<List<Int>> = {a: [1]}
+exhale m

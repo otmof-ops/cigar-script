@@ -1,0 +1,7 @@
+strength medium
+
+pull count_items(xs: List<Int>) -> Int { snuff 0 }
+
+measure for List = count_items
+
+exhale measure [1, 2]

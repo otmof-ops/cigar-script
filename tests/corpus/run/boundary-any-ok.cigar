@@ -1,0 +1,11 @@
+strength medium
+
+pull load() { snuff 7 }
+
+stick n: Int = load()
+exhale n + 1
+stick p: Path = "a/b"
+stick t: Text = p
+exhale path.base(p), t
+stick f: Float = 2.5
+exhale f

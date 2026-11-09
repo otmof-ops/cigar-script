@@ -1,0 +1,5 @@
+strength full
+
+within timeout(5) {
+  exhale 1
+}

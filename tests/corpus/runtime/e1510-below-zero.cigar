@@ -1,0 +1,6 @@
+strength full
+
+roll n = 0
+n -= 1
+stick b: u8 = n
+exhale b

@@ -1,0 +1,7 @@
+strength full
+
+pull keep(borrow xs: List<Int>) -> Int {
+  stick ys = xs
+  snuff ys.len()
+}
+exhale keep([1])

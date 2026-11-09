@@ -1,0 +1,21 @@
+strength medium
+
+enum Status { ok, failed(reason: Text), skipped }
+
+pull rate(s: Status, n: Int) -> Text {
+  match s {
+    ok => {
+      match n {
+        0 => snuff "ok-none"
+        _ => snuff "ok-some"
+      }
+    }
+    failed(r) => snuff "fail ${r}"
+    skipped => snuff "skip"
+  }
+}
+
+exhale rate(Status.ok, 0)
+exhale rate(Status.ok, 3)
+exhale rate(Status.failed("x"), 1)
+exhale rate(Status.skipped, 1)

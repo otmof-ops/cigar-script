@@ -1,0 +1,4 @@
+strength medium
+
+record P { x: Int }
+record P { y: Text }

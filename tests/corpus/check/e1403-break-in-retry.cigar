@@ -1,0 +1,8 @@
+strength full
+
+for x in [1, 2, 3] {
+  within retry(2) {
+    if x == 2 { continue }
+    exhale x
+  }
+}

@@ -1,0 +1,373 @@
+# CigarScript's run-time helpers, appended after a lowered file's last line.
+# Every name starts `_cg_`; a .cigar file may not use the prefix (E1104).
+
+# ----- what a value is
+
+pull _cg_is_record(v, name) {
+  if type_of(v) != "map" { snuff false }
+  if not v.has("__record") { snuff false }
+  snuff name == null or v.__record == name
+}
+
+pull _cg_is_enum(v, name) {
+  if type_of(v) != "map" { snuff false }
+  if not v.has("__enum") { snuff false }
+  snuff name == null or v.__enum == name
+}
+
+pull _cg_variant(v, en, variant) {
+  if not _cg_is_enum(v, en) { snuff false }
+  snuff v.__variant == variant
+}
+
+# What a value is, in CigarScript's words: Int, Text, Move, Status.failed.
+pull _cg_kind(v) {
+  if _cg_is_record(v, null) { snuff v.__record }
+  if _cg_is_enum(v, null) { snuff v.__enum + "." + v.__variant }
+  stick t = type_of(v)
+  if t == "int" { snuff "Int" }
+  if t == "float" { snuff "Float" }
+  if t == "string" { snuff "Text" }
+  if t == "bool" { snuff "Bool" }
+  if t == "null" { snuff "null" }
+  if t == "list" { snuff "List" }
+  if t == "map" { snuff "Map" }
+  snuff "a function"
+}
+
+# The kind, and the value itself when it is short and plain.
+pull _cg_what(v) {
+  stick t = type_of(v)
+  if t == "null" { snuff "null" }
+  if t == "int" or t == "float" or t == "string" or t == "bool" {
+    stick r = repr(v)
+    if r.len() > 40 { snuff _cg_kind(v) + " " + r.slice(0, 37) + "..." }
+    snuff _cg_kind(v) + " " + r
+  }
+  snuff _cg_kind(v)
+}
+
+# ----- descriptors: a type, at run time
+
+pull _cg_tname(d) {
+  stick k = d.k
+  if k == "any" { snuff "Any" }
+  if k == "int" { snuff "Int" }
+  if k == "float" { snuff "Float" }
+  if k == "text" { snuff "Text" }
+  if k == "bool" { snuff "Bool" }
+  if k == "null" { snuff "Null" }
+  if k == "list" { snuff "List<" + _cg_tname(d.of) + ">" }
+  if k == "map" { snuff "Map<" + _cg_tname(d.of) + ">" }
+  if k == "opt" { snuff _cg_tname(d.of) + "?" }
+  if k == "record" or k == "enum" or k == "sized" { snuff d.name }
+  snuff "a function"
+}
+
+pull _cg_fits(v, d) {
+  stick k = d.k
+  if k == "any" { snuff true }
+  stick t = type_of(v)
+  if k == "int" { snuff t == "int" }
+  if k == "float" { snuff t == "float" or t == "int" }
+  if k == "text" { snuff t == "string" }
+  if k == "bool" { snuff t == "bool" }
+  if k == "null" { snuff t == "null" }
+  if k == "opt" { snuff t == "null" or _cg_fits(v, d.of) }
+  if k == "fn" { snuff t == "function" }
+  if k == "sized" {
+    if t != "int" { snuff false }
+    snuff v >= d.lo and v <= d.hi
+  }
+  if k == "record" { snuff _cg_is_record(v, d.name) }
+  if k == "enum" { snuff _cg_is_enum(v, d.name) }
+  if k == "list" {
+    if t != "list" { snuff false }
+    if d.of.k == "any" { snuff true }
+    for x in v {
+      if not _cg_fits(x, d.of) { snuff false }
+    }
+    snuff true
+  }
+  if k == "map" {
+    if t != "map" { snuff false }
+    if _cg_is_record(v, null) or _cg_is_enum(v, null) { snuff false }
+    if d.of.k == "any" { snuff true }
+    for key in v {
+      if not _cg_fits(v[key], d.of) { snuff false }
+    }
+    snuff true
+  }
+  snuff true
+}
+
+# Why `v` does not fit `d`, as the value to cough: E1510 for a number
+# outside a sized type, E1210 for anything else.
+pull _cg_why(v, d, w) {
+  if d.k == "sized" and type_of(v) == "int" {
+    stick m = "E1510 " + w + " is " + str(v) + ", outside " + d.name + " (" + str(d.lo) + " to " + str(d.hi) + ")"
+    snuff {code: "E1510", message: m}
+  }
+  stick m = "E1210 " + w + " should be " + _cg_tname(d) + " and is " + _cg_what(v)
+  snuff {code: "E1210", message: m}
+}
+
+# A value entering a typed place inside an expression.
+pull _cg_check(v, d, w) {
+  if _cg_fits(v, d) { snuff v }
+  cough _cg_why(v, d, w)
+}
+
+# A sized number's arithmetic, checked for range.
+pull _cg_sized(v, lo, hi, name) {
+  if type_of(v) == "int" and v >= lo and v <= hi { snuff v }
+  cough _cg_why(v, {k: "sized", lo: lo, hi: hi, name: name}, "the result")
+}
+
+# json.parse<T>(text), json.load<T>(path): the value read, made a T.
+pull _cg_as(d, v) {
+  snuff _cg_check(_cg_tagged(v, d), d, "the value read")
+}
+
+# csv.read<T>(path): every row made a T.
+pull _cg_rows_as(d, rows) {
+  roll out = []
+  for r in rows {
+    out.push(_cg_as(d, r))
+  }
+  snuff out
+}
+
+# Plain data (from JSON or CSV) given the tags a descriptor's records and
+# enums carry, so `json.parse<Move>` gives a Move.
+pull _cg_tagged(v, d) {
+  stick k = d.k
+  stick t = type_of(v)
+  if k == "opt" {
+    if t == "null" { snuff null }
+    snuff _cg_tagged(v, d.of)
+  }
+  if k == "list" and t == "list" {
+    roll out = []
+    for x in v {
+      out.push(_cg_tagged(x, d.of))
+    }
+    snuff out
+  }
+  if k == "map" and t == "map" {
+    stick out = {}
+    for key in v {
+      out.set(key, _cg_tagged(v[key], d.of))
+    }
+    snuff out
+  }
+  if k == "record" and t == "map" and not v.has("__record") {
+    stick make = _cg_records()
+    if make.has(d.name) { snuff make[d.name](v) }
+  }
+  snuff v
+}
+
+# ----- records and enums
+
+# A record: checks every field is given once and fits, and returns the
+# tagged map in declaration order.
+pull _cg_record(name, order, given, descs) {
+  stick out = {__record: name}
+  for f in order {
+    if not given.has(f) {
+      cough {code: "E1205", message: "E1205 `" + name + "` is missing the field `" + f + "`"}
+    }
+    stick v = given[f]
+    if not _cg_fits(v, descs[f]) { cough _cg_why(v, descs[f], name + "." + f) }
+    out.set(f, v)
+  }
+  for f in given {
+    if not descs.has(f) {
+      cough {code: "E1206", message: "E1206 `" + name + "` has no field `" + f + "`"}
+    }
+  }
+  snuff out
+}
+
+# An enum value given by name (`Shape.rect(h: 4.0, w: 3.0)`): every field
+# once, and no other.
+pull _cg_named_ok(en, variant, order, given) {
+  for f in order {
+    if not given.has(f) {
+      cough {code: "E1208", message: "E1208 `" + en + "." + variant + "` is missing the field `" + f + "`"}
+    }
+  }
+  for f in given {
+    if not order.contains(f) {
+      cough {code: "E1208", message: "E1208 `" + en + "." + variant + "` has no field `" + f + "`"}
+    }
+  }
+}
+
+# ----- coughs
+
+# A record or enum coughed: shown as one when nothing catches it (its own
+# `message`, when it has one), caught as itself.
+pull _cg_coughed(v) {
+  if not _cg_is_record(v, null) and not _cg_is_enum(v, null) { snuff v }
+  roll msg = _cg_show(v)
+  if v.has("message") { msg = str(v.message) }
+  snuff {message: msg, __cg_value: v}
+}
+
+pull _cg_caught(e) {
+  if type_of(e) == "map" and e.has("__cg_value") { snuff e.__cg_value }
+  snuff e
+}
+
+# ----- showing a value
+
+# A value as `exhale` shows it: cig's own display, with records as
+# `Move { from: "a", to: "b" }` and enums as `Status.failed(reason: "x")`.
+pull _cg_show(v) {
+  stick t = type_of(v)
+  if t == "list" or t == "map" { snuff _cg_inner(v) }
+  snuff str(v)
+}
+
+# A value inside a container: text quoted, as cig shows it there.
+pull _cg_inner(v) {
+  stick t = type_of(v)
+  if t == "list" {
+    roll parts = []
+    for x in v {
+      parts.push(_cg_inner(x))
+    }
+    snuff "[" + parts.join(", ") + "]"
+  }
+  if t != "map" { snuff repr(v) }
+  if _cg_is_record(v, null) {
+    roll parts = []
+    for f in v {
+      if f != "__record" { parts.push(f + ": " + _cg_inner(v[f])) }
+    }
+    if parts.len() == 0 { snuff v.__record + " {}" }
+    snuff v.__record + " { " + parts.join(", ") + " }"
+  }
+  if _cg_is_enum(v, null) {
+    roll parts = []
+    for f in v {
+      if f != "__enum" and f != "__variant" {
+        if f.starts_with("_") {
+          parts.push(_cg_inner(v[f]))
+        } else {
+          parts.push(f + ": " + _cg_inner(v[f]))
+        }
+      }
+    }
+    stick head = v.__enum + "." + v.__variant
+    if parts.len() == 0 { snuff head }
+    snuff head + "(" + parts.join(", ") + ")"
+  }
+  roll parts = []
+  for key in v {
+    parts.push(_cg_key(key) + ": " + _cg_inner(v[key]))
+  }
+  snuff "{" + parts.join(", ") + "}"
+}
+
+# A map key as cig shows it: bare when it is a name, quoted when not.
+pull _cg_key(key) {
+  stick one = {}
+  one.set(key, 0)
+  stick r = repr(one)
+  snuff r.slice(1, r.len() - 4)
+}
+
+# Plain data for JSON: records without their tag, enums as `"ok"` or
+# `{"failed": {"reason": "x"}}`.
+pull _cg_plain(v) {
+  stick t = type_of(v)
+  if t == "list" {
+    roll out = []
+    for x in v {
+      out.push(_cg_plain(x))
+    }
+    snuff out
+  }
+  if t != "map" { snuff v }
+  if _cg_is_enum(v, null) {
+    stick fields = {}
+    for f in v {
+      if f != "__enum" and f != "__variant" { fields.set(f, _cg_plain(v[f])) }
+    }
+    if fields.len() == 0 { snuff v.__variant }
+    stick out = {}
+    out.set(v.__variant, fields)
+    snuff out
+  }
+  stick out = {}
+  for f in v {
+    if f != "__record" { out.set(f, _cg_plain(v[f])) }
+  }
+  snuff out
+}
+
+# ----- layers
+
+pull _cg_into_list(v, target) {
+  target.push(v)
+}
+
+pull _cg_into_path(v, target) {
+  if type_of(v) == "string" {
+    fs.write_text(target, v)
+  } else {
+    fs.write_text(target, json.stringify(_cg_plain(v)))
+  }
+}
+
+# `measure x` and `a into b` where the checker could not tell the type:
+# chosen by the value, as the built-in layers would be.
+pull _cg_layer_measure(v) {
+  stick t = type_of(v)
+  if t == "list" or t == "map" or t == "string" { snuff len(v) }
+  cough {code: "E1402", message: "E1402 nothing gives `measure` a meaning for " + _cg_kind(v)}
+}
+
+pull _cg_layer_into(v, target) {
+  stick t = type_of(target)
+  if t == "list" { snuff _cg_into_list(v, target) }
+  if t == "string" { snuff _cg_into_path(v, target) }
+  cough {code: "E1402", message: "E1402 nothing gives `into` a meaning for " + _cg_kind(target)}
+}
+
+# `recv?.m(...)` where `m` is an `impl`'s: nothing is called on null.
+pull _cg_safe(v, f) {
+  if v == null { snuff null }
+  snuff f(v)
+}
+
+# ----- full: channels
+
+# A channel: a queue of values. `send` adds one, `receive` takes the oldest
+# (null when there is none), `close` stops further sends.
+pull _cg_channel() {
+  stick buf = []
+  stick state = {closed: false, next: 0}
+  pull send(v) {
+    if state.closed {
+      cough {code: "E1520", message: "E1520 send on a closed channel"}
+    }
+    buf.push(v)
+  }
+  pull receive() {
+    if state.next >= buf.len() { snuff null }
+    stick v = buf[state.next]
+    state.next = state.next + 1
+    snuff v
+  }
+  pull close() {
+    state.closed = true
+  }
+  pull closed() {
+    snuff state.closed
+  }
+  snuff {send: send, receive: receive, close: close, closed: closed}
+}
