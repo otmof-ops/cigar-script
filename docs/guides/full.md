@@ -161,8 +161,9 @@ $ cigar run parallel.cigar
 
 A channel has three methods. `send(x)` adds a value. `receive()` gives the
 oldest value, or `null` when there is none. `close()` stops further sends:
-a send after that is a coughed `E1520`. The type of the channel is
-`Channel<T>`, and what `receive` gives is a `T?`.
+a send after that is a coughed `E1520`, on the line of the send. The type of
+the channel is `Channel<T>`: `send` takes a `T` (anything else is `E1201`),
+and what `receive` gives is a `T?`.
 
 A parallel loop works inside a `burn` the same way, and the loop body is a
 plain block:
@@ -300,8 +301,8 @@ error[E600 cough]: E1510 c is 300, outside u8 (0 to 255)
 The check passes and the run stops: the checker does not evaluate
 arithmetic, and a coughed `E1510` is catchable with `try` and `ashtray`.
 The error points at the statement that made the number, as written. An
-`Int` fits a sized place when it is in range; a literal outside the range
-is found at run time too (`stick a: u8 = 300` passes the check and coughs `E1510`).
+`Int` fits a sized place when it is in range; a number written out of range
+is found by the check (`stick a: u8 = 300` is `E1510` before anything runs).
 
 `Bytes` is a type, and **is checked as `Any` today**, because cig has no
 bytes value yet. Sized numbers, `Bytes` and `Channel<T>` are full's: in a

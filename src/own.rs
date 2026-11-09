@@ -29,6 +29,11 @@ pub fn check(
     for s in prog.fns.values() {
         modes.insert(s.name.clone(), s.params.iter().map(|p| p.mode).collect());
     }
+    // A module's functions, as this file calls them: `plan.take` and, for a
+    // name brought in with braces, `take`.
+    for (k, s) in &prog.module_fns {
+        modes.insert(k.clone(), s.params.iter().map(|p| p.mode).collect());
+    }
     let any =
         modes.values().any(|m| m.iter().any(|x| *x != Mode::Shared)) || !prog.moves.is_empty();
     if !any {
@@ -41,6 +46,7 @@ pub fn check(
         diags: Vec::new(),
         reported: HashSet::new(),
         borrowed: HashSet::new(),
+        lambdas: 0,
     };
     let mut moved = HashMap::new();
     o.stmts(&ast.body, &mut moved);
@@ -55,10 +61,12 @@ struct Own<'a> {
     reported: HashSet<(String, usize)>,
     /// The `borrow` parameters of the function being checked.
     borrowed: HashSet<String>,
+    /// How many function values (`pack`) enclose the expression.
+    lambdas: usize,
 }
 
-/// Names that are gone, and the line where each went.
-type Moved = HashMap<String, u32>;
+/// Names that are gone, and where each went.
+type Moved = HashMap<String, Span>;
 
 impl Own<'_> {
     fn err(&mut self, code: &'static str, msg: String, span: Span, hint: String) {
@@ -94,6 +102,8 @@ impl Own<'_> {
                     // `snuff x` with a result type is lowered through a
                     // temporary: returning a borrow.
                     self.returned(value);
+                } else if !name.starts_with("__cg_") {
+                    self.stored(value);
                 }
                 moved.remove(name);
             }
@@ -152,7 +162,9 @@ impl Own<'_> {
             }
             Stmt::While { cond, body, .. } => {
                 self.expr(cond, moved);
-                self.block(body, moved);
+                let mut inner = moved.clone();
+                self.stmts(&body.stmts, &mut inner);
+                self.moved_in_loop(&body.stmts, moved, &inner, None);
             }
             Stmt::For {
                 var, iter, body, ..
@@ -161,6 +173,7 @@ impl Own<'_> {
                 let mut inner = moved.clone();
                 inner.remove(var);
                 self.stmts(&body.stmts, &mut inner);
+                self.moved_in_loop(&body.stmts, moved, &inner, Some(var));
             }
             Stmt::Break(_) | Stmt::Continue(_) => {}
             Stmt::Try {
@@ -197,6 +210,38 @@ impl Own<'_> {
                 }
             }
             Stmt::Expr(e) => self.expr(e, moved),
+        }
+    }
+
+    /// A name from outside a loop, given away inside it: the next time
+    /// round, it is gone.
+    fn moved_in_loop(
+        &mut self,
+        body: &[Stmt],
+        before: &Moved,
+        after: &Moved,
+        var: Option<&String>,
+    ) {
+        let declared: HashSet<&String> = body
+            .iter()
+            .filter_map(|s| match s {
+                Stmt::Declare { name, .. } => Some(name),
+                _ => None,
+            })
+            .chain(var)
+            .collect();
+        let mut gone: Vec<(&String, &Span)> = after
+            .iter()
+            .filter(|(n, _)| !before.contains_key(*n) && !declared.contains(n))
+            .collect();
+        gone.sort_by_key(|(_, sp)| sp.start);
+        for (n, sp) in gone {
+            self.err(
+                "E1501",
+                format!("`{n}` is given away inside a loop, so the next time round it is gone"),
+                *sp,
+                format!("give away a copy (`{n}.copy()`), or make `{n}` inside the loop"),
+            );
         }
     }
 
@@ -263,20 +308,31 @@ impl Own<'_> {
             return;
         }
         if let ExprKind::Ident(n) = &e.kind {
-            moved.insert(n.clone(), e.span.line);
+            moved.insert(n.clone(), e.span);
         }
     }
 
     fn expr(&mut self, e: &Expr, moved: &mut Moved) {
         match &e.kind {
             ExprKind::Ident(n) => {
-                if let Some(line) = moved.get(n).copied() {
+                if let Some(at) = moved.get(n).copied() {
+                    let line = at.line;
                     self.err(
                         "E1501",
                         format!("`{n}` was given away on line {line} and cannot be used after"),
                         e.span,
                         format!("use it before it is moved, or move a copy (`{n}.copy()`)"),
                     );
+                }
+                if self.lambdas > 0 {
+                    if let Some(b) = self.is_borrow(e) {
+                        self.err(
+                            "E1502",
+                            format!("`{b}` is borrowed, so a function value cannot keep it"),
+                            e.span,
+                            format!("pass it in as an argument, or capture a copy (`{b}.copy()`)"),
+                        );
+                    }
                 }
                 if self.prog.moves.contains(&e.span.start) {
                     self.give(e, "to `move`", moved);
@@ -293,6 +349,7 @@ impl Own<'_> {
             ExprKind::List(items) => {
                 for i in items {
                     self.expr(i, moved);
+                    self.stored(i);
                 }
             }
             ExprKind::Map(entries) => {
@@ -301,6 +358,7 @@ impl Own<'_> {
                         self.expr(x, moved);
                     }
                     self.expr(v, moved);
+                    self.stored(v);
                 }
             }
             ExprKind::Unary { expr, .. } => self.expr(expr, moved),
@@ -332,10 +390,18 @@ impl Own<'_> {
                 ..
             } => {
                 self.expr(receiver, moved);
-                for a in args {
+                // `plan.take(a)`: a module's function, with its modes.
+                let modes = match &receiver.kind {
+                    ExprKind::Ident(l) => self.modes.get(&format!("{l}.{name}")).cloned(),
+                    _ => None,
+                };
+                for (i, a) in args.iter().enumerate() {
                     self.expr(a, moved);
                     if matches!(name.as_str(), "push" | "insert" | "set") {
                         self.stored(a);
+                    }
+                    if modes.as_ref().and_then(|m| m.get(i)) == Some(&Mode::Owned) {
+                        self.give(a, &format!("to `{name}`, which takes it `owned`"), moved);
                     }
                 }
             }
@@ -346,10 +412,12 @@ impl Own<'_> {
             }
             ExprKind::Lambda { body, .. } => {
                 let mut inner = moved.clone();
+                self.lambdas += 1;
                 match body {
                     LambdaBody::Expr(x) => self.expr(x, &mut inner),
                     LambdaBody::Block(b) => self.stmts(&b.stmts, &mut inner),
                 }
+                self.lambdas -= 1;
             }
             ExprKind::Pipe { lhs, rhs } => {
                 self.expr(lhs, moved);

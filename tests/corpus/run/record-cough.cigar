@@ -1,0 +1,9 @@
+strength medium
+
+record Oops { why: Text }
+
+try {
+  cough Oops { why: "w" }
+} ashtray e {
+  exhale e, e == Oops { why: "w" }
+}

@@ -1,0 +1,7 @@
+strength full
+
+pull keep(owned v: List<Int>) { exhale v }
+stick c = [3]
+for i in [1, 2] {
+  keep(c)
+}

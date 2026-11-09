@@ -101,9 +101,9 @@ A mild file goes to CigScript as it is. A medium or full file is
 
 `cigar run` runs that text as a cig program: plans, journals, rollback and
 run records are cig's, and an error names the `.cigar` file and its line.
-A **run-time** error shows the line as written, except for errors in the
-lowering's helpers and in modules' code, which are reported past the end of
-the file with the lowered text.
+A **run-time** error shows the line as written, with a caret under the
+statement or expression. The one exception is an error inside a module's
+code, which is reported past the end of the file with the lowered text.
 Every construct is defined by what it lowers to, which is what keeps the
 whole language CigScript underneath.
 
@@ -139,7 +139,7 @@ page; until then the message carries the whole explanation.
 | `E1211` | a `match` that does not cover every case: lists the missing ones |
 | `E1212` | a `match` or an arm `cigar` cannot read: a pattern it does not know, an arm with no `=>`, a `match` nested as an arm's result, or a `match` that is neither a statement nor bound by `stick`, `roll`, an assignment or `snuff` |
 | `E1213` | a block as the arm of a `match` used as a value |
-| `E1214` | a record that names a field twice, or an enum that names a variant twice |
+| `E1214` | a record that names a field twice, an enum that names a variant twice, or a record, enum or interface name declared twice |
 | `E1215` | an assignment to a `stick` |
 | `E1216` | a call with the wrong number of arguments |
 | `E1217` | a `snuff` whose value is not the function's declared result |
@@ -152,7 +152,7 @@ page; until then the message carries the whole explanation.
 |---|---|
 | `E1301` | a module that cannot be found; a module that does not check (names its first error, at the `use` line); a `use` that names no module; a file with no folder to find modules from |
 | `E1302` | modules that use each other in a cycle: names the cycle |
-| `E1303` | a name a module has but does not mark `pub` |
+| `E1303` | a name a module has but does not mark `pub`: a function or value brought in with braces, or a record or enum used by name |
 | `E1304` | a name a module does not have |
 | `E1311` | an `impl` that leaves out a method its interface declares, or an `impl` written wrongly |
 | `E1312` | an `impl` method whose signature is not the interface's |
@@ -164,6 +164,7 @@ page; until then the message carries the whole explanation.
 |---|---|
 | `E1401` | a layer with two meanings for one type: names both |
 | `E1402` | a layer with no meaning for the type: says what to declare. Also a layer declaration written wrongly, and a run-time cough when the type was not known until then |
+| `E1403` | `break` or `continue` inside `within retry` that would leave the block (the block runs inside a loop of its own) |
 | `E303` | `into` a path outside a `burn`: an error at the top level and a warning inside a function. It is cig's own code, the one `fs.write_text` gets |
 
 **Full**
@@ -172,7 +173,7 @@ page; until then the message carries the whole explanation.
 |---|---|
 | `E1501` | a name used after it was given to an `owned` parameter or to `move`: names the line it went |
 | `E1502` | a `borrow` parameter returned, stored (`push`, `insert`, `set`) or given away |
-| `E1510` | **at run time**: a number outside its sized type (`E1510 c is 300, outside u8 (0 to 255)`) |
+| `E1510` | a number outside its sized type: at check time for a number written out (`stick a: u8 = 300`), **at run time** for one that is computed (`E1510 c is 300, outside u8 (0 to 255)`) |
 | `E1520` | **at run time**: a send on a closed channel |
 
 The run-time codes (`E1205`, `E1206`, `E1208`, `E1210`, `E1402`, `E1510` and

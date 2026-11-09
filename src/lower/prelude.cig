@@ -205,6 +205,22 @@ pull _cg_named_ok(en, variant, order, given) {
   }
 }
 
+# ----- coughs
+
+# A record or enum coughed: shown as one when nothing catches it (its own
+# `message`, when it has one), caught as itself.
+pull _cg_coughed(v) {
+  if not _cg_is_record(v, null) and not _cg_is_enum(v, null) { snuff v }
+  roll msg = _cg_show(v)
+  if v.has("message") { msg = str(v.message) }
+  snuff {message: msg, __cg_value: v}
+}
+
+pull _cg_caught(e) {
+  if type_of(e) == "map" and e.has("__cg_value") { snuff e.__cg_value }
+  snuff e
+}
+
 # ----- showing a value
 
 # A value as `exhale` shows it: cig's own display, with records as
@@ -322,6 +338,12 @@ pull _cg_layer_into(v, target) {
   cough {code: "E1402", message: "E1402 nothing gives `into` a meaning for " + _cg_kind(target)}
 }
 
+# `recv?.m(...)` where `m` is an `impl`'s: nothing is called on null.
+pull _cg_safe(v, f) {
+  if v == null { snuff null }
+  snuff f(v)
+}
+
 # ----- full: channels
 
 # A channel: a queue of values. `send` adds one, `receive` takes the oldest
@@ -344,5 +366,8 @@ pull _cg_channel() {
   pull close() {
     state.closed = true
   }
-  snuff {send: send, receive: receive, close: close}
+  pull closed() {
+    snuff state.closed
+  }
+  snuff {send: send, receive: receive, close: close, closed: closed}
 }

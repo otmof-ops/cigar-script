@@ -54,6 +54,8 @@ pub enum Resolution {
         call_end: usize,
         func: String,
         has_args: bool,
+        /// Written `recv?.m(...)`: nothing is called on null.
+        safe: bool,
     },
     /// Wrap `[start, end)` in `pre` and `post`.
     Wrap {
@@ -337,6 +339,8 @@ struct Ck<'a> {
     stmt_end: Option<usize>,
     /// Helpers declared in place so far.
     locals: usize,
+    /// The argument types of the last call `apply` checked.
+    last_args: Vec<Ty>,
     scopes: Vec<HashMap<String, Var>>,
     fns: HashMap<String, types::FnSig>,
     impl_self: HashMap<String, Ty>,
@@ -374,6 +378,7 @@ impl<'a> Ck<'a> {
             guarded: None,
             stmt_end: None,
             locals: 0,
+            last_args: Vec::new(),
             scopes: vec![],
             fns,
             impl_self,
@@ -416,6 +421,35 @@ impl<'a> Ck<'a> {
         self.push(code, msg, Some(span), None, hint);
     }
 
+    /// A helper declared at the end of the statement being checked, so what
+    /// it coughs is reported on that statement's line. `pull` is its whole
+    /// text, given its name.
+    fn local(&mut self, pull: impl FnOnce(&str) -> String) -> Option<String> {
+        let end = self.stmt_end?;
+        self.locals += 1;
+        let name = format!("__cg_l{}", self.locals);
+        let text = format!("; {}", pull(&name));
+        self.resolutions.push(Resolution::Insert { at: end, text });
+        Some(name)
+    }
+
+    /// Check, when the program runs, that `e` fits `t`; a value that does not
+    /// coughs on this statement's line.
+    fn check_here(&mut self, e: &Expr, t: &Ty, what: &str) {
+        let d = crate::lower::ty::descriptor(t);
+        let f = self.local(|n| {
+            format!("pull {n}(v) {{ if not _cg_fits(v, {d}) {{ cough _cg_why(v, {d}, \"{what}\") }}; snuff v }}")
+        });
+        if let Some(f) = f {
+            self.resolutions.push(Resolution::Wrap {
+                start: e.span.start,
+                end: e.span.end,
+                pre: format!("{f}("),
+                post: ")".into(),
+            });
+        }
+    }
+
     fn warn(&mut self, code: &'static str, msg: String, span: Span, hint: Option<String>) {
         let before = self.diags.len();
         self.push(code, msg, Some(span), None, hint);
@@ -434,6 +468,19 @@ impl<'a> Ck<'a> {
         code: &'static str,
         hint: String,
     ) -> bool {
+        // A number written out that a sized type cannot hold.
+        if let (Ty::Sized(sz), Some(v)) = (strip_opt(want), int_literal(e)) {
+            let (lo, hi) = sz.range();
+            if v < lo || v > hi {
+                self.err(
+                    "E1510",
+                    format!("`{v}` is outside `{}` ({lo} to {hi})", sz.name()),
+                    e.span,
+                    Some(hint),
+                );
+                return false;
+            }
+        }
         if assignable(found, want) {
             return true;
         }
@@ -1299,7 +1346,8 @@ impl<'a> Ck<'a> {
                     Ty::Record(..) => self
                         .field_ty(&inner, name, object, e.span, true)
                         .unwrap_or(Ty::Any),
-                    Ty::Map(v) => opt((**v).clone()),
+                    // `m.k` on a missing key is an error, not null (`m?.k` is null).
+                    Ty::Map(v) => (**v).clone(),
                     _ => Ty::Any,
                 };
                 if *safe {
@@ -1419,6 +1467,7 @@ impl<'a> Ck<'a> {
         mut binds: HashMap<String, Ty>,
     ) -> Ty {
         let arg_tys: Vec<Ty> = args.iter().map(|a| self.infer(a)).collect();
+        self.last_args = arg_tys.clone();
         let min = params.len().saturating_sub(optional);
         let bad = args.len() < min || (rest.is_none() && args.len() > params.len());
         if bad {
@@ -1504,6 +1553,10 @@ impl<'a> Ck<'a> {
                     }
                     return Ty::Bool;
                 }
+                if name == "_cg_coughed" && args.len() == 1 {
+                    // `cough R { ... }`, lowered: still an `R` to `coughs`.
+                    return self.infer(&args[0]);
+                }
                 if let Some(layer) = name.strip_prefix("_cg_layer_") {
                     return self.layer_call(layer, callee, args, span);
                 }
@@ -1524,7 +1577,7 @@ impl<'a> Ck<'a> {
                     let gens: Vec<String> = s.generics.iter().map(|g| g.0.clone()).collect();
                     let params = Self::sig_params(&s);
                     let ret = s.ret.clone().unwrap_or(Ty::Any);
-                    return self.apply(
+                    let t = self.apply(
                         name,
                         &gens,
                         &params,
@@ -1535,6 +1588,18 @@ impl<'a> Ck<'a> {
                         span,
                         HashMap::new(),
                     );
+                    // A value the checker cannot see is checked where it is
+                    // passed, so a bad one coughs on the caller's line.
+                    if gens.is_empty() && args.len() == params.len() {
+                        let tys = std::mem::take(&mut self.last_args);
+                        for (i, (a, at)) in args.iter().zip(&tys).enumerate() {
+                            if needs_check(at, &params[i]) {
+                                let what = format!("{}: {}", shown_name(name), s.params[i].name);
+                                self.check_here(a, &params[i], &what);
+                            }
+                        }
+                    }
+                    return t;
                 }
                 if let Some(s) = stdlib::function(None, name) {
                     return self.apply_sig(name, &s, args, span, HashMap::new());
@@ -1560,6 +1625,62 @@ impl<'a> Ck<'a> {
         Ty::Any
     }
 
+    /// A channel's `send`, `receive`, `close` and `closed`. A send is made
+    /// through a helper on this line, so a send on a closed channel coughs
+    /// here.
+    fn channel_method(
+        &mut self,
+        receiver: &Expr,
+        name: &str,
+        args: &[Expr],
+        el: Ty,
+        safe: bool,
+        span: Span,
+    ) -> Ty {
+        let tys: Vec<Ty> = args.iter().map(|a| self.infer(a)).collect();
+        let arity = |n: usize| if n == 1 { "argument" } else { "arguments" };
+        let want = match name {
+            "send" => 1,
+            "receive" | "close" | "closed" => 0,
+            _ => return Ty::Any,
+        };
+        if args.len() != want {
+            self.err(
+                "E1216",
+                format!(
+                    "`.{name}` takes {want} {}, given {}",
+                    arity(want),
+                    args.len()
+                ),
+                span,
+                None,
+            );
+            return Ty::Any;
+        }
+        match name {
+            "send" => {
+                let hint = format!("expected `{el}` here, because the channel carries `{el}`");
+                self.expect(&args[0], &tys[0], &el, "E1201", hint);
+                if let Some(f) = self.local(|n| {
+                    format!("pull {n}(c, v) {{ if c.closed() {{ cough {{code: \"E1520\", message: \"E1520 send on a closed channel\"}} }}; snuff c.send(v) }}")
+                }) {
+                    self.resolutions.push(Resolution::Method {
+                        recv_start: receiver.span.start,
+                        recv_end: receiver.span.end,
+                        call_end: span.end,
+                        func: f,
+                        has_args: true,
+                        safe,
+                    });
+                }
+                Ty::Null
+            }
+            "receive" => opt(el),
+            "closed" => Ty::Bool,
+            _ => Ty::Null,
+        }
+    }
+
     /// `measure x` (`_cg_layer_measure(x)`) and `a into b`
     /// (`_cg_layer_into(a, b)`): the layer is picked by the type of `x` or
     /// `b`, here, and the call renamed to it. A type the checker cannot see
@@ -1571,6 +1692,7 @@ impl<'a> Ck<'a> {
             return Ty::Any;
         };
         if matches!(t, Ty::Any | Ty::Param(_) | Ty::Never) {
+            self.untyped_layer(layer, callee, span);
             return Ty::Any;
         }
         let prog = self.prog;
@@ -1659,6 +1781,56 @@ impl<'a> Ck<'a> {
         }
     }
 
+    /// A layer on a value the checker cannot see: chosen when the program
+    /// runs, by a helper declared on this line (so what fails, fails here,
+    /// and a write is in the text cig reads).
+    fn untyped_layer(&mut self, layer: &str, callee: &Expr, span: Span) {
+        let prog = self.prog;
+        let into = layer == "into";
+        let subject = if into { "t" } else { "v" };
+        let mut lines = String::new();
+        for l in prog.layers.iter().filter(|l| l.layer == layer) {
+            let f = types::impl_fn_name(layer, &l.for_ty, layer);
+            let test = crate::lower::type_test(&l.for_ty, subject);
+            let call = if into {
+                format!("{f}(v, t)")
+            } else {
+                format!("{f}(v)")
+            };
+            lines.push_str(&format!("if {test} {{ snuff {call} }}; "));
+        }
+        match layer {
+            "measure" => lines.push_str(
+                "stick k = type_of(v); if k == \"list\" or k == \"map\" or k == \"string\" { snuff len(v) }; ",
+            ),
+            "into" => lines.push_str(
+                "if type_of(t) == \"list\" { t.push(v); snuff null }; if type_of(t) == \"string\" { if type_of(v) == \"string\" { fs.write_text(t, v) } else { fs.write_text(t, json.stringify(_cg_plain(v))) }; snuff null }; ",
+            ),
+            _ => {}
+        }
+        let params = if into { "v, t" } else { "v" };
+        let f = self.local(|n| {
+            format!(
+                "pull {n}({params}) {{ {lines}cough {{code: \"E1402\", message: \"E1402 nothing gives `{layer}` a meaning for \" + _cg_kind({subject})}} }}"
+            )
+        });
+        if let Some(f) = f {
+            self.resolutions.push(Resolution::Rename {
+                start: callee.span.start,
+                end: callee.span.end,
+                text: f,
+            });
+        }
+        if into && self.burn_depth == 0 {
+            self.warn(
+                "E303",
+                "`into` writes a file when its target is a path, and a write must be inside a burn block".into(),
+                span,
+                Some("wrap it: burn { ... }; a target that is a list needs no burn".into()),
+            );
+        }
+    }
+
     /// `_cg_named_E_v({field: value, ...})`: an enum variant given by name.
     fn named_ctor(&mut self, rest: &str, args: &[Expr]) -> Option<Ty> {
         let prog = self.prog;
@@ -1690,7 +1862,9 @@ impl<'a> Ck<'a> {
                         let hint = format!(
                             "expected `{want}` here, because of field `{n}` of `{en}.{vn}`"
                         );
-                        self.expect(val, t, &want, "E1201", hint);
+                        if self.expect(val, t, &want, "E1201", hint) && needs_check(t, &want) {
+                            self.check_here(val, &want, &format!("{en}.{vn} {n}"));
+                        }
                     }
                 }
             } else {
@@ -1755,7 +1929,9 @@ impl<'a> Ck<'a> {
                             "expected `{want}` here, because of the type of field `{n}` in `{}`",
                             rd.name
                         );
-                        self.expect(v, t, &want, "E1201", hint);
+                        if self.expect(v, t, &want, "E1201", hint) && needs_check(t, &want) {
+                            self.check_here(v, &want, &format!("{}.{n}", rd.name));
+                        }
                     }
                 }
             }
@@ -1820,7 +1996,10 @@ impl<'a> Ck<'a> {
                         "expected `{want}` here, because of field `{}` of `{en}.{vn}`",
                         v.fields[i].0
                     );
-                    self.expect(&args[i], t, &want, "E1201", hint);
+                    if self.expect(&args[i], t, &want, "E1201", hint) && needs_check(t, &want) {
+                        let what = format!("{en}.{vn} {}", v.fields[i].0);
+                        self.check_here(&args[i], &want, &what);
+                    }
                 }
             }
             return Some(Ty::Enum(
@@ -1850,23 +2029,60 @@ impl<'a> Ck<'a> {
                 };
             }
         }
+        // `plan.f(x)` for `use tools.plan`: the module's signature.
+        if let ExprKind::Ident(l) = &receiver.kind {
+            if let Some(sig) = prog.module_fns.get(&format!("{l}.{name}")).cloned() {
+                self.infer(receiver);
+                let gens: Vec<String> = sig.generics.iter().map(|g| g.0.clone()).collect();
+                let params = Self::sig_params(&sig);
+                let ret = sig.ret.clone().unwrap_or(Ty::Any);
+                let what = format!("{l}.{name}");
+                let t = self.apply(
+                    &what,
+                    &gens,
+                    &params,
+                    0,
+                    None,
+                    &ret,
+                    args,
+                    span,
+                    HashMap::new(),
+                );
+                return if safe { opt(t) } else { t };
+            }
+        }
         let rt = self.infer(receiver);
         let recv = strip_opt(&rt);
         let result = if matches!(recv, Ty::Any | Ty::Param(_) | Ty::Fn(..)) {
-            // An interface's method on a value the checker cannot see: the
-            // dispatcher picks the `impl` by the value when it runs.
+            // An interface's method on a value the checker cannot see: picked
+            // by the value when it runs, by a dispatcher declared on this
+            // line (so a value with no `impl` fails here).
             if !matches!(recv, Ty::Fn(..)) {
                 if let Some(i) = prog
                     .interfaces
                     .values()
                     .find(|i| i.methods.iter().any(|m| m.name == name))
                 {
+                    let params: Vec<String> = (1..=args.len()).map(|k| format!("a{k}")).collect();
+                    let list = if params.is_empty() {
+                        String::new()
+                    } else {
+                        format!(", {}", params.join(", "))
+                    };
+                    let lines = crate::lower::dispatch_lines(prog, &i.name, name, &list);
+                    let plain = params.join(", ");
+                    let func = self
+                        .local(|n| {
+                            format!("pull {n}(self{list}) {{ {lines}snuff self.{name}({plain}) }}")
+                        })
+                        .unwrap_or_else(|| format!("_cg_dispatch_{}_{name}", i.name));
                     self.resolutions.push(Resolution::Method {
                         recv_start: receiver.span.start,
                         recv_end: receiver.span.end,
                         call_end: span.end,
-                        func: format!("_cg_dispatch_{}_{name}", i.name),
+                        func,
                         has_args: !args.is_empty(),
+                        safe,
                     });
                 }
             }
@@ -1874,6 +2090,8 @@ impl<'a> Ck<'a> {
                 self.infer(a);
             }
             Ty::Any
+        } else if let Ty::Channel(el) = &recv {
+            self.channel_method(receiver, name, args, (**el).clone(), safe, span)
         } else if let Some(s) = stdlib::method(&recv, name) {
             let mut binds = HashMap::new();
             match &recv {
@@ -1913,6 +2131,7 @@ impl<'a> Ck<'a> {
                             call_end: span.end,
                             func: types::impl_fn_name(&i.name, &im.for_ty, name),
                             has_args: !args.is_empty(),
+                            safe,
                         });
                         let params: Vec<Ty> = m
                             .params
@@ -1959,6 +2178,28 @@ impl<'a> Ck<'a> {
         } else {
             result
         }
+    }
+}
+
+/// Does a value of type `found` need a check when the program runs to be
+/// sure it fits `want`?
+fn needs_check(found: &Ty, want: &Ty) -> bool {
+    crate::lower::ty::checks(want)
+        && (matches!(found, Ty::Any) || (matches!(strip_opt(want), Ty::Sized(_)) && found != want))
+}
+
+/// A whole number written out: `3`, `-3`.
+fn int_literal(e: &Expr) -> Option<i64> {
+    match &e.kind {
+        ExprKind::Int(v) => Some(*v),
+        ExprKind::Unary {
+            op: UnOp::Neg,
+            expr,
+        } => match &expr.kind {
+            ExprKind::Int(v) => v.checked_neg(),
+            _ => None,
+        },
+        _ => None,
     }
 }
 

@@ -173,6 +173,11 @@ struct L<'a> {
     /// The lowered offsets (as original offsets, converted at the end) of
     /// every name given to `move`.
     move_keys: Vec<usize>,
+    /// The modules this file has bound (`use`), by function name.
+    bound_modules: BTreeSet<String>,
+    /// Records and enums of a module this file uses that are not `pub`:
+    /// name -> module.
+    private_types: BTreeMap<String, String>,
     /// Type parameters in scope (of the enclosing generic function).
     tparams: Vec<String>,
     public_next: bool,
@@ -238,6 +243,8 @@ pub fn lower(src: &str, opts: &Options) -> Lowered {
         opts,
         modules: Vec::new(),
         move_keys: Vec::new(),
+        bound_modules: BTreeSet::new(),
+        private_types: BTreeMap::new(),
         tparams: Vec::new(),
         public_next: false,
         record_names: BTreeSet::new(),
@@ -475,6 +482,21 @@ impl<'a> L<'a> {
                 Some((t, n))
             }
             Err((at, m)) => {
+                if let Some(module) = self
+                    .ident(at)
+                    .and_then(|n| self.private_types.get(&n).cloned())
+                {
+                    let n = self.ident(at).unwrap_or_default();
+                    let sp = self.sp(at);
+                    self.err_hint(
+                        "E1303",
+                        format!("`{n}` is in module `{module}` but not exported"),
+                        sp.start,
+                        sp.end,
+                        format!("mark it `pub` in module `{module}`"),
+                    );
+                    return None;
+                }
                 let m = if m.starts_with('E') {
                     m
                 } else {
@@ -566,15 +588,21 @@ impl<'a> L<'a> {
             if (public || self.at_stmt_start(i)) && self.ident(s + 1).is_some() {
                 if self.is_word(s, "record") {
                     if let Some(r) = self.read_record(s, public) {
-                        self.prog.records.insert(r.name.clone(), r);
+                        if !self.declared_twice(&r.name, s + 1) {
+                            self.prog.records.insert(r.name.clone(), r);
+                        }
                     }
                 } else if self.is_word(s, "enum") {
                     if let Some(e) = self.read_enum(s, public) {
-                        self.prog.enums.insert(e.name.clone(), e);
+                        if !self.declared_twice(&e.name, s + 1) {
+                            self.prog.enums.insert(e.name.clone(), e);
+                        }
                     }
                 } else if self.is_word(s, "interface") {
                     if let Some(f) = self.read_interface(s, public) {
-                        self.prog.interfaces.insert(f.name.clone(), f);
+                        if !self.declared_twice(&f.name, s + 1) {
+                            self.prog.interfaces.insert(f.name.clone(), f);
+                        }
                     }
                 } else if self.is_word(s, "layer") && self.strength == Strength::Full {
                     if let Some(n) = self.ident(s + 1) {
@@ -593,6 +621,29 @@ impl<'a> L<'a> {
             }
             i += 1;
         }
+    }
+
+    /// A record, enum or interface named like one declared above it: E1214,
+    /// naming the line of the first.
+    fn declared_twice(&mut self, name: &str, at: usize) -> bool {
+        let first = self
+            .prog
+            .records
+            .get(name)
+            .map(|r| r.at)
+            .or_else(|| self.prog.enums.get(name).map(|e| e.at))
+            .or_else(|| self.prog.interfaces.get(name).map(|i| i.at));
+        let Some(first) = first else { return false };
+        let line = self.lines.partition_point(|&s| s <= first.start);
+        let sp = self.sp(at);
+        self.err_hint(
+            "E1214",
+            format!("`{name}` is declared twice: a record, enum or interface name is one thing in a file"),
+            sp.start,
+            sp.end,
+            format!("the first is on line {line}; rename one of them"),
+        );
+        true
     }
 
     /// `<A, B>` after a declaration's name: the names, and the index after.
@@ -1064,6 +1115,12 @@ impl<'a> L<'a> {
             }
             T::Cough | T::Chain => {
                 let e = self.stmt_end(i, end);
+                // A record or enum coughed is shown as one when nothing
+                // catches it, and caught as itself.
+                if self.show && matches!(self.k(i), T::Cough) && i + 1 < e {
+                    self.e.open(self.sp(i + 1).start, "_cg_coughed(");
+                    self.e.close(self.sp(e - 1).end, ")");
+                }
                 self.expr(i + 1, e);
                 e
             }
@@ -1117,6 +1174,22 @@ impl<'a> L<'a> {
                         || self.is_word(i.saturating_sub(1), "unburn") =>
                 {
                     i = self.block(i);
+                }
+                T::Ashtray
+                    if self.show
+                        && self.ident(i + 1).is_some()
+                        && matches!(self.k(i + 2), T::LBrace) =>
+                {
+                    // `ashtray e {`: `e` is what was coughed, a record as itself.
+                    let name = self.ident(i + 1).unwrap();
+                    let n = self.fresh();
+                    let sp = self.sp(i + 1);
+                    self.e.replace(sp.start, sp.end, format!("__cg_c{n}"));
+                    self.e.open(
+                        self.sp(i + 2).end,
+                        format!(" stick {name} = _cg_caught(__cg_c{n});"),
+                    );
+                    i += 2;
                 }
                 T::If | T::While | T::For | T::Else | T::Ashtray | T::Finally | T::Burn => {
                     i += 1;
@@ -1174,6 +1247,19 @@ impl<'a> L<'a> {
         }
         if let Some((a, b)) = annotation {
             self.e.blank(self.src, a, b);
+        }
+        // `stick ch = channel<T>()`: `ch` is a `Channel<T>`.
+        if declared.is_none() && self.is_word(j + 1, "channel") && matches!(self.k(j + 2), T::Lt) {
+            let d = self.close_angle(j + 2, e);
+            if d + 3 == e
+                && matches!(self.k(d + 1), T::LParen)
+                && matches!(self.k(d + 2), T::RParen)
+            {
+                if let Some((t, _)) = self.parse_ty(j + 3) {
+                    self.bind_keys
+                        .push((self.sp(i).start, Ty::Channel(Box::new(t))));
+                }
+            }
         }
         if let Some(t) = &declared {
             self.bind_keys.push((self.sp(i).start, t.clone()));
@@ -1454,17 +1540,50 @@ impl<'a> L<'a> {
                         a += 1;
                     }
                 }
+                // The block runs inside a loop of the lowering's own: a
+                // `break` or `continue` there would leave the retry, not the
+                // loop the reader sees around it.
+                let mut loops: Vec<(usize, usize)> = Vec::new();
+                for k in open + 1..close {
+                    if matches!(self.k(k), T::For | T::While) {
+                        if let Some(b) = self.block_brace(k + 1, close) {
+                            loops.push((b, self.matching(b)));
+                        }
+                    }
+                }
+                for k in open + 1..close {
+                    if matches!(self.k(k), T::Break | T::Continue)
+                        && !loops.iter().any(|(a, b)| *a < k && k < *b)
+                    {
+                        let sp = self.sp(k);
+                        let word = if matches!(self.k(k), T::Break) {
+                            "break"
+                        } else {
+                            "continue"
+                        };
+                        self.err_hint(
+                            "E1403",
+                            format!("`{word}` cannot leave a `within retry` block"),
+                            sp.start,
+                            sp.end,
+                            "put the loop inside the block, or set a flag and test it after the block",
+                        );
+                    }
+                }
                 let n = self.fresh();
+                // The last failure is coughed again on the `within` line.
                 self.e.replace(
                     self.sp(i).start,
                     self.sp(open).start,
-                    format!("roll __cg_t{n} = 0; while true {{ try "),
+                    format!(
+                        "roll __cg_t{n} = 0; pull __cg_f{n}(e) {{ cough e }}; while true {{ try "
+                    ),
                 );
                 self.e.replace(
                     self.sp(close).start,
                     self.sp(close).end,
                     format!(
-                        "; break }} ashtray __cg_e{n} {{ __cg_t{n} += 1; if __cg_t{n} >= ({count}) {{ cough __cg_e{n} }}; time.sleep_ms({backoff_ms}) }} }}"
+                        "; break }} ashtray __cg_e{n} {{ __cg_t{n} += 1; if __cg_t{n} >= ({count}) {{ __cg_f{n}(__cg_e{n}) }}; time.sleep_ms({backoff_ms}) }} }}"
                     ),
                 );
             }
@@ -1583,14 +1702,26 @@ impl<'a> L<'a> {
                 }
                 T::Ident(name) => {
                     let name = name.clone();
+                    if let Some(module) = self.private_types.get(&name).cloned() {
+                        if !self.record_names.contains(&name)
+                            && !self.enum_names.contains(&name)
+                            && matches!(self.k(j + 1), T::LBrace | T::Dot | T::Lt)
+                        {
+                            let sp = self.sp(j);
+                            self.err_hint(
+                                "E1303",
+                                format!("`{name}` is in module `{module}` but not exported"),
+                                sp.start,
+                                sp.end,
+                                format!("mark it `pub` in module `{module}`"),
+                            );
+                        }
+                    }
                     // A record literal: `Name { ... }` or `Name<T> { ... }`.
                     if self.record_names.contains(&name) {
                         let mut b = j + 1;
                         if matches!(self.k(b), T::Lt) {
-                            let mut d = j + 1;
-                            while d < e && !matches!(self.k(d), T::Gt) {
-                                d += 1;
-                            }
+                            let d = self.close_angle(j + 1, e);
                             if matches!(self.k(d + 1), T::LBrace) {
                                 self.e.blank(self.src, self.sp(j + 1).start, self.sp(d).end);
                                 b = d + 1;
@@ -1643,10 +1774,7 @@ impl<'a> L<'a> {
                         self.move_keys.push(self.sp(j + 1).start);
                     }
                     if name == "channel" && matches!(self.k(j + 1), T::Lt) {
-                        let mut d = j + 1;
-                        while d < e && !matches!(self.k(d), T::Gt) {
-                            d += 1;
-                        }
+                        let d = self.close_angle(j + 1, e);
                         if matches!(self.k(d + 1), T::LParen) {
                             self.e
                                 .replace(self.sp(j).start, self.sp(d).end, "_cg_channel");
@@ -1656,10 +1784,7 @@ impl<'a> L<'a> {
                     }
                     // A generic function's explicit type arguments.
                     if self.generic_fns.contains(&name) && matches!(self.k(j + 1), T::Lt) {
-                        let mut d = j + 1;
-                        while d < e && !matches!(self.k(d), T::Gt) {
-                            d += 1;
-                        }
+                        let d = self.close_angle(j + 1, e);
                         if matches!(self.k(d + 1), T::LParen) {
                             self.e.blank(self.src, self.sp(j + 1).start, self.sp(d).end);
                         }
@@ -1737,6 +1862,47 @@ impl<'a> L<'a> {
         let n = self.toks.len() - 1;
         self.expr(0, n);
         self.toks = saved;
+    }
+
+    /// The first token in `[i, limit)` at bracket depth 0 that `stop` picks;
+    /// `limit` when there is none.
+    fn depth0(&self, i: usize, limit: usize, stop: impl Fn(&T) -> bool) -> usize {
+        let mut depth = 0i32;
+        let mut b = i;
+        while b < limit {
+            let kk = self.k(b);
+            if Self::is_open(kk) {
+                depth += 1;
+            } else if Self::is_close(kk) {
+                depth -= 1;
+            } else if depth == 0 && stop(kk) {
+                return b;
+            }
+            b += 1;
+        }
+        limit
+    }
+
+    /// The `>` that closes the `<` at `lt`, counting the ones between
+    /// (`id<List<Map<Int>>>`); `limit` when there is none.
+    fn close_angle(&self, lt: usize, limit: usize) -> usize {
+        let mut depth = 0i32;
+        let mut d = lt;
+        while d < limit {
+            match self.k(d) {
+                T::Lt => depth += 1,
+                T::Gt => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return d;
+                    }
+                }
+                T::Newline | T::Semicolon | T::LBrace | T::RBrace => return limit,
+                _ => {}
+            }
+            d += 1;
+        }
+        limit
     }
 
     /// Does an operand start at `i` (for a prefix layer like `measure x`)?
@@ -2270,6 +2436,21 @@ impl<'a> L<'a> {
             );
             return e;
         };
+        // `match P { x: 1 } { ... }` reads the record's braces as the arms.
+        if self
+            .ident(open - 1)
+            .is_some_and(|n| self.record_names.contains(&n))
+        {
+            let sp = self.sp(open - 1);
+            self.err_hint(
+                "E1212",
+                "a record written right after `match` needs parentheses",
+                sp.start,
+                sp.end,
+                "write `match (P { ... }) { ... }`, or bind it first",
+            );
+            return self.stmt_end(m, end).max(self.matching(open) + 1);
+        }
         let close = self.matching(open);
         let n = self.fresh();
         let (msub, done, res) = (
@@ -2331,19 +2512,17 @@ impl<'a> L<'a> {
                 let bc = self.matching(arrow + 1);
                 ((arrow + 1, bc + 1), true)
             } else {
-                let mut b = arrow + 1;
-                let mut depth = 0i32;
-                while b < close {
-                    let kk = self.k(b);
-                    if Self::is_open(kk) {
-                        depth += 1;
-                    } else if Self::is_close(kk) {
-                        depth -= 1;
-                    } else if depth == 0 && matches!(kk, T::Newline | T::Comma) {
-                        break;
-                    }
-                    b += 1;
-                }
+                // An arm ends at the line's end, or at a comma before the
+                // next arm. `exhale a, b` keeps its commas when no other arm
+                // follows on the line.
+                let line_end = self.depth0(arrow + 1, close, |k| matches!(k, T::Newline));
+                let arm_after =
+                    self.depth0(arrow + 1, line_end, |k| matches!(k, T::FatArrow)) < line_end;
+                let b = if matches!(self.k(arrow + 1), T::Exhale) && !arm_after {
+                    line_end
+                } else {
+                    self.depth0(arrow + 1, close, |k| matches!(k, T::Newline | T::Comma))
+                };
                 ((arrow + 1, b), false)
             };
             let sep = if matches!(self.k(body.1), T::Comma) {
@@ -2559,6 +2738,22 @@ impl<'a> L<'a> {
         })
     }
 
+    /// A record pattern that tests nothing: each field `_` or a name that
+    /// is not a variant of the field's enum.
+    fn irrefutable_record(&self, name: &str, fields: &[(String, Pat)]) -> bool {
+        let Some(r) = self.prog.records.get(name) else {
+            return false;
+        };
+        fields.iter().all(|(f, p)| match p {
+            Pat::Wild => true,
+            Pat::Bind(n) => {
+                let fty = r.fields.iter().find(|x| x.0 == *f).map(|x| &x.1);
+                !matches!(fty, Some(Ty::Enum(e, _)) if self.prog.enums.get(e).is_some_and(|d| d.variants.iter().any(|v| v.name == *n)))
+            }
+            _ => false,
+        })
+    }
+
     fn exhaustive(&mut self, m: usize, guarded: &[bool], pats: &[Pat], en: Option<&str>) {
         let unguarded: Vec<&Pat> = pats
             .iter()
@@ -2571,6 +2766,8 @@ impl<'a> L<'a> {
             Pat::Bind(n) => !en
                 .and_then(|e| self.prog.enums.get(e))
                 .is_some_and(|d| d.variants.iter().any(|v| v.name == *n)),
+            // `Move { from, to }`: every field bound, nothing tested.
+            Pat::Record { name, fields } => self.irrefutable_record(name, fields),
             _ => false,
         });
         if catch_all {
@@ -2681,14 +2878,28 @@ impl<'a> L<'a> {
         let fname = format!("_cg_mod_{}", parts.join("_"));
         let local = parts.last().unwrap().clone();
         let shown = parts.join(".");
-        let mut text = format!("stick {local} = {fname}()");
+        // `use tools.plan` and `use tools.plan.{Move}` in one file bind
+        // `plan` once.
+        let mut text = if self.bound_modules.insert(fname.clone()) {
+            format!("stick {local} = {fname}()")
+        } else {
+            String::new()
+        };
         let mut typed: Vec<(usize, Ty)> = Vec::new();
         if let Some(m) = self.load_module(&parts, at) {
+            for (n, k) in &m.exports {
+                if let Export::Function(sig) = k {
+                    self.prog
+                        .module_fns
+                        .insert(format!("{local}.{n}"), sig.clone());
+                }
+            }
             for n in &names {
                 match m.exports.iter().find(|(x, _)| x == n).map(|x| &x.1) {
                     // A type: its constructor is global, nothing to bind.
                     Some(Export::Record | Export::Enum) => {}
                     Some(Export::Function(sig)) => {
+                        self.prog.module_fns.insert(n.clone(), sig.clone());
                         let off = text.len() + 2;
                         text.push_str(&format!("; stick {n} = {local}.{n}"));
                         if sig.generics.is_empty() {
@@ -2723,9 +2934,18 @@ impl<'a> L<'a> {
                 }
             }
         }
-        let seq = self.e.replace(at.0, at.1, text);
+        // What a second `use` of a module binds starts with "; ".
+        let (text, cut) = match text.strip_prefix("; ") {
+            Some(t) => (t.to_string(), 2),
+            None => (text, 0),
+        };
+        let seq = if text.is_empty() {
+            self.e.blank(self.src, at.0, at.1)
+        } else {
+            self.e.replace(at.0, at.1, text)
+        };
         for (off, t) in typed {
-            self.gen_bindings.push((seq, off, t));
+            self.gen_bindings.push((seq, off - cut, t));
         }
         e
     }
@@ -2837,15 +3057,25 @@ impl<'a> L<'a> {
                 format!("`cigar check {}` shows where", m.path.display()),
             );
         }
+        // A module's `pub` records and enums are types here; the others stay
+        // its own (their values can still reach this file, untyped).
         for (n, r) in &m.program.records {
-            self.record_names.insert(n.clone());
+            if r.public {
+                self.record_names.insert(n.clone());
+            } else {
+                self.private_types.insert(n.clone(), shown.clone());
+            }
             self.prog
                 .records
                 .entry(n.clone())
                 .or_insert_with(|| r.clone());
         }
         for (n, en) in &m.program.enums {
-            self.enum_names.insert(n.clone());
+            if en.public {
+                self.enum_names.insert(n.clone());
+            } else {
+                self.private_types.insert(n.clone(), shown.clone());
+            }
             self.prog
                 .enums
                 .entry(n.clone())
@@ -2978,17 +3208,7 @@ impl<'a> L<'a> {
                     })
                 {
                     let f = impl_fn_name(iname, &imp.for_ty, &m.name);
-                    let test = match &imp.for_ty {
-                        Ty::Record(n, _) => format!("_cg_is_record(self, \"{n}\")"),
-                        Ty::Enum(n, _) => format!("_cg_is_enum(self, \"{n}\")"),
-                        Ty::Text | Ty::Path => "type_of(self) == \"string\"".to_string(),
-                        Ty::Int | Ty::Sized(_) => "type_of(self) == \"int\"".to_string(),
-                        Ty::Float => "type_of(self) == \"float\"".to_string(),
-                        Ty::Bool => "type_of(self) == \"bool\"".to_string(),
-                        Ty::List(_) => "type_of(self) == \"list\" and not _cg_is_record(self, null)".to_string(),
-                        Ty::Map(_) => "type_of(self) == \"map\" and not _cg_is_record(self, null) and not _cg_is_enum(self, null)".to_string(),
-                        _ => "false".to_string(),
-                    };
+                    let test = type_test(&imp.for_ty, "self");
                     body.push_str(&format!("  if {test} {{ snuff {f}(self{args}) }}\n"));
                 }
                 let plain = params.join(", ");
@@ -3000,6 +3220,39 @@ impl<'a> L<'a> {
         }
         out
     }
+}
+
+/// A run-time test that the value named `v` is of type `t`, as an `impl`
+/// or a layer picks one.
+pub fn type_test(t: &Ty, v: &str) -> String {
+    match t {
+        Ty::Record(n, _) => format!("_cg_is_record({v}, \"{n}\")"),
+        Ty::Enum(n, _) => format!("_cg_is_enum({v}, \"{n}\")"),
+        Ty::Text | Ty::Path => format!("type_of({v}) == \"string\""),
+        Ty::Int | Ty::Sized(_) => format!("type_of({v}) == \"int\""),
+        Ty::Float => format!("type_of({v}) == \"float\""),
+        Ty::Bool => format!("type_of({v}) == \"bool\""),
+        Ty::List(_) => format!("type_of({v}) == \"list\""),
+        Ty::Map(_) => format!("type_of({v}) == \"map\" and not _cg_is_record({v}, null) and not _cg_is_enum({v}, null)"),
+        _ => "false".to_string(),
+    }
+}
+
+/// The `if` lines of a dispatcher for `method` of `iface`, over the impls
+/// that define it, called with `self` and `args` (already joined, with a
+/// leading ", " when there are any).
+pub fn dispatch_lines(prog: &Program, iface: &str, method: &str, args: &str) -> String {
+    let mut body = String::new();
+    for imp in prog
+        .impls
+        .iter()
+        .filter(|i| i.interface == iface && i.methods.iter().any(|x| x.name == method))
+    {
+        let f = impl_fn_name(iface, &imp.for_ty, method);
+        let test = type_test(&imp.for_ty, "self");
+        body.push_str(&format!("if {test} {{ snuff {f}(self{args}) }}; "));
+    }
+    body
 }
 
 /// Marks the start of a file's own lowered declarations (a comment, so cig
@@ -3110,7 +3363,7 @@ fn split_code(m: &str) -> (&'static str, String) {
     const CODES: &[&str] = &[
         "E1104", "E1201", "E1202", "E1203", "E1204", "E1205", "E1206", "E1207", "E1208", "E1209",
         "E1211", "E1212", "E1213", "E1214", "E1215", "E1216", "E1217", "E1218", "E1301", "E1302",
-        "E1303", "E1304", "E1311", "E1312", "E1313", "E1401", "E1402", "E1501", "E1502",
+        "E1303", "E1304", "E1311", "E1312", "E1313", "E1401", "E1402", "E1403", "E1501", "E1502",
     ];
     for c in CODES {
         if let Some(rest) = m.strip_prefix(c) {

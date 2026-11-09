@@ -166,11 +166,11 @@ inbox/a.txt
 
 A run-time error names the `.cigar` file and the line, shows the line as you
 wrote it, and puts a caret under the statement or expression. The checks the
-lowering inserts (`E1210`, `E1510`) report at the statement that holds them:
-a typed parameter's check is at its `pull` line. Two limits are known: an
-error raised inside the lowering's own helpers (`E1520`, a send on a closed
-channel) and an error inside a module's code are reported at a line past the
-end of your file, with the lowered text in the snippet.
+lowering inserts (`E1210`, `E1510`, `E1520`) report at the statement that
+holds them: a value passed to a typed parameter is checked where it is
+passed, and the parameter's own check is at its `pull` line. One limit is
+known: an error inside a module's code is reported at a line past the end of
+your file, with the lowered text in the snippet.
 
 ### Flags
 
@@ -219,6 +219,7 @@ step reads them the same way.
 | `E1104` | check, or internal | a name that starts `_cg_` or `__cg_`; or, as kind `internal`, a file that lowers to CigScript cig refuses (a bug in `cigar`) |
 | `E1200` to `E1399` | check | medium's type, record, `match`, module and interface errors |
 | `E1401`, `E1402` | check | layers: two meanings for a type, or none |
+| `E1403` | check | `break` or `continue` that would leave a `within retry` block |
 | `E1501`, `E1502` | check | ownership, at full |
 | `E303` | check | `into` a path outside a burn (a warning inside a function), as `fs.write_text` is |
 | `E1210`, `E1510`, `E1205`, `E1206`, `E1208`, `E1520` | cough, at run time | a boundary, a sized number, a record's or a variant's fields given at run time, and a send on a closed channel; the message starts with the code |

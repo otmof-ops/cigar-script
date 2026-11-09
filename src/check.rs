@@ -313,7 +313,14 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
                 }
             }
             for w in rep.warnings {
-                if !w.span.is_some_and(|s| appended(s.start)) {
+                // A warning about text the lowering wrote is CigarScript's
+                // to give (it gives its own, where it applies).
+                let generated = w.span.is_some_and(|s| {
+                    appended(s.start)
+                        || !applied.copied(s.start)
+                        || !lowered.copied(applied.original(s.start))
+                });
+                if !generated {
                     warnings.push(mapped(w, &back));
                 }
             }

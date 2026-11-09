@@ -1,0 +1,7 @@
+strength medium
+
+record R { n: Int, t: Text }
+pull mk(v) {
+  snuff R { n: v, t: "x" }
+}
+exhale mk("notint")

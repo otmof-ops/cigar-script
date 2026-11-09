@@ -41,14 +41,29 @@ pub fn apply(text: &str, rs: &[Resolution]) -> Applied {
             Resolution::Method {
                 recv_start,
                 recv_end,
+                call_end,
                 func,
                 has_args,
-                ..
+                safe,
             } => {
-                // `recv.name(` -> `func(recv, ` (or `func(recv` with no arguments).
-                if let Some(paren) = open_paren_after(text, *recv_end) {
+                let Some(paren) = open_paren_after(text, *recv_end) else {
+                    continue;
+                };
+                let comma = if *has_args { ", " } else { "" };
+                if *safe {
+                    // `recv?.name(a)` -> `_cg_safe(recv, pack(__cg_s) => func(__cg_s, a))`:
+                    // on null, nothing is called and nothing is evaluated.
+                    e.open(*recv_start, "_cg_safe(");
+                    e.replace(
+                        *recv_end,
+                        paren + 1,
+                        format!(", pack(__cg_s) => {func}(__cg_s{comma}"),
+                    );
+                    e.close(*call_end, ")");
+                } else {
+                    // `recv.name(` -> `func(recv, ` (or `func(recv` with no arguments).
                     e.open(*recv_start, format!("{func}("));
-                    e.replace(*recv_end, paren + 1, if *has_args { ", " } else { "" });
+                    e.replace(*recv_end, paren + 1, comma);
                 }
             }
             Resolution::Wrap {
@@ -118,6 +133,7 @@ mod tests {
                 call_end: src.find(')').unwrap() + 1,
                 func: "_cg_impl_Sized_Move_size".into(),
                 has_args: false,
+                safe: false,
             },
             Resolution::Method {
                 recv_start: n,
@@ -125,6 +141,7 @@ mod tests {
                 call_end: src.rfind(')').unwrap() + 1,
                 func: "_cg_impl_Add_Int_add".into(),
                 has_args: true,
+                safe: false,
             },
         ];
         let a = apply(src, &rs);
@@ -148,6 +165,7 @@ mod tests {
                 call_end: close,
                 func: "f".into(),
                 has_args: false,
+                safe: false,
             },
             Resolution::Wrap {
                 start: m,

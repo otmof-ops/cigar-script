@@ -284,6 +284,9 @@ pub struct Program {
     pub lambdas: BTreeMap<usize, Vec<Option<Ty>>>,
     /// Every name given to `move` (full), by the lowered offset of the name.
     pub moves: std::collections::BTreeSet<usize>,
+    /// The functions modules export, as this file reaches them: `plan.f`
+    /// for `use tools.plan`, and `f` for `use tools.plan.{f}`.
+    pub module_fns: BTreeMap<String, FnSig>,
 }
 
 /// The name of the lowered function that implements `method` of

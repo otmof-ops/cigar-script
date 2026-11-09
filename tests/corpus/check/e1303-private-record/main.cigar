@@ -1,0 +1,7 @@
+strength medium
+# CHECK THIS FILE; tools/a.cigar has a record that is not pub.
+
+use tools.a
+
+stick s = Secret { n: 1 }
+exhale s

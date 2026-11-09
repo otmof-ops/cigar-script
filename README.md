@@ -97,7 +97,7 @@ broke.
 | `cigar check` on a `.cig` file | **built.** Exactly what `cig check` does, of the cig version `cigar` is built on; a `.cig` file never gets a new error |
 | `cigar check` on a `.cigar` file | **built.** The `strength` declaration, the feature gate, lowering, the type and ownership checks, and then CigScript's own check |
 | `cigar run` | **built.** Checks, then runs as a cig program: plans, journals, rollback and run records are cig's; errors name your file and line |
-| `E1101` to `E1104`, `E1201` to `E1218`, `E1301` to `E1304`, `E1311` to `E1313`, `E1401`, `E1402`, `E1501`, `E1502`, `E1510`, `E1520` | **built.** [The language](docs/LANGUAGE.md#errors) says when each comes |
+| `E1101` to `E1104`, `E1201` to `E1218`, `E1301` to `E1304`, `E1311` to `E1313`, `E1401` to `E1403`, `E1501`, `E1502`, `E1510`, `E1520` | **built.** [The language](docs/LANGUAGE.md#errors) says when each comes |
 | `--strength`, `--json`, `--plain`, `--no-color`, folders | **built.** Exit `0` checked, `2` a check failed, `3` could not check |
 | mild: everything CigScript has | **built** |
 | medium: types, records, enums, `match`, generics, interfaces, modules, `into`, `measure`, the typed standard library | **built**, provisional ([#8](https://github.com/otmof-ops/cigar-script/issues/8), [#9](https://github.com/otmof-ops/cigar-script/issues/9), [#10](https://github.com/otmof-ops/cigar-script/issues/10), [#11](https://github.com/otmof-ops/cigar-script/issues/11), [#13](https://github.com/otmof-ops/cigar-script/issues/13)) |

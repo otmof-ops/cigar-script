@@ -1,0 +1,5 @@
+strength medium
+
+record Secret { n: Int }
+
+pub pull one() -> Int { snuff 1 }

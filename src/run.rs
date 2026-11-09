@@ -190,8 +190,16 @@ fn relay(err: impl Read, name: &str, map: &crate::check::SourceMap, lowered: &st
     let mut out = io::stderr();
     // An error being rewritten: its lowered offset, and where it is written.
     let mut open: Option<(usize, usize, usize, usize, bool)> = None;
-    for line in BufReader::new(err).lines() {
-        let Ok(line) = line else { break };
+    let mut reader = BufReader::new(err);
+    let mut raw = Vec::new();
+    loop {
+        raw.clear();
+        match reader.read_until(b'\n', &mut raw) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+        let line = String::from_utf8_lossy(&raw);
+        let line = line.trim_end_matches(['\n', '\r']).to_string();
         if let Some(rest) = line.strip_prefix(&arrow) {
             let mut nums = rest.splitn(2, ':').map(|n| n.trim().parse::<usize>().ok());
             if let (Some(Some(l)), Some(Some(c))) = (nums.next(), nums.next()) {
@@ -292,7 +300,15 @@ fn built(program: &Program) -> io::Result<PathBuf> {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     // The script's hash, and which cigar built it.
-    let key = format!("{}-{:x}-{:x}", &program.sha256[..16], meta.len(), stamp);
+    // The script (its whole hash), the file it names in errors and records,
+    // what built it, and which cigar it is appended to.
+    let key = format!(
+        "{}-{:016x}-{:x}-{:x}",
+        program.sha256,
+        fnv(format!("{}\0{}", program.file, program.compiler).as_bytes()),
+        meta.len(),
+        stamp
+    );
     let dir = cache_dir();
     private_dir(&dir)?;
     let path = dir.join(format!(
@@ -301,6 +317,10 @@ fn built(program: &Program) -> io::Result<PathBuf> {
         std::env::consts::EXE_SUFFIX
     ));
     if fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
+        // Used now: the newest, so the cache keeps it.
+        if let Ok(f) = fs::File::options().append(true).open(&path) {
+            let _ = f.set_modified(std::time::SystemTime::now());
+        }
         return Ok(path);
     }
     let runtime = fs::read(&me)?;
@@ -344,6 +364,16 @@ fn private_dir(dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// FNV-1a, 64 bits: tells apart two files whose scripts are the same.
+fn fnv(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in bytes {
+        h ^= u64::from(*b);
+        h = h.wrapping_mul(0x0100_0000_01b3);
+    }
+    h
+}
+
 /// Keep the newest built programs, and the one about to run.
 fn prune(dir: &Path, keep: &Path) {
     let Ok(entries) = fs::read_dir(dir) else {
@@ -352,7 +382,12 @@ fn prune(dir: &Path, keep: &Path) {
     let mut files: Vec<(std::time::SystemTime, PathBuf)> = entries
         .filter_map(|e| e.ok())
         .map(|e| e.path())
+        // Not a program another cigar is still writing (`.name-key.pid`).
         .filter(|p| p.is_file() && p != keep)
+        .filter(|p| {
+            !p.file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+        })
         .filter_map(|p| {
             fs::metadata(&p)
                 .and_then(|m| m.modified())
