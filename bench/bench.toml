@@ -1,0 +1,52 @@
+# The benchmark manifest for cigar-script, in the shape cig-script's
+# docs/BENCH.md defines. This slice measures the checker's work only:
+# `cigar check` on the CigScript example corpus as mild, the same set
+# through `cig check` for comparison, and a generated 1,000-line mild
+# file at each strength. The generated fixtures are produced by
+# `fixtures/make-big.sh` as a case `setup`, so this repo carries nothing
+# large.
+
+[bench]
+product = "cigar"
+version = ["cigar", "--version"]
+home    = "isolated"
+
+[defaults]
+samples = 9
+per     = 5
+warmup  = 1
+env     = { NO_COLOR = "1", CIG_DOCTOR = "0" }
+
+[[case]]
+name  = "cigar check: CigScript examples, as mild"
+group = "check"
+setup = ["sh", "-c", "fixtures/make-big.sh"]
+run   = ["sh", "-c", "cigar check ${CIGSCRIPT_SRC:-.}/examples"]
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig check: CigScript examples, for comparison"
+group = "check"
+run   = ["sh", "-c", "for f in ${CIGSCRIPT_SRC:-.}/examples/*.cig; do cig check $f > /dev/null; done"]
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: a generated 1,000-line mild file"
+group = "check-1k"
+setup = ["sh", "-c", "fixtures/make-big.sh"]
+run   = ["cigar", "check", "fixtures/big-mild.cigar"]
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: the same file at medium"
+group = "check-1k"
+setup = ["sh", "-c", "fixtures/make-big.sh"]
+run   = ["cigar", "check", "fixtures/big-medium.cigar"]
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: the same file at full"
+group = "check-1k"
+setup = ["sh", "-c", "fixtures/make-big.sh"]
+run   = ["cigar", "check", "fixtures/big-full.cigar"]
+expect = { exit = 0 }

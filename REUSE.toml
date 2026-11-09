@@ -5,7 +5,7 @@ SPDX-PackageSupplier = "Jay Taylor"
 SPDX-PackageDownloadLocation = "https://github.com/otmof-ops/cigar-script"
 
 [[annotations]]
-path = ["src/**", "tests/**", "bench/**", "build.rs", "Cargo.toml", "Cargo.lock", ".github/**", ".gitignore", "REUSE.toml"]
+path = ["src/**", "tests/**", "bench/**", "ci/**", "build.rs", "Cargo.toml", "Cargo.lock", ".github/**", ".gitignore", "REUSE.toml"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)"
 SPDX-License-Identifier = "Apache-2.0"

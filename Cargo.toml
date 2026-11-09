@@ -1,0 +1,31 @@
+[package]
+name = "cigarscript"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.82"
+description = "CigarScript: CigScript grown deeper, in three strengths"
+repository = "https://github.com/otmof-ops/cigar-script"
+publish = false
+default-run = "cigar"
+
+[lib]
+name = "cigarscript"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cigar"
+path = "src/main.rs"
+
+[dependencies]
+cigscript = { git = "https://github.com/otmof-ops/cig-script", tag = "v1.18.0" }
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = "debuginfo"

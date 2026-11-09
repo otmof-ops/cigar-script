@@ -1,0 +1,6 @@
+strength medium
+record Move { from: Path, to: Path }
+stick x: Int = 1
+pull f(a: Int) -> Int {
+  exhale a
+}
