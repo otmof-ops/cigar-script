@@ -71,6 +71,41 @@ fn unknown_strength_exits_three() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(3));
+    // A usage error like the others: E800, and one JSON object under --json.
+    let json = Command::new(cigar_bin())
+        .args(["--json", "check", "--strength", "spicy"])
+        .arg(&f)
+        .output()
+        .unwrap();
+    assert_eq!(json.status.code(), Some(3));
+    let said = String::from_utf8_lossy(&json.stdout);
+    let v: serde_json::Value = serde_json::from_str(said.trim()).expect("one JSON object");
+    assert_eq!(v["code"], "E800", "{said}");
+}
+
+/// Findings come in the order they sit in the file, a late declaration's
+/// E1103 among the features above it.
+#[test]
+fn findings_come_in_file_order() {
+    let tmp = tempfile::tempdir().unwrap();
+    let f = tmp.path().join("late.cigar");
+    std::fs::write(&f, "record A { x: Int }\nstick b = 1\nstrength medium\n").unwrap();
+    let out = Command::new(cigar_bin())
+        .args(["--json", "check"])
+        .arg(&f)
+        .output()
+        .unwrap();
+    let codes: Vec<String> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .map(|v| format!("{}@{}", v["code"].as_str().unwrap_or(""), v["line"]))
+        .collect();
+    assert_eq!(
+        codes.first().map(String::as_str),
+        Some("E1101@1"),
+        "{codes:?}"
+    );
+    assert!(codes.iter().any(|c| c == "E1103@3"), "{codes:?}");
 }
 
 #[test]
@@ -114,4 +149,43 @@ fn a_folder_checks_every_top_level_file() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(2));
+}
+
+/// A diagnostic shows its line as written: the `strength` declaration is
+/// blanked for the checker, never in what the reader sees.
+#[test]
+fn a_declaration_error_shows_the_line_as_written() {
+    let f = fixtures().join("declaration/spicy.cigar");
+    let out = Command::new(cigar_bin())
+        .args(["check", "--no-color"])
+        .arg(&f)
+        .output()
+        .unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("1 | strength spicy"), "{err}");
+}
+
+/// Usage errors carry cig's own codes, so `cig explain` says what they mean:
+/// E800 for a command line that names nothing to check, E801 for a path
+/// that cannot be read.
+#[test]
+fn usage_errors_carry_cigs_codes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let txt = tmp.path().join("a.txt");
+    std::fs::write(&txt, "x\n").unwrap();
+    let missing = tmp.path().join("nope.cigar");
+    for (path, code) in [(&txt, "E800"), (&missing, "E801")] {
+        let out = Command::new(cigar_bin())
+            .args(["--json", "check"])
+            .arg(path)
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(3), "{}", path.display());
+        let said = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(said.contains(&format!("\"code\":\"{code}\"")), "{said}");
+    }
 }

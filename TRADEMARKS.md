@@ -1,8 +1,8 @@
 # Trademark policy
 
 **CigarScript** (the language, also written cigar-script, its repository's
-name, and cigar, its command) is a trademark of Jay Taylor, as **CigScript**
-is. The code is Apache-2.0, and the Apache license
+name, and cigar, its command) and the CigarScript logo are trademarks of Jay
+Taylor, as **CigScript** is. The code is Apache-2.0, and the Apache license
 says so itself in its section 6: it grants no trademark rights. This page says
 what that means in practice, so nobody has to guess.
 
@@ -33,9 +33,10 @@ with; do not use them to say what your thing *is*.
   (CigarScripts, cigarlang, cigarscript.dev). Forks and other implementations
   are welcome under Apache-2.0; they need their own name once they differ from
   the official one.
+- Using the **logo** anywhere other than to link to the official project.
 - Calling a build, distribution or service **official**, **certified**, or
   otherwise implying endorsement.
-- Merchandise carrying the names.
+- Merchandise carrying the names or the logo.
 
 Use GitHub's private reporting on this repository (see `SECURITY.md`) or open
 a discussion with what you have in mind. Answers are usually quick, and the

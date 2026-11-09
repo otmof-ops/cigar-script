@@ -81,23 +81,29 @@ fn run() -> i32 {
 }
 
 fn check_cmd(top: &Cli, a: &CheckArgs) -> i32 {
-    let strength = match a.strength.as_deref() {
-        Some(s) => match Strength::parse(s) {
-            Some(s) => Some(s),
-            None => {
-                eprintln!("cigar check: --strength is `{s}`, want `mild`, `medium` or `full`");
-                return exit::USAGE;
-            }
-        },
-        None => None,
-    };
-    let flags = Flags {
+    let mut flags = Flags {
         paths: a.paths.clone(),
-        strength,
+        strength: None,
         json: top.json,
         plain: top.plain,
         no_color: top.no_color,
     };
     let ctx = ctx_from(&flags);
+    if let Some(s) = a.strength.as_deref() {
+        match Strength::parse(s) {
+            Some(st) => flags.strength = Some(st),
+            None => {
+                // A usage error like any other: a code, a hint, and one
+                // JSON object under --json.
+                let d = cigscript::diagnostics::usage(format!(
+                    "--strength is `{s}`, want `mild`, `medium` or `full`"
+                ))
+                .code("E800")
+                .with_hint("cigar check --strength mild, medium or full");
+                cigscript::cli::report(&ctx, &d, None, None);
+                return exit::USAGE;
+            }
+        }
+    }
     run_check(&ctx, &flags)
 }

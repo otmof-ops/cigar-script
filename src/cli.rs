@@ -50,7 +50,7 @@ pub fn ctx_from(flags: &Flags) -> Ctx {
 /// error makes the overall exit `CHECK`.
 pub fn run_check(ctx: &Ctx, flags: &Flags) -> i32 {
     if flags.paths.is_empty() {
-        let d = usage("cigar check: name a file or a folder").code("E1006");
+        let d = usage("cigar check: name a file or a folder").code("E800");
         cigscript::cli::report(ctx, &d, None, None);
         return exit::USAGE;
     }
@@ -64,7 +64,7 @@ pub fn run_check(ctx: &Ctx, flags: &Flags) -> i32 {
                         "{}: no .cig or .cigar files at the top of the folder",
                         path.display()
                     ))
-                    .code("E1006");
+                    .code("E800");
                     cigscript::cli::report(ctx, &d, None, None);
                     had_usage = true;
                     continue;
@@ -103,7 +103,7 @@ fn check_file(ctx: &Ctx, path: &Path, strength: Option<Strength>) -> FileOutcome
         Some(k) => k,
         None => {
             let d = usage(format!("{}: not a .cig or .cigar file", path.display()))
-                .code("E1006")
+                .code("E800")
                 .with_hint("name a .cig script or a .cigar file");
             cigscript::cli::report(ctx, &d, None, None);
             return FileOutcome::Usage;
@@ -113,7 +113,7 @@ fn check_file(ctx: &Ctx, path: &Path, strength: Option<Strength>) -> FileOutcome
         Ok(s) => s,
         Err(e) => {
             let d = usage(format!("cannot read {}: {e}", path.display()))
-                .code("E1000")
+                .code("E801")
                 .with_hint("name a file you can read");
             cigscript::cli::report(ctx, &d, None, None);
             return FileOutcome::Usage;
@@ -139,20 +139,10 @@ fn report_checked(ctx: &Ctx, name: &str, checked: &Checked) {
         // One diagnostic per line, each carrying the file. Matches the
         // shape cig's reports emit.
         for d in &checked.errors {
-            cigscript::cli::report(
-                ctx,
-                d,
-                Some(name),
-                Some(&checked.source_as_cigscript_saw_it),
-            );
+            cigscript::cli::report(ctx, d, Some(name), Some(&checked.source_as_written));
         }
         for w in &checked.warnings {
-            cigscript::cli::report(
-                ctx,
-                w,
-                Some(name),
-                Some(&checked.source_as_cigscript_saw_it),
-            );
+            cigscript::cli::report(ctx, w, Some(name), Some(&checked.source_as_written));
         }
         if checked.ok() {
             // `cig check --json` prints one summary object per file;
@@ -170,7 +160,7 @@ fn report_checked(ctx: &Ctx, name: &str, checked: &Checked) {
             eprint!(
                 "{}",
                 ctx.yellow(
-                    &w.render(Some(name), Some(&checked.source_as_cigscript_saw_it))
+                    &w.render(Some(name), Some(&checked.source_as_written))
                         .replacen("error[", "warning[", 1),
                 ),
             );
@@ -178,12 +168,7 @@ fn report_checked(ctx: &Ctx, name: &str, checked: &Checked) {
         println!("checked {name}");
         return;
     }
-    cigscript::cli::report_all(
-        ctx,
-        &checked.errors,
-        name,
-        &checked.source_as_cigscript_saw_it,
-    );
+    cigscript::cli::report_all(ctx, &checked.errors, name, &checked.source_as_written);
 }
 
 /// The top-level files a path names: one file, or the `.cig` and
@@ -192,20 +177,18 @@ fn report_checked(ctx: &Ctx, name: &str, checked: &Checked) {
 fn files_of(path: &Path) -> Result<Vec<PathBuf>, Diagnostic> {
     let meta = fs::metadata(path).map_err(|e| {
         usage(format!("{}: {e}", path.display()))
-            .code("E1000")
+            .code("E801")
             .with_hint("name a file or a folder")
     })?;
     if meta.is_file() {
         return Ok(vec![path.to_path_buf()]);
     }
     if !meta.is_dir() {
-        return Err(
-            usage(format!("{}: neither a file nor a folder", path.display())).code("E1006"),
-        );
+        return Err(usage(format!("{}: neither a file nor a folder", path.display())).code("E800"));
     }
     let mut out = Vec::new();
     let entries =
-        fs::read_dir(path).map_err(|e| usage(format!("{}: {e}", path.display())).code("E1000"))?;
+        fs::read_dir(path).map_err(|e| usage(format!("{}: {e}", path.display())).code("E801"))?;
     for entry in entries {
         let entry = match entry {
             Ok(e) => e,

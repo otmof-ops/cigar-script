@@ -88,10 +88,111 @@ explain E1101` has a page; until then the message carries the whole
 explanation.
 
 ```
+Don't see any cigarettes.
 error[E1101 check]: using records needs strength medium; this file is mild
-  --> plan.cigar:3:1
+  --> moves.cigar:3:1
+  |
+3 | record Move {
+  | ^^^^^^
   = hint: to use it, put `strength medium` at the top of the file
+  = explain: cig explain E1101
 ```
+
+## Grammar
+
+This is the grammar of what the checker reads today. It is small, because
+the checker adds one construct to CigScript: the strength declaration. The
+rest of a file is CigScript, whose grammar is `cig`'s own and is read by
+`cig`'s parser, never a second one: after the declaration is set aside,
+`cigar check` hands the file to the same parse and check `cig check` runs.
+
+Notation is ISO 14977 EBNF: `,` follows, `|` chooses, `[ ]` is optional,
+`{ }` repeats, and `(* *)` is a comment.
+
+```ebnf
+file            = { separator } , [ strength-decl , end ] , cigscript-rest ;
+
+strength-decl   = "strength" , strength-word ;
+strength-word   = "mild" | "medium" | "full" ;
+
+separator       = newline | ";" ;
+end             = newline | ";" | end-of-file ;
+
+cigscript-rest  = (* CigScript: the grammar of `cig`, unchanged *) ;
+```
+
+What the rules say, and what the checker does with what they leave out:
+
+- **Where a declaration may appear.** Only as the first statement of the
+  file. Comments and blank lines may come before it (a comment is not a
+  statement, and a leading `;` opens none). `strength` and its word must be
+  on the same line.
+- **A declaration anywhere else** (after any statement) is `E1103`:
+  "`strength` declarations must be the first statement of the file".
+- **A word that is not one of the three** after `strength`, or none on the
+  same line, is `E1103`.
+- **`strength` as a name** anywhere in a `.cigar` file is `E1103`: it is
+  reserved.
+- **No declaration** means mild.
+- **A `.cig` file takes no declaration.** Its text is CigScript's, so
+  `strength medium` there is `cig check`'s own `E203`, as it always was.
+- **The declaration is read, then set aside.** The checker replaces it with
+  spaces before CigScript sees the file, so every line and column in an
+  error is where you wrote it.
+
+### What the checker finds in the rest
+
+CigScript's parser does not know the words of medium and full, and the
+checker does not teach it. It scans the tokens of a `.cigar` file for them
+before CigScript reads it, and reports each use at its place. Two kinds
+of use are found:
+
+```ebnf
+word-use        = reserved-word ;      (* the word, anywhere in the file *)
+
+annotation      = ( "stick" | "roll" ) , identifier , ":" , type
+                | "pull" , identifier , "(" , { param } , ")"
+                  [ "->" , type ] ;
+param           = identifier , ":" , type | identifier ;
+```
+
+An annotation is found where it is written: the `:` after the name of a
+`stick` or a `roll`, a `:` after a parameter name at the top level of a
+`pull`'s parameter list, and the `->` that follows the closing `)`
+directly. A `:` inside a map or list a default value writes
+(`pull f(a = {x: 1})`) is not an annotation. `type` is not parsed yet; it
+comes with medium (#8).
+
+For each use the checker looks the feature up in the
+[feature table](#the-feature-table): above the file's strength it is
+`E1101`; at or below it, and not built, it is `E1102`; at or below it and
+built, nothing. If any use is found, the checker reports those and stops
+there: it does not run CigScript's check on a file that failed this one.
+
+### Reserved words
+
+Every word below is reserved in `.cigar` files at every strength, wherever
+it appears: as a name, a map key or a field. That is what makes turning the
+strength up additive.
+
+| word | belongs to | strength |
+|---|---|---|
+| `strength` | the declaration | all (`E1103` anywhere but the first statement) |
+| `coughs` | typed coughs | medium |
+| `record`, `enum`, `match` | records, enums, pattern matching | medium |
+| `use`, `interface` | modules, interfaces | medium |
+| `into`, `measure` | `into` and `measure` on built-in types | medium |
+| `owned`, `borrow`, `move` | ownership | full |
+| `parallel`, `channel` | concurrency | full |
+| `within`, `layer` | context blocks, new layers | full |
+| `foreign` | calls into Rust and C | full |
+
+The table and the feature table agree: a word is reserved because a row
+in the feature table detects it. A `.cig` file reserves none of them.
+
+The grammar of the features themselves (a record's fields, a `match`'s arms,
+a module's `use` list) is written as each is built. Until then a use is
+`E1102`, and the checker does not read past the keyword.
 
 ## The design questions
 
@@ -105,6 +206,10 @@ error[E1101 check]: using records needs strength medium; this file is mild
 
 ## Not written yet
 
-The grammar (an EBNF the parser is tested against), the semantics of each
-construct by reduction to CigScript's core, the lexicon additions, and the
-three strength guides (#6) come as each strength is built.
+- The grammar of every feature in the table: each comes with the work that
+  builds it (#8 to #13), and is tested against the same fixtures the
+  checker is.
+- The semantics of each construct by reduction to CigScript's core (the
+  layered-depth rule), written as each construct is built.
+- The decisions from #1 to #5 in their final form: the answers above stay
+  **provisional** until the questions are decided.

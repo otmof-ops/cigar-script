@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="589" viewBox="0 0 960 589" role="img" aria-label="A terminal: a mild CigarScript file that uses a record is refused with E1101, which says to put strength medium at the top; at strength medium the same file gets E1102, because records are designed but not built yet (issue 9); a mild file with no medium features is checked.">
+  <title>cigar check, for real</title>
+  <rect x="1" y="1" width="958" height="587" rx="12" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <path d="M 1 34 L 959 34" stroke="#30363d" stroke-width="1"/>
+  <circle cx="22" cy="17" r="5.5" fill="#f97316"/>
+  <circle cx="40" cy="17" r="5.5" fill="#9ca3af" opacity="0.6"/>
+  <circle cx="58" cy="17" r="5.5" fill="#9ca3af" opacity="0.6"/>
+  <text x="480.0" y="21" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#9ca3af">~/demo</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#d1d5db">
+    <text x="22" y="56.0" xml:space="preserve"><tspan fill="#9ca3af">$ </tspan><tspan fill="#f3f4f6" font-weight="700">cat moves.cigar</tspan></text>
+    <text x="22" y="73.5" xml:space="preserve"><tspan fill="#d1d5db">strength mild</tspan></text>
+    <text x="22" y="108.5" xml:space="preserve"><tspan fill="#d1d5db">record Move {</tspan></text>
+    <text x="22" y="126.0" xml:space="preserve"><tspan fill="#d1d5db">  from: str</tspan></text>
+    <text x="22" y="143.5" xml:space="preserve"><tspan fill="#d1d5db">  to: str</tspan></text>
+    <text x="22" y="161.0" xml:space="preserve"><tspan fill="#d1d5db">}</tspan></text>
+    <text x="22" y="196.0" xml:space="preserve"><tspan fill="#9ca3af">$ </tspan><tspan fill="#f3f4f6" font-weight="700">cigar check moves.cigar</tspan></text>
+    <text x="22" y="213.5" xml:space="preserve"><tspan fill="#9ca3af">Don't see any cigarettes.</tspan></text>
+    <text x="22" y="231.0" xml:space="preserve"><tspan fill="#f87171" font-weight="700">error[E1101 check]</tspan><tspan fill="#d1d5db">: using records needs strength medium; this file is mild</tspan></text>
+    <text x="22" y="248.5" xml:space="preserve"><tspan fill="#9ca3af">  --&gt; </tspan><tspan fill="#d1d5db">moves.cigar:3:1</tspan></text>
+    <text x="22" y="266.0" xml:space="preserve"><tspan fill="#9ca3af">  |</tspan></text>
+    <text x="22" y="283.5" xml:space="preserve"><tspan fill="#9ca3af">3 | </tspan><tspan fill="#d1d5db">record Move {</tspan></text>
+    <text x="22" y="301.0" xml:space="preserve"><tspan fill="#9ca3af">  | </tspan><tspan fill="#f87171" font-weight="700">^^^^^^</tspan></text>
+    <text x="22" y="318.5" xml:space="preserve"><tspan fill="#9ca3af">  = hint: </tspan><tspan fill="#d1d5db">to use it, put `strength medium` at the top of the file</tspan></text>
+    <text x="22" y="336.0" xml:space="preserve"><tspan fill="#9ca3af">  = explain: cig explain E1101</tspan></text>
+    <text x="22" y="371.0" xml:space="preserve"><tspan fill="#9ca3af">$ </tspan><tspan fill="#f3f4f6" font-weight="700">sed -i 's/strength mild/strength medium/' moves.cigar</tspan></text>
+    <text x="22" y="388.5" xml:space="preserve"><tspan fill="#9ca3af">$ </tspan><tspan fill="#f3f4f6" font-weight="700">cigar check moves.cigar</tspan></text>
+    <text x="22" y="406.0" xml:space="preserve"><tspan fill="#9ca3af">Don't see any cigarettes.</tspan></text>
+    <text x="22" y="423.5" xml:space="preserve"><tspan fill="#f87171" font-weight="700">error[E1102 check]</tspan><tspan fill="#d1d5db">: using records is medium-strength CigarScript, not built yet in this version </tspan><tspan fill="#9ca3af">(otmof-ops/cigar-script#9)</tspan></text>
+    <text x="22" y="441.0" xml:space="preserve"><tspan fill="#9ca3af">  --&gt; </tspan><tspan fill="#d1d5db">moves.cigar:3:1</tspan></text>
+    <text x="22" y="458.5" xml:space="preserve"><tspan fill="#9ca3af">  |</tspan></text>
+    <text x="22" y="476.0" xml:space="preserve"><tspan fill="#9ca3af">3 | </tspan><tspan fill="#d1d5db">record Move {</tspan></text>
+    <text x="22" y="493.5" xml:space="preserve"><tspan fill="#9ca3af">  | </tspan><tspan fill="#f87171" font-weight="700">^^^^^^</tspan></text>
+    <text x="22" y="511.0" xml:space="preserve"><tspan fill="#9ca3af">  = explain: cig explain E1102</tspan></text>
+    <text x="22" y="546.0" xml:space="preserve"><tspan fill="#9ca3af">$ </tspan><tspan fill="#f3f4f6" font-weight="700">cigar check plan.cigar</tspan></text>
+    <text x="22" y="563.5" xml:space="preserve"><tspan fill="#4ade80" font-weight="700">checked</tspan><tspan fill="#d1d5db"> plan.cigar</tspan></text>
+  </g>
+</svg>
