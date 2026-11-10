@@ -118,7 +118,7 @@ Each item above is on the [roadmap](docs/roadmap.md).
 
 | guide | read it when you want to |
 |---|---|
-| [Getting started](docs/getting-started.md) | build `cigar`, check your first file, and put the check in CI |
+| [Getting started](docs/getting-started.md) | install `cigar`, check your first file, and put the check in CI |
 | [Mild](docs/guides/mild.md) | you know CigScript: you already know it |
 | [Medium](docs/guides/medium.md) | write types, records, enums, `match`, modules and interfaces, and run them |
 | [Full](docs/guides/full.md) | use ownership, parallel loops, channels, sized numbers and layers, and see what is not built |
@@ -133,16 +133,36 @@ should pass does, and one marked to fail (`# expect: E1101`, or any other
 code) gives that error first. Multi-file samples write each module as its own
 block, with its path after the language.
 
-## Build from source
+## Install
 
-`cigar` is not released and is not on crates.io. With Rust 1.82 or newer:
+`cigar` has no release yet, so for now it is built from source (below). Once
+the first release is out, it is installed by
+[`ciginstaller`](https://github.com/otmof-ops/cig-installer), the one way to
+install the CigScript family:
 
 ```sh
-cargo install --git https://github.com/otmof-ops/cigar-script --locked
-cigar --version
+ciginstaller install carton
 ```
 
-From a checkout, `cargo build --release` writes `target/release/cigar`, and
+The installer's manifest decides which carton, pack or stick carries `cigar`;
+until it lists one, nothing above installs it. No `ciginstaller` yet? Get it
+from <https://github.com/otmof-ops/cig-installer#install>.
+
+`ciginstaller uninstall cigar` removes it and clears its run cache
+(`~/.cache/cigar/run`, or `%LOCALAPPDATA%\cigar\run` on Windows), which holds
+only programs `cigar run` can build again.
+
+## Build from source
+
+`cigar` is not on crates.io. With Rust 1.82 or newer, from a checkout:
+
+```sh
+git clone https://github.com/otmof-ops/cigar-script
+cd cigar-script
+cargo build --release
+target/release/cigar --version
+```
+
 `cargo test` runs the checker's tests and the docs test. `cigar run` is part of the same binary.
 
 ## Part of CigScript

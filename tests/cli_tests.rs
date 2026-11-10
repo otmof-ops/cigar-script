@@ -189,3 +189,153 @@ fn usage_errors_carry_cigs_codes() {
         assert!(said.contains(&format!("\"code\":\"{code}\"")), "{said}");
     }
 }
+
+/// `cigar __doctor --json` with a scratch cache and a PATH holding only
+/// what the test puts there.
+fn doctor(cache: &std::path::Path, path: &std::ffi::OsStr, extra: &[&str]) -> std::process::Output {
+    Command::new(cigar_bin())
+        .arg("__doctor")
+        .args(extra)
+        .env("XDG_CACHE_HOME", cache)
+        .env("PATH", path)
+        .output()
+        .unwrap()
+}
+
+fn finding<'a>(doc: &'a serde_json::Value, check: &str) -> &'a serde_json::Value {
+    doc["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["check"] == check)
+        .unwrap_or_else(|| panic!("no `{check}` finding in {doc}"))
+}
+
+#[test]
+fn doctor_has_the_installer_doctors_shape_and_exits_zero() {
+    let tmp = tempfile::tempdir().unwrap();
+    let out = doctor(tmp.path(), tmp.path().as_os_str(), &["--json"]);
+    assert_eq!(out.status.code(), Some(0));
+    let doc: serde_json::Value =
+        serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim()).expect("one JSON object");
+    assert_eq!(doc["tool"], "cigar");
+    assert_eq!(doc["version"], env!("CARGO_PKG_VERSION"));
+    let findings = doc["findings"].as_array().unwrap();
+    assert!(!findings.is_empty());
+    for f in findings {
+        assert!(f["check"].is_string());
+        assert!(
+            ["ok", "note", "action"].contains(&f["severity"].as_str().unwrap()),
+            "{f}"
+        );
+        assert!(f["found"].is_string());
+        assert!(f["because"].is_string());
+        assert!(f["fix"].is_null() || f["fix"].is_string());
+    }
+}
+
+#[test]
+fn doctor_is_hidden_and_text_mode_exits_zero() {
+    let help = Command::new(cigar_bin()).arg("--help").output().unwrap();
+    assert!(!String::from_utf8_lossy(&help.stdout).contains("__doctor"));
+    let tmp = tempfile::tempdir().unwrap();
+    let out = doctor(tmp.path(), tmp.path().as_os_str(), &[]);
+    assert_eq!(out.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("lowering"));
+}
+
+#[test]
+fn doctor_lowering_round_trips_with_no_e1104() {
+    let tmp = tempfile::tempdir().unwrap();
+    let out = doctor(tmp.path(), tmp.path().as_os_str(), &["--json"]);
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let f = finding(&doc, "lowering");
+    assert_eq!(f["severity"], "ok", "{f}");
+    assert!(!f["found"].as_str().unwrap().contains("gives E1104"));
+}
+
+#[test]
+fn doctor_without_cig_says_run_does_not_need_one() {
+    let tmp = tempfile::tempdir().unwrap();
+    let out = doctor(tmp.path(), tmp.path().as_os_str(), &["--json"]);
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let f = finding(&doc, "embedded-cig");
+    assert_eq!(f["severity"], "note");
+    assert!(f["found"].as_str().unwrap().contains("does not need one"));
+}
+
+#[cfg(unix)]
+fn fake_cig(dir: &std::path::Path, said: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let p = dir.join("cig");
+    std::fs::write(&p, format!("#!/bin/sh\necho '{said}'\n")).unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_compares_the_embedded_cigscript_with_an_installed_cig() {
+    let tmp = tempfile::tempdir().unwrap();
+    let bin = tmp.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let mine = cigscript::VERSION;
+    // The same version: ok.
+    fake_cig(&bin, &format!("cig {mine}"));
+    let out = doctor(tmp.path(), bin.as_os_str(), &["--json"]);
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(finding(&doc, "embedded-cig")["severity"], "ok");
+    // Another version: a note that names both, never a failure.
+    fake_cig(&bin, "cig 99.0.0");
+    let out = doctor(tmp.path(), bin.as_os_str(), &["--json"]);
+    assert_eq!(out.status.code(), Some(0));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let f = finding(&doc, "embedded-cig");
+    assert_eq!(f["severity"], "note");
+    let found = f["found"].as_str().unwrap();
+    assert!(found.contains(mine) && found.contains("99.0.0"), "{found}");
+}
+
+#[test]
+fn doctor_reports_the_run_cache_size_and_never_calls_the_installer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cache = tmp.path().join("cigar").join("run");
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("prog"), vec![0u8; 2048]).unwrap();
+    // A ciginstaller on PATH that would leave a mark if it were started.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let bin = tmp.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let p = bin.join("ciginstaller");
+        let mark = tmp.path().join("called");
+        std::fs::write(&p, format!("#!/bin/sh\ntouch '{}'\n", mark.display())).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let out = doctor(tmp.path(), bin.as_os_str(), &["--json"]);
+        assert!(!mark.exists(), "__doctor started ciginstaller");
+        let doc: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        let f = finding(&doc, "run-cache");
+        assert_eq!(f["severity"], "ok", "{f}");
+        assert!(f["found"].as_str().unwrap().contains("2 KB"), "{f}");
+    }
+    // Only the probe was written, and it is gone.
+    let names: Vec<_> = std::fs::read_dir(&cache).unwrap().flatten().collect();
+    assert_eq!(names.len(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_flags_a_run_cache_that_is_not_a_folder() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::create_dir(tmp.path().join("cigar")).unwrap();
+    std::fs::write(tmp.path().join("cigar").join("run"), "x").unwrap();
+    let out = doctor(tmp.path(), tmp.path().as_os_str(), &["--json"]);
+    assert_eq!(out.status.code(), Some(0));
+    let doc: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(finding(&doc, "run-cache")["severity"], "action");
+}
+
+#[test]
+fn e1104_names_the_issues_page() {
+    assert!(cigarscript::check::ISSUES_URL.ends_with("otmof-ops/cigar-script/issues"));
+}

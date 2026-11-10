@@ -39,6 +39,9 @@ enum Command {
     Check(CheckArgs),
     /// Check a file, then run it: every burn journaled, rolled back if it fails.
     Run(RunArgs),
+    /// The checks only cigar can make, for `ciginstaller doctor --tools`.
+    #[command(name = "__doctor", hide = true)]
+    Doctor,
 }
 
 #[derive(Args)]
@@ -106,6 +109,7 @@ fn run() -> i32 {
         }
         Some(Command::Check(a)) => check_cmd(&cli, a),
         Some(Command::Run(a)) => run_cmd(&cli, a),
+        Some(Command::Doctor) => cigarscript::doctor::run(cli.json),
     }
 }
 

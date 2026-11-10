@@ -1,0 +1,114 @@
+name: release
+
+# A tag `vX.Y.Z` builds cigar for every machine the family is released for and
+# leaves a DRAFT release holding each build, its .sha256, SHA256SUMS and a
+# build attestation. Nothing is published from here: the release is read and
+# published by hand once the licence gate has passed. A tag is the only
+# trigger; a pull request or a push to a branch builds nothing.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.asset }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The asset names follow the family's single-binary releases (cig, CigCompile):
+        # cigar-vX.Y.Z-<os>-<arch>[.exe], each with a .sha256 beside it, which the
+        # installer's manifest reads.
+        include:
+          - { os: ubuntu-latest,  target: x86_64-unknown-linux-musl,  asset: linux-x86_64,   ext: "" }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, asset: linux-aarch64,  ext: "" }
+          - { os: macos-15-intel, target: x86_64-apple-darwin,       asset: macos-x86_64,   ext: "" }
+          - { os: macos-latest,   target: aarch64-apple-darwin,      asset: macos-aarch64,  ext: "" }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc,    asset: windows-x86_64, ext: ".exe" }
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: musl tools (linux builds are static)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: the tag matches Cargo.toml
+        shell: bash
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          have="$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')"
+          if [ "$want" != "$have" ]; then
+            echo "tag $GITHUB_REF_NAME does not match Cargo.toml version $have"
+            exit 1
+          fi
+      - run: cargo build --release --locked --bin cigar --target ${{ matrix.target }}
+      - name: it runs, and says its version
+        shell: bash
+        run: |
+          "target/${{ matrix.target }}/release/cigar${{ matrix.ext }}" --version
+      - name: name and checksum the asset
+        shell: bash
+        run: |
+          name="cigar-${GITHUB_REF_NAME}-${{ matrix.asset }}${{ matrix.ext }}"
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/cigar${{ matrix.ext }}" "dist/$name"
+          if command -v sha256sum >/dev/null; then
+            (cd dist && sha256sum "$name" > "$name.sha256")
+          else
+            (cd dist && shasum -a 256 "$name" > "$name.sha256")
+          fi
+          cat "dist/$name.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cigar-${{ matrix.asset }}
+          path: dist/*
+          if-no-files-found: error
+
+  draft:
+    name: draft release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: cigar-*
+          merge-multiple: true
+      - uses: actions/checkout@v4
+        with:
+          path: src
+      - name: the licence files, once
+        run: cp src/LICENSE src/NOTICE src/THIRD-PARTY-NOTICES.md dist/
+      - name: SHA256SUMS
+        run: |
+          cd dist
+          cat cigar-*.sha256 | sort -k2 > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          cat SHA256SUMS
+      - name: attest the builds
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/cigar-v*-linux-*
+            dist/cigar-v*-macos-*
+            dist/cigar-v*-windows-*.exe
+      - name: the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --verify-tag \
+            --title "cigar ${GITHUB_REF_NAME#v}" \
+            --notes "Draft: read, run the licence gate, then publish by hand."

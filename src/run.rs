@@ -273,7 +273,7 @@ fn relay(err: impl Read, name: &str, map: &crate::check::SourceMap, lowered: &st
 }
 
 /// Where built programs are kept.
-fn cache_dir() -> PathBuf {
+pub fn cache_dir() -> PathBuf {
     let base = std::env::var_os("XDG_CACHE_HOME")
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)

@@ -389,16 +389,21 @@ fn mapped(mut d: Diagnostic, back: &dyn Fn(usize) -> usize) -> Diagnostic {
     d
 }
 
+/// Where a bug in cigar is reported. When `ciginstaller` has a `bug`
+/// command, `ciginstaller bug cigar` becomes the way and this stays the
+/// fallback.
+pub const ISSUES_URL: &str = "https://github.com/otmof-ops/cigar-script/issues";
+
 /// cig refused CigScript the lowering made: a bug in CigarScript, said so.
 fn internal(d: Diagnostic) -> Diagnostic {
     let mut i = Diagnostic::new(
         DK::Internal,
         format!(
-            "CigarScript lowered this file into CigScript that cig refuses ({} {}): a bug in cigar, please report it",
+            "CigarScript lowered this file into CigScript that cig refuses ({} {}): a bug in cigar, please report it at {ISSUES_URL}",
             d.code, d.message
         ),
     )
-    .with_hint("otmof-ops/cigar-script issues; the file and this message are what is needed");
+    .with_hint("report it at the issues page above, with the file and this message");
     i.code = "E1104";
     i.span = d.span;
     i.line = d.line;

@@ -1,0 +1,54 @@
+name: Something went wrong
+description: cigar said the wrong thing, did the wrong thing, or stopped when it should not have.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Nobody is on trial. A few things make a report easy to fix.
+        Take anything secret out of what you paste. A security problem
+        does not go here: SECURITY.md says where to send it.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "The output of `cigar --version`."
+      placeholder: cigar 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: script
+    attributes:
+      label: The script
+      description: The .cigar or .cig file, or the smallest one that still shows the problem.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: The command you ran
+      placeholder: cigar check tidy.cigar
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: What it printed
+      description: Everything, including any error code (E1104 and so on). Paste, do not summarize.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: ciginstaller status, if you have it
+      description: "The output of `ciginstaller status`. Leave this empty if you built cigar from source."
+      render: text
