@@ -1,6 +1,6 @@
 # Getting started
 
-Ten minutes: build `cigar` from source, check and run your first `.cigar`
+Ten minutes: install `cigar`, check and run your first `.cigar`
 file, declare a strength, write a small medium program, read the errors the
 checker adds, turn a file down with `--strength`, and put the check in CI.
 
@@ -9,20 +9,32 @@ program yet; the [roadmap](roadmap.md) says when that comes.
 
 ## 1. Install cigar
 
-`cigar` is not released yet and is not on crates.io. Build it from source
-with Rust 1.82 or newer:
+`cigar` has no release yet, so today it is built from source, with Rust 1.82
+or newer:
 
 ```sh
-cargo install --git https://github.com/otmof-ops/cigar-script --locked
+git clone https://github.com/otmof-ops/cigar-script
+cd cigar-script
+cargo build --release
 ```
+
+That writes `target/release/cigar`; put it on your `PATH`. Once the first
+release is out, the way to install it is the installer:
+
+```sh
+ciginstaller install carton
+```
+
+(or a pack or stick with `cigar` in it, once the installer's manifest lists
+one). No `ciginstaller` yet? It is at
+<https://github.com/otmof-ops/cig-installer#install>. To remove `cigar`, run
+`ciginstaller uninstall cigar`; that also clears its run cache, the programs
+`cigar run` built, which it makes again when needed.
 
 ```sh
 $ cigar --version
 cigar 0.1.0
 ```
-
-From a checkout, the same binary is `cargo build --release`, then
-`target/release/cigar`.
 
 ## 2. Check and run your first file
 
@@ -334,9 +346,14 @@ file that is not `.cig` or `.cigar`, a bad `--strength`: each `E800` or
 `E801`). Any nonzero exit fails a CI step, so this is the whole job:
 
 ```sh
-cargo install --git https://github.com/otmof-ops/cigar-script --locked
 cigar check .
 ```
+
+The job needs `cigar` on its `PATH` first. Until there is a release, build it
+in the job (`cargo build --release`, then `target/release/cigar check .`);
+after, install it with `ciginstaller install carton`, which the installer's
+page shows how to fetch on a runner:
+<https://github.com/otmof-ops/cig-installer#install>.
 
 `cigar check .` checks the `.cig` and `.cigar` files at the top of the
 folder, not the folders inside it; name those too (`cigar check . scripts

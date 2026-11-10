@@ -59,7 +59,8 @@ For a `.cigar` file that is, in order:
 
 Findings are listed in the order they sit in the file. A file that
 cigar cannot lower correctly reports `E1104` with kind `internal`: that is a
-bug in `cigar`, and the message says to report it. A `.cigar` file may not
+bug in `cigar`, and the message gives the issues page to report it at:
+<https://github.com/otmof-ops/cigar-script/issues>. A `.cigar` file may not
 use a name that starts `_cg_` or `__cg_`, which are the lowering's; that is
 `E1104` too.
 
