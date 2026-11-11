@@ -1,0 +1,3 @@
+strength medium
+
+pub pull add1(x: Int) -> Int { snuff x + 1 }

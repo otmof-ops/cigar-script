@@ -169,6 +169,10 @@ page; until then the message carries the whole explanation.
 | `E1104` | check | a name that starts `_cg_` or `__cg_`. As kind `internal`: the file lowered to CigScript cig refuses, which is a bug in `cigar` |
 | `E1105` | check | a reserved word where a name goes (`stick match = 1`), in a file whose strength reserves it; or `r#word` and `r_word` both written. The message names the word and offers `r#word` |
 | `W1234` | warning | a name that shadows a keyword the file's strength does not reserve yet: "`match` will be a keyword if this file goes to medium" |
+| `W1230` | warning, error at full | a parameter of a top-level `pull` with no type that the body does not settle: "`x` is `Any`: write its type". An error at full and under `--deny any` |
+| `W1231` | warning | code after a `snuff`, `cough`, `break`, `continue`, or a `match` or `if` whose every branch ends: "this code can never run" |
+| `W1232` | warning | a `stick` or `roll`, a parameter, or a `use` that nothing reads; a name that starts `_` is meant |
+| `W1233` | warning | the result of a pure method (`xs.copy()`) or of a `-> T` function dropped; `_ = f()` says it is meant |
 
 **Types, records and `match`** (medium)
 
@@ -224,7 +228,7 @@ page; until then the message carries the whole explanation.
 | `E1501` | a name used after it was given to an `owned` parameter, to `move`, to a binding or a container, or into a `move pack`: names the line it went |
 | `E1502` | a `borrow` parameter returned, stored (`push`, `insert`, `set`) or given away |
 | `E1503` | a name given away on some paths and used after they join (names the branch); a name given away while a function value that borrows it is used later |
-| `E1510` | a number outside its sized type: at check time for a number written out (`stick a: u8 = 300`), **at run time** for one that is computed (`E1510 c is 300, outside u8 (0 to 255)`) |
+| `E1510` | a number outside its sized type: at check time for a number the checker can work out (written out, or a `stick` of numbers through `+ - * / %`: `stick a: u8 = 300`, `stick c: u8 = b + 10` with `stick b: u8 = 250`), **at run time** for one that is computed (`E1510 c is 300, outside u8 (0 to 255)`) |
 | `E1520` | **at run time**: a send on a closed channel |
 | `E1521` | a turn of a `parallel` loop writes a name, list, map or record declared outside the loop, directly or through a name for it made in the turn (`` `total` is written by every turn of a parallel loop ``) |
 | `E1522` | a `parallel … collect` or `reduce` body whose last line is not a value, or a `reduce` operator other than `+`, `*`, `min` or `max` |
@@ -480,6 +484,45 @@ For each use the checker looks the feature up in the
 `E1101`; at or below it, and not built, it is `E1102`; at or below it and
 built, nothing. If any use is found, the checker reports those and stops
 there: it does not lower or type-check a file that failed this one.
+
+### Strictness: what is said before a program runs
+
+The standard is Rust's: a mistake that can be found before the program runs
+is found before it runs. Four of the findings are warnings, because the
+program is not wrong, and they are on at medium and full only. A `.cig` file
+never gets one (the superset rule), and a mild file is not read for them.
+
+- **`W1230`, a parameter with no type.** At medium, a parameter of a
+  top-level `pull` is typed by what the body does with it when that says one
+  type: it is handed to a parameter that has a type, given back where the
+  function's result type is written, or added to text. Otherwise it is `Any`
+  and the checker says so. At full it is an error. A lambda inside a function
+  keeps its inference. `x: Any` says it is meant, and so does a name that
+  starts `_`.
+- **`W1231`, code that cannot run.** The first statement written after one
+  that always ends the path: `snuff`, `cough`, `break`, `continue`, an `if`
+  with every branch ending, a `match` with every arm ending, a loop that never
+  ends.
+- **`W1232`, a name nothing reads.** A `stick` or `roll`, a parameter of a
+  `pull` and a `use`. Setting a `roll` is not reading it. A name that starts
+  `_` is silent. Loop variables, lambda parameters, names a `match` arm binds
+  and the parameters of an `impl` method are not judged.
+- **`W1233`, a result dropped.** A statement that is only a call of a method
+  that changes nothing (`len`, `copy`, `keys`, `map`, `filter`, `trim` and the
+  like) or of a `pull` declared `-> T`. `_ = f()` drops it on purpose: the
+  value goes to a name nothing can read.
+
+`cigar check --deny any` makes `W1230` an error at medium, and `--deny
+warnings` makes every warning an error, at any strength; the finding keeps its
+code, and its hint says it is an error because of the flag.
+
+Two findings are errors, because the program would stop at that line when it
+ran. The checker folds whole numbers through `stick`, `+`, `-`, `*`, a `/`
+whose quotient is whole and `%`, and what it can see is refused before the
+run: a sized number out of its range is `E1510`, and a divisor that is `0`
+(or `0.0`, or a `stick` of `0`) is `E502`. What it cannot see, a `roll`, a
+parameter, a value read at run time, is checked when the program runs, as
+before.
 
 ### The declaration
 

@@ -1,0 +1,4 @@
+strength medium
+pull f(n: Int) -> Int { snuff n }
+f(1)
+exhale 1

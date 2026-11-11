@@ -304,8 +304,10 @@ $ cigar run sized.cigar
 -128 65535 9000000000
 ```
 
-One more and it does not fit:
+One more and it does not fit. Every number here is written out, so the
+check sees it without running anything:
 
+<!-- expect: E1510 -->
 ```cigar
 strength full
 
@@ -317,11 +319,36 @@ exhale c
 
 ```sh
 $ cigar check overflow.cigar
-checked overflow.cigar
-$ cigar run overflow.cigar
+Don't see any cigarettes.
+error[E1510 check]: `a + b` is 300, outside `u8` (0 to 255)
+  --> overflow.cigar:5:11
+  |
+5 | stick c = a + b
+  |           ^^^^^
+  = hint: the numbers are known before the program runs; make `c` a wider type, or change the numbers
+  = explain: cig explain E1510
+```
+
+The check follows a `stick` of a number through `+ - * / %`. A number that is
+only known when the program runs, a `roll` or something a function was given,
+is checked then:
+
+```cigar
+strength full
+
+roll a: u8 = 200
+stick b: u8 = 100
+stick c = a + b
+exhale c
+```
+
+```sh
+$ cigar check computed.cigar
+checked computed.cigar
+$ cigar run computed.cigar
 Don't see any cigarettes.
 error[E600 cough]: E1510 c is 300, outside u8 (0 to 255)
-  --> overflow.cigar:5:1
+  --> computed.cigar:5:1
   |
 5 | stick c = a + b
   | ^^^^^^^^^^^^^^^

@@ -162,15 +162,19 @@ fn turning_up_is_additive() {
                 path.display()
             ));
         }
-        // Full adds the ownership rules (#22 S5-S7) and nothing else: every
-        // error the file had is still there, and the only new ones say a
-        // value was used after it was given away.
+        // Full adds the ownership rules (#22 S5-S7) and the typed parameter
+        // (L1: `W1230` is an error at full) and nothing else: every error the
+        // file had is still there, and the only new ones say a value was used
+        // after it was given away, or that a parameter has no type. A `.cig`
+        // file itself never gets either.
         let full = Strength::Full;
         let got = fingerprints(&as_cigar(&format!("strength {full}\n{source}"), None).errors);
         let lost: Vec<_> = expected.iter().filter(|f| !got.contains(f)).collect();
         let foreign: Vec<_> = got
             .iter()
-            .filter(|f| !expected.contains(f) && !OWNERSHIP.contains(&f.0.as_str()))
+            .filter(|f| {
+                !expected.contains(f) && !OWNERSHIP.contains(&f.0.as_str()) && f.0 != "W1230"
+            })
             .collect();
         if !lost.is_empty() || !foreign.is_empty() {
             diffs.push(format!(

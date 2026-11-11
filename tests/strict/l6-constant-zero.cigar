@@ -1,0 +1,3 @@
+strength medium
+stick n: Int = 10 / 0
+exhale n

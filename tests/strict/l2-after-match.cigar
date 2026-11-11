@@ -1,0 +1,10 @@
+strength medium
+enum Sh { A, B }
+pull g(s: Sh) -> Int {
+  match s {
+    A => { snuff 1 }
+    B => { snuff 2 }
+  }
+  exhale "no"
+}
+exhale g(Sh.A)

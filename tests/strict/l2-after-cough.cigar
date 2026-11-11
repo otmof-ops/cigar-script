@@ -1,0 +1,6 @@
+strength medium
+pull f() {
+  cough "stop"
+  exhale "unreachable"
+}
+exhale 1

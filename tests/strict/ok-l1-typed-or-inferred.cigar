@@ -1,0 +1,11 @@
+strength medium
+pull double(n: Int) -> Int { snuff n * 2 }
+pull a(x) { snuff double(x) }
+pull b(s) { snuff s + "!" }
+pull c(x: Any) { snuff x }
+pull d(xs: List<Int>) -> List<Int> {
+  # a lambda inside a function keeps its inference
+  snuff xs.map(pack(v) => v + 1)
+}
+pull e(_unused) { snuff 1 }
+exhale a(1), b("a"), c(1), d([1]), e(0)

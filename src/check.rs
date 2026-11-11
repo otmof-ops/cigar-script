@@ -29,6 +29,8 @@ use crate::features::Strength;
 use crate::lower::{self, Module};
 use crate::{gate, own, resolve, strength, typeck, types};
 
+pub use crate::typeck::lint::Deny;
+
 /// Which language the file is: `.cig` is always mild CigScript; `.cigar`
 /// has a declared strength.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -125,6 +127,18 @@ pub fn check_file_source(
     override_strength: Option<Strength>,
     file: Option<&Path>,
 ) -> Checked {
+    check_file_source_deny(kind, source, override_strength, file, Deny::default())
+}
+
+/// `check_file_source`, with some warnings denied (`--deny any`,
+/// `--deny warnings`): a `.cig` file is never held to them.
+pub fn check_file_source_deny(
+    kind: Kind,
+    source: &str,
+    override_strength: Option<Strength>,
+    file: Option<&Path>,
+    deny: Deny,
+) -> Checked {
     let modules = RefCell::new(BTreeMap::new());
     let root = file.map(|f| match f.parent() {
         Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
@@ -140,6 +154,13 @@ pub fn check_file_source(
         stack: Vec::new(),
         modules: &modules,
         name,
+        // A `.cig` file is never held to a warning (#1): its deeper check
+        // is a hint, and the file is not judged by what is denied.
+        deny: if kind == Kind::Cig {
+            Deny::default()
+        } else {
+            deny
+        },
     };
     match kind {
         Kind::Cig => check_cig(source, &env),
@@ -154,6 +175,7 @@ struct Env<'a> {
     stack: Vec<(String, PathBuf)>,
     modules: &'a RefCell<BTreeMap<String, Module>>,
     name: String,
+    deny: Deny,
 }
 
 /// What a `.cig` file says in a hint, ahead of what the deeper checker said.
@@ -322,6 +344,19 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
     let out = typeck::check_all_in(&ast, &lowered.program, &original, source);
     let mut errors = out.errors;
     let mut warnings = out.warnings;
+    // What a strict checker says that is not a type error (#22, L1-L4).
+    let written = |p: usize| lowered.copied(p);
+    let found = typeck::lint::run(
+        &ast,
+        &lowered.program,
+        &lowered.text,
+        effective,
+        env.deny,
+        &original,
+        &written,
+    );
+    errors.extend(found.errors);
+    warnings.extend(found.warnings);
     if effective == Strength::Full {
         errors.extend(own::check(&ast, &lowered.program, &original));
     }
@@ -380,9 +415,20 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
             }
         }
     }
-    let errors = placed(errors, source);
+    let mut errors = placed(errors, source);
     let mut warnings = placed(warnings, source);
     warnings.extend(gate_warnings);
+    if env.deny.warnings {
+        // `--deny warnings`: what would only be said is an error.
+        for mut w in warnings.drain(..) {
+            let note = "an error because of --deny warnings";
+            w.hint = Some(match w.hint.take() {
+                Some(h) => format!("{h} ({note})"),
+                None => note.to_string(),
+            });
+            errors.push(w);
+        }
+    }
     warnings.sort_by_key(|d: &Diagnostic| (d.line.unwrap_or(0), d.col.unwrap_or(0)));
     let map = SourceMap {
         lowered,
@@ -412,6 +458,7 @@ fn compile_module(path: &Path, name: &str, src: &str, opts: &lower::Options) -> 
         stack: opts.stack.clone(),
         modules: opts.modules,
         name: name.to_string(),
+        deny: Deny::default(),
     };
     let c = check_cigar(src, None, &env);
     let text = &c.source_as_cigscript_saw_it;
