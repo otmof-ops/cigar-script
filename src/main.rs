@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: FSL-1.1-ALv2
 //! `cigar`: the CigarScript command line. `cigar check` reports on a file
 //! (or a folder's `.cig` and `.cigar` files at the top level) the way `cig
 //! check` does; `cigar run` checks a file and runs it.

@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: FSL-1.1-ALv2
 //! CigarScript: CigScript grown deeper, in three strengths.
 //!
 //! This first slice implements issue #7: strength declarations and the

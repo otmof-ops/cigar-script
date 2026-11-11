@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: FSL-1.1-ALv2
 //! Every CigarScript sample in the docs is checked (#6). A ```cigar block in
 //! the README or under docs/ must pass `cigar check`, unless it says which
 //! error it gives first: `# expect: E1101` as its first line, or

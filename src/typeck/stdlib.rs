@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: FSL-1.1-ALv2
 //! The standard library's type signatures (cig 1.20.0).
 //!
 //! Source of truth: every module's `TABLE` in cig's `src/stdlib/*.rs`, the

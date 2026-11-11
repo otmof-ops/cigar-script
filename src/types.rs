@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: FSL-1.1-ALv2
 //! CigarScript's types, and what the lowering pass hands the checker.
 //!
 //! The pipeline (docs/LANGUAGE.md, "How a file is checked and run"):
