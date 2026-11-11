@@ -2,7 +2,7 @@
 name = "cigarscript"
 version = "0.1.0"
 edition = "2021"
-license = "Apache-2.0"
+license = "FSL-1.1-ALv2"
 rust-version = "1.82"
 description = "CigarScript: CigScript grown deeper, in three strengths"
 repository = "https://github.com/otmof-ops/cigar-script"

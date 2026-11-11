@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: FSL-1.1-ALv2
 //! CigarScript's static type checker (#8), on cig's AST of the lowered text.
 //!
 //! The checker is conservative by construction: a type it cannot work out is

@@ -13,7 +13,7 @@
   <a href="docs/roadmap.md"><img alt="mild: built" src="https://img.shields.io/badge/mild-built-2ea44f"></a>
   <a href="docs/roadmap.md"><img alt="medium: built" src="https://img.shields.io/badge/medium-built-2ea44f"></a>
   <a href="docs/roadmap.md"><img alt="full: mostly built" src="https://img.shields.io/badge/full-mostly%20built-f59e0b"></a>
-  <a href="LICENSE"><img alt="license Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-6b7280"></a>
+  <a href="LICENSE"><img alt="license FSL-1.1-ALv2" src="https://img.shields.io/badge/license-FSL--1.1--ALv2-6b7280"></a>
 </p>
 
 CigScript is small on purpose: it automates, and it keeps one rule,
@@ -179,11 +179,21 @@ the work is in the [issues](https://github.com/otmof-ops/cigar-script/issues).
 
 ## Licensing
 
-- **Code** (`src/`, `tests/`, `bench/`): [Apache-2.0](LICENSE), the same
-  license as CigScript. In plain words: use, copy, change, sell and embed
-  CigarScript freely, including in closed products; keep the copyright notice
-  and the [NOTICE](NOTICE) file with any copy; you get a patent license from
-  every contributor; and you can't use the name to endorse your derivative.
+- **Code** (`src/`, `tests/`, `bench/`): **source-available, not open source.** Under the
+  [Functional Source License, version 1.1, with an Apache-2.0 future license
+  (FSL-1.1-ALv2)](LICENSE). The Open Source Initiative does not count it as an
+  open source license, and this project does not call it one.
+  - *What you may do.* Use it, including inside a company for its own work;
+    read it, study it, change it and share it with the license attached; and
+    help others use it. The source is here for all of that.
+  - *What you may not do.* Make it available to others in a commercial product
+    or service that substitutes for it or does the same job. Selling it, or
+    selling access to it, is the clear case.
+  - *It becomes Apache-2.0.* Each version converts to
+    [Apache-2.0](LICENSES/Apache-2.0.txt) two years after it is made
+    available.
+  - *Earlier releases.* Commits before the change were published under Apache-2.0 and stay under it; there has been no release. [LICENSING.md](LICENSING.md)
+    lists which versions carry which license.
 - **Documentation** (`docs/`, this README and the other guides at the root):
   [CC BY 4.0](LICENSES/CC-BY-4.0.txt). Reuse and adapt with credit.
 - **The name.** CigarScript is a trademark of Jay Taylor, as CigScript is.
@@ -191,7 +201,6 @@ the work is in the [issues](https://github.com/otmof-ops/cigar-script/issues).
   [TRADEMARKS.md](TRADEMARKS.md) says what is free to do and what to ask about
   first.
 
-[REUSE.toml](REUSE.toml) maps every path to its license. Contributions are
-accepted under the same terms, signed off under the DCO; see
-[CONTRIBUTING.md](CONTRIBUTING.md). Security reports:
-[SECURITY.md](SECURITY.md).
+[REUSE.toml](REUSE.toml) maps every path to its license. Contributions come in
+under the contributor agreement; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Security reports: [SECURITY.md](SECURITY.md).

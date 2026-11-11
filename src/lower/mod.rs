@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: FSL-1.1-ALv2
 //! Lowering: a `.cigar` file's constructs rewritten **in place** into
 //! CigScript, keeping every line on its line (docs/LANGUAGE.md, "How a file
 //! is checked and run"). cig's own lexer reads the file; a construct is

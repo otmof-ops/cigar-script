@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: FSL-1.1-ALv2
 //! The medium and full corpus (tests/corpus/README.md): programs that run
 //! and print exactly what they should, files that fail `cigar check` with
 //! the error they name first, and files that check and then fail when run.
