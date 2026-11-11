@@ -187,3 +187,13 @@ fn closure_capture_borrows_or_moves() {
 fn possibly_moved_is_moved() {
     run("s7-");
 }
+
+#[test]
+fn an_error_inside_an_interpolation_is_said_at_its_string() {
+    // cig parses `${...}` on its own; the error must not land on line 1.
+    let src = "strength full\nstick a = [1]\nstick b = a\nexhale \"x ${a.len()}\"\n";
+    let checked = check_file_source(Kind::Cigar, src, None, None);
+    let d = checked.errors.first().expect("an E1501");
+    assert_eq!(d.code, "E1501", "{}", d.message);
+    assert_eq!((d.line, d.col), (Some(4), Some(8)), "{}", d.message);
+}

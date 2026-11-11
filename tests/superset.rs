@@ -19,6 +19,9 @@ use common::{as_cig, as_cigar, cigscript_corpus, cigscript_result, cigscript_src
 /// name and the word here.
 const RESERVED_WORD_FILES: &[(&str, &str)] = &[];
 
+/// The errors turning a file up to full may add: the ownership rules.
+const OWNERSHIP: &[&str] = &["E1501", "E1502", "E1503"];
+
 fn print_skip(reason: &str) {
     eprintln!("note: skipping; {reason}");
 }
@@ -145,21 +148,35 @@ fn turning_up_is_additive() {
             continue;
         }
         let mild = as_cigar(&source, None);
-        for turned_up in [Strength::Medium, Strength::Full] {
-            let with_decl = format!("strength {turned_up}\n{source}");
-            let turned = as_cigar(&with_decl, None);
-            // Account for the one-line shift in position.
-            let expected: Vec<_> = fingerprints(&mild.errors)
-                .into_iter()
-                .map(|(code, kind, line, col)| (code, kind, line.map(|l| l + 1), col))
-                .collect();
-            let got = fingerprints(&turned.errors);
-            if expected != got {
-                diffs.push(format!(
-                    "{}: turning up to {turned_up} changed the errors\n  mild+1 = {expected:?}\n  {turned_up} = {got:?}",
-                    path.display()
-                ));
-            }
+        // Account for the one-line shift in position.
+        let expected: Vec<_> = fingerprints(&mild.errors)
+            .into_iter()
+            .map(|(code, kind, line, col)| (code, kind, line.map(|l| l + 1), col))
+            .collect();
+        // Medium only lets a file write more: its errors stay the same.
+        let medium = Strength::Medium;
+        let got = fingerprints(&as_cigar(&format!("strength {medium}\n{source}"), None).errors);
+        if expected != got {
+            diffs.push(format!(
+                "{}: turning up to {medium} changed the errors\n  mild+1 = {expected:?}\n  {medium} = {got:?}",
+                path.display()
+            ));
+        }
+        // Full adds the ownership rules (#22 S5-S7) and nothing else: every
+        // error the file had is still there, and the only new ones say a
+        // value was used after it was given away.
+        let full = Strength::Full;
+        let got = fingerprints(&as_cigar(&format!("strength {full}\n{source}"), None).errors);
+        let lost: Vec<_> = expected.iter().filter(|f| !got.contains(f)).collect();
+        let foreign: Vec<_> = got
+            .iter()
+            .filter(|f| !expected.contains(f) && !OWNERSHIP.contains(&f.0.as_str()))
+            .collect();
+        if !lost.is_empty() || !foreign.is_empty() {
+            diffs.push(format!(
+                "{}: turning up to {full} lost {lost:?} or added errors other than ownership: {foreign:?}",
+                path.display()
+            ));
         }
     }
     assert!(diffs.is_empty(), "{}", diffs.join("\n"));

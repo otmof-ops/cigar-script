@@ -25,7 +25,10 @@ holds at every strength: nothing touches the world outside a `burn { }`.
 - **Turning up is additive.** Changing `strength mild` to `strength medium`
   never breaks a file: every word below is reserved in `.cigar` files at
   every strength, so no name a mild file uses can become a keyword when
-  the strength goes up. *(Provisional.)*
+  the strength goes up. *(Provisional.)* Turning up to `strength full`
+  adds the ownership rules and nothing else: a file that gives a list, map,
+  record or channel away and uses it after gets `E1501` or `E1503` there,
+  as it would in Rust, and every other error stays as it was.
 - **Turning down is checked.** `cigar check --strength mild` on a medium
   file lists every feature it uses above mild, each with its place.
 - **A `.cig` file gets hints, never errors.** The superset is exact and it

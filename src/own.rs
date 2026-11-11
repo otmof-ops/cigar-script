@@ -63,6 +63,7 @@ pub fn check(
         heavy: HashSet::new(),
         closures: HashMap::new(),
         loops: Vec::new(),
+        inside: None,
     };
     let mut moved = HashMap::new();
     o.stmts(&ast.body, &mut moved);
@@ -89,6 +90,8 @@ struct Own<'a> {
     closures: HashMap<String, (Vec<String>, Span)>,
     /// The loops being walked, innermost last.
     loops: Vec<LoopCtx>,
+    /// The string whose `${...}` is being walked: where its errors are said.
+    inside: Option<Span>,
 }
 
 /// Where a loop's `break` and `continue` leave the moves.
@@ -277,6 +280,7 @@ fn block_names(ss: &[Stmt], out: &mut Vec<String>) {
 
 impl Own<'_> {
     fn err(&mut self, code: &'static str, msg: String, span: Span, hint: String) {
+        let span = self.inside.unwrap_or(span);
         let (s, e) = ((self.original)(span.start), (self.original)(span.end));
         if !self.reported.insert((msg.clone(), s)) {
             return;
@@ -308,6 +312,7 @@ impl Own<'_> {
 
     /// `n` is given away; a function value that borrowed it is now stale.
     fn take(&mut self, n: &str, at: Span, how: How, moved: &mut Moved) {
+        let at = self.inside.unwrap_or(at);
         moved.insert(n.to_string(), Gone { at, how });
         let mut stale: Vec<(String, Span)> = self
             .closures
@@ -808,11 +813,16 @@ impl Own<'_> {
             }
             ExprKind::Null | ExprKind::Bool(_) | ExprKind::Int(_) | ExprKind::Float(_) => {}
             ExprKind::Str(parts) => {
+                // cig parses each `${...}` on its own, so the spans inside
+                // count from the interpolation: say it at the string.
+                let outer = self.inside;
+                self.inside = Some(outer.unwrap_or(e.span));
                 for p in parts {
                     if let StrPiece::Expr(x) = p {
                         self.expr(x, moved);
                     }
                 }
+                self.inside = outer;
             }
             ExprKind::List(items) => {
                 for i in items {
