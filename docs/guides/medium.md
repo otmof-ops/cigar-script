@@ -604,7 +604,7 @@ rows into "out.txt"
 ```sh
 $ cigar check into-path.cigar
 Don't see any cigarettes.
-error[E303 check]: `into` a path writes the file, so it must be inside a burn block
+error[E303 check]: `into` means *write file* here, because `"out.txt"` is a Path, so it must be inside a burn block
   --> into-path.cigar:4:1
   |
 4 | rows into "out.txt"

@@ -75,6 +75,8 @@ pub struct Checked {
 pub struct SourceMap {
     lowered: lower::Lowered,
     resolved: crate::lower::edits::Applied,
+    /// Which layer each `into` and `measure` chose.
+    pub layers: Vec<typeck::LayerNote>,
 }
 
 impl SourceMap {
@@ -90,6 +92,13 @@ impl SourceMap {
     /// rather than by the lowering?
     pub fn written(&self, p: usize) -> bool {
         self.resolved.copied(p) && self.lowered.copied(self.resolved.original(p))
+    }
+}
+
+impl SourceMap {
+    /// Every `within` block in the file as written.
+    pub fn withins(&self) -> &[lower::WithinNote] {
+        &self.lowered.withins
     }
 }
 
@@ -293,7 +302,7 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
 
     // 3. Types and ownership.
     let original = |p: usize| lowered.original(p);
-    let out = typeck::check_all(&ast, &lowered.program, &original);
+    let out = typeck::check_all_in(&ast, &lowered.program, &original, source);
     let mut errors = out.errors;
     let mut warnings = out.warnings;
     if effective == Strength::Full {
@@ -359,6 +368,7 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
     let map = SourceMap {
         lowered,
         resolved: applied,
+        layers: out.layers,
     };
     done(effective, text, errors, warnings, program, Some(map))
 }

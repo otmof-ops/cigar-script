@@ -1,0 +1,5 @@
+strength medium
+record Op { run: (Any) -> Int }
+pull dbl(n: Int) -> Int { snuff n * 2 }
+stick o = Op { run: dbl }
+exhale o

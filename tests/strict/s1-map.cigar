@@ -1,0 +1,4 @@
+strength medium
+stick a: Map<Int> = {k: 1}
+stick b: Map<Any> = a
+exhale b

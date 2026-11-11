@@ -1,5 +1,5 @@
 strength full
 
-within timeout(5) {
+within eventually(5) {
   exhale 1
 }

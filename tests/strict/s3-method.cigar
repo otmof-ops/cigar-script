@@ -1,0 +1,6 @@
+strength medium
+pull f(x: Text?) -> Int {
+  if x != null { snuff x.len() }
+  snuff x.len()
+}
+exhale f(null)

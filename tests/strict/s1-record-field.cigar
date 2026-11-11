@@ -1,0 +1,5 @@
+strength medium
+record Bag { items: List<Any> }
+stick a: List<Int> = [1]
+stick b = Bag { items: a }
+exhale b

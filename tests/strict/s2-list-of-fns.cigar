@@ -1,0 +1,4 @@
+strength medium
+pull dbl(n: Int) -> Int { snuff n * 2 }
+stick fs: List<(Any) -> Int> = [dbl]
+exhale fs

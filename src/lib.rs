@@ -12,6 +12,7 @@
 pub mod check;
 pub mod cli;
 pub mod doctor;
+pub mod explain;
 pub mod features;
 pub mod gate;
 pub mod lower;

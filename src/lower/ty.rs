@@ -167,6 +167,10 @@ fn named(name: &str, args: Vec<Ty>, params: &[String], names: &dyn Names) -> Res
                 Ty::List(Box::new(args.into_iter().next().unwrap()))
             }
         },
+        "ListView" => {
+            arity(1)?;
+            Ty::ListView(Box::new(args.into_iter().next().unwrap()))
+        }
         "Map" => match args.len() {
             0 => Ty::Map(Box::new(Ty::Any)),
             1 => Ty::Map(Box::new(args.into_iter().next().unwrap())),
@@ -212,7 +216,7 @@ pub fn descriptor(t: &Ty) -> String {
                 s.name()
             )
         }
-        Ty::List(e) => format!("{{k: \"list\", of: {}}}", descriptor(e)),
+        Ty::List(e) | Ty::ListView(e) => format!("{{k: \"list\", of: {}}}", descriptor(e)),
         Ty::Map(v) => format!("{{k: \"map\", of: {}}}", descriptor(v)),
         Ty::Opt(v) => format!("{{k: \"opt\", of: {}}}", descriptor(v)),
         Ty::Fn(..) => "{k: \"fn\"}".into(),

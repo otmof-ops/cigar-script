@@ -411,6 +411,7 @@ dependencies = [
  "clap",
  "serde_json",
  "tempfile",
+ "wait-timeout",
 ]
 
 [[package]]

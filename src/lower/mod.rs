@@ -38,6 +38,28 @@ pub struct Lowered {
     pub diags: Vec<Diagnostic>,
     /// The modules this file uses, by path.
     pub modules: Vec<PathBuf>,
+    /// Every `within` block, for `cigar explain --layers`.
+    pub withins: Vec<WithinNote>,
+}
+
+/// A `within` block as written: where it is and what it was given.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WithinNote {
+    /// The `within` word.
+    pub start: usize,
+    /// The end of the head (just before the block's `{`).
+    pub head_end: usize,
+    /// The end of the block's `}`.
+    pub end: usize,
+    /// `retry`, `parallel` or `timeout`.
+    pub context: String,
+    /// The text of the context as written (`retry(3, backoff: 2s)`).
+    pub head: String,
+    /// `retry`: tries; `timeout`: the limit as written; `parallel`: threads.
+    pub arg: String,
+    /// `retry`: milliseconds between tries. `timeout`: the limit in milliseconds
+    /// when it was written as a duration.
+    pub ms: i64,
 }
 
 impl Lowered {
@@ -166,6 +188,10 @@ struct L<'a> {
     rets: Vec<Option<(Ty, String)>>,
     show: bool,
     layers: BTreeSet<String>,
+    /// Every `within` block seen.
+    withins: Vec<WithinNote>,
+    /// The deadlines of the `within timeout` blocks being lowered, by name.
+    deadlines: Vec<(String, String)>,
     generic_fns: BTreeSet<String>,
     lines: Vec<usize>,
     opts: &'a Options<'a>,
@@ -211,6 +237,7 @@ pub fn lower(src: &str, opts: &Options) -> Lowered {
                 applied,
                 diags: vec![d],
                 modules: Vec::new(),
+                withins: Vec::new(),
             };
         }
     };
@@ -238,6 +265,8 @@ pub fn lower(src: &str, opts: &Options) -> Lowered {
         rets: Vec::new(),
         show: false,
         layers: ["measure", "into"].iter().map(|s| s.to_string()).collect(),
+        withins: Vec::new(),
+        deadlines: Vec::new(),
         generic_fns: BTreeSet::new(),
         lines,
         opts,
@@ -1061,8 +1090,13 @@ impl<'a> L<'a> {
                 self.public_next = public;
                 self.pull_stmt(i, end, None)
             }
-            T::If | T::While => {
+            T::If => {
                 let e = self.stmt_end(i, end);
+                self.headed(i + 1, e)
+            }
+            T::While => {
+                let e = self.stmt_end(i, end);
+                self.deadline_tick(i + 1, e);
                 self.headed(i + 1, e)
             }
             T::Else => {
@@ -1071,6 +1105,7 @@ impl<'a> L<'a> {
             }
             T::For => {
                 let e = self.stmt_end(i, end);
+                self.deadline_tick(i + 1, e);
                 self.headed(i + 1, e)
             }
             T::Burn | T::Unlit | T::Try | T::Ashtray | T::Finally => {
@@ -1510,10 +1545,42 @@ impl<'a> L<'a> {
             return e;
         };
         let close = self.matching(open);
+        let mut note = WithinNote {
+            start: self.sp(i).start,
+            head_end: self.sp(open).start,
+            end: self.sp(close).end,
+            context: ctx.clone(),
+            head: self.src[self.sp(i + 1).start..self.sp(open).start]
+                .trim()
+                .to_string(),
+            arg: String::new(),
+            ms: 0,
+        };
+        if matches!(self.k(i + 2), T::LParen) {
+            let pc = self.matching(i + 2);
+            let first_end = (i + 3..pc)
+                .find(|&j| matches!(self.k(j), T::Comma))
+                .unwrap_or(pc);
+            if i + 3 < first_end {
+                note.arg = self.src[self.sp(i + 3).start..self.sp(first_end - 1).end]
+                    .trim()
+                    .to_string();
+            }
+            if ctx == "parallel" {
+                if let Some(a) = (i + 3..pc).find(|&j| self.is_word(j, "threads")) {
+                    note.arg = self.src[self.sp(a + 2).start..self.sp(pc - 1).end]
+                        .trim()
+                        .to_string();
+                }
+            }
+        }
         match ctx.as_str() {
             "parallel" => {
                 self.e
                     .replace(self.sp(i).start, self.sp(open).start, "if true ");
+            }
+            "timeout" => {
+                self.within_timeout(i, open, close, &mut note);
             }
             "retry" => {
                 // retry(n) or retry(n, backoff: 2s)
@@ -1571,6 +1638,7 @@ impl<'a> L<'a> {
                     }
                 }
                 let n = self.fresh();
+                note.ms = backoff_ms;
                 // The last failure is coughed again on the `within` line.
                 self.e.replace(
                     self.sp(i).start,
@@ -1591,15 +1659,90 @@ impl<'a> L<'a> {
                 let sp = self.sp(i + 1);
                 self.err_hint(
                     "E1102",
-                    format!("`within {other}` is full-strength CigarScript, not built yet in this version (otmof-ops/cigar-script#13)"),
+                    format!("`within {other}` is not a context this version has: a user-declared context is full-strength CigarScript, not built yet (otmof-ops/cigar-script#13)"),
                     sp.start,
                     sp.end,
-                    "`within retry(n)` and `within parallel(...)` are built",
+                    "`within retry(n)`, `within parallel(...)` and `within timeout(d)` are built",
                 );
             }
         }
+        self.withins.push(note);
+        let is_timeout = ctx == "timeout" && self.deadlines.last().is_some();
         self.stmts(open + 1, close);
+        if is_timeout {
+            self.deadlines.pop();
+        }
         e
+    }
+
+    /// `within timeout(2s) { ... }`: a deadline, taken when the block starts,
+    /// checked at the top of every `for` and `while` pass in the block and
+    /// once more when it ends. Past it is a cough, `E1404`, so the burns in
+    /// the block roll back with the run (or are retried by a `within retry`
+    /// around it). A single call that never returns is not interrupted.
+    fn within_timeout(&mut self, i: usize, open: usize, close: usize, note: &mut WithinNote) {
+        let ok = matches!(self.k(i + 2), T::LParen)
+            && matches!(self.k(self.matching(i + 2)), T::RParen)
+            && self.matching(i + 2) > i + 3;
+        if !ok {
+            let sp = self.sp(i + 1);
+            self.err_hint(
+                "E1405",
+                "`within timeout` needs a limit: `within timeout(2s) { ... }`".to_string(),
+                sp.start,
+                self.sp(open).start,
+                "a duration (`500ms`, `2s`, `1m`) or a number of milliseconds",
+            );
+            return;
+        }
+        let pc = self.matching(i + 2);
+        let literal = matches!(self.k(i + 3), T::Int(_))
+            && (pc == i + 4 || (pc == i + 5 && self.ident(i + 4).is_some()));
+        let limit = if literal {
+            note.ms = self.duration_ms(i + 3);
+            note.ms.to_string()
+        } else {
+            format!(
+                "({})",
+                self.src[self.sp(i + 3).start..self.sp(pc - 1).end].trim()
+            )
+        };
+        let n = self.fresh();
+        let name = format!("__cg_d{n}");
+        let shown = note.arg.replace('"', "'");
+        self.e.replace(
+            self.sp(i).start,
+            self.sp(open).start,
+            format!("roll {name} = time.now_ms() + {limit}; if true "),
+        );
+        self.e.open(
+            self.sp(close).start,
+            format!("; {}", self.deadline_check(&name, &shown)),
+        );
+        self.deadlines.push((name, shown));
+    }
+
+    /// The statement that coughs `E1404` once a deadline has passed.
+    fn deadline_check(&self, name: &str, shown: &str) -> String {
+        format!(
+            "if time.now_ms() > {name} {{ cough {{code: \"E1404\", message: \"E1404 `within timeout({shown})` ran out of time\"}} }}"
+        )
+    }
+
+    /// At the top of a loop's body inside a `within timeout`: the same check.
+    fn deadline_tick(&mut self, i: usize, e: usize) {
+        if self.deadlines.is_empty() {
+            return;
+        }
+        let Some(open) = self.block_brace(i, e) else {
+            return;
+        };
+        let checks: String = self
+            .deadlines
+            .iter()
+            .map(|(n, s)| format!("{}; ", self.deadline_check(n, s)))
+            .collect();
+        self.e.open(self.sp(open).end, checks);
     }
 
     /// `2s`, `500ms`, `1m`: milliseconds.
@@ -3177,6 +3320,7 @@ impl<'a> L<'a> {
             appended_at,
             diags: self.diags,
             modules: self.modules,
+            withins: self.withins,
         }
     }
 
@@ -3351,7 +3495,7 @@ fn full_only(t: &Ty) -> Option<&'static str> {
         Ty::Sized(_) => Some("sized numbers"),
         Ty::Bytes => Some("raw bytes"),
         Ty::Channel(_) => Some("channels"),
-        Ty::List(a) | Ty::Map(a) | Ty::Opt(a) => full_only(a),
+        Ty::List(a) | Ty::ListView(a) | Ty::Map(a) | Ty::Opt(a) => full_only(a),
         Ty::Fn(ps, r) => ps.iter().find_map(full_only).or_else(|| full_only(r)),
         Ty::Record(_, a) | Ty::Enum(_, a) => a.iter().find_map(full_only),
         _ => None,
@@ -3363,7 +3507,8 @@ fn split_code(m: &str) -> (&'static str, String) {
     const CODES: &[&str] = &[
         "E1104", "E1201", "E1202", "E1203", "E1204", "E1205", "E1206", "E1207", "E1208", "E1209",
         "E1211", "E1212", "E1213", "E1214", "E1215", "E1216", "E1217", "E1218", "E1301", "E1302",
-        "E1303", "E1304", "E1311", "E1312", "E1313", "E1401", "E1402", "E1403", "E1501", "E1502",
+        "E1303", "E1304", "E1311", "E1312", "E1313", "E1401", "E1402", "E1403", "E1404", "E1405",
+        "E1501", "E1502",
     ];
     for c in CODES {
         if let Some(rest) = m.strip_prefix(c) {

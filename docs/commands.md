@@ -196,6 +196,31 @@ script and the `cigar` that built it, so running the same file again starts at
 once. The newest 12 are kept and older ones are removed. If the folder cannot be written,
 `cigar run` says so with `E802` and exits `3`.
 
+## `cigar explain`
+
+`cigar explain --layers FILE:LINE:COL` peels the `into`, `measure` or `within`
+at a place back to CigScript's core: which layer was chosen, for which type,
+and the reduction it becomes. The place is written as an error shows it.
+
+```sh
+$ cigar explain --layers sales.cigar:10:3
+sales.cigar:10:3
+Here, `into` means *write file*, because `"report.csv"` is a Path.
+
+full    rows into "report.csv"
+medium  _cg_into_path(rows, "report.csv")
+mild    fs.write_text("report.csv", json.stringify(rows))
+core    burn op: write "report.csv"   (journaled, reversible)
+```
+
+Inside `within` blocks it also lists them, outermost first. `--json` prints
+one object with `what`, `layer`, `type`, `source` (`built in`, `declared` or
+`chosen at run time`), `effect`, `within`, `headline` and `reduction` (a list
+of `{level, text}`). The file is checked first: if it does not check, its
+errors are printed and the exit is `2`. A `.cig` file, a mild file, a bad
+position and a place with no layer exit `3` (`E800`), the last listing where
+the file's layers are. [The language](LANGUAGE.md) has the rules.
+
 ## Exit codes
 
 | code | `cigar check` | `cigar run` |
@@ -221,6 +246,8 @@ step reads them the same way.
 | `E1200` to `E1399` | check | medium's type, record, `match`, module and interface errors |
 | `E1401`, `E1402` | check | layers: two meanings for a type, or none |
 | `E1403` | check | `break` or `continue` that would leave a `within retry` block |
+| `E1404` | cough, at run time | a `within timeout` block ran past its deadline |
+| `E1405` | check | `within timeout` written without a limit |
 | `E1501`, `E1502` | check | ownership, at full |
 | `E303` | check | `into` a path outside a burn (a warning inside a function), as `fs.write_text` is |
 | `E1210`, `E1510`, `E1205`, `E1206`, `E1208`, `E1520` | cough, at run time | a boundary, a sized number, a record's or a variant's fields given at run time, and a send on a closed channel; the message starts with the code |

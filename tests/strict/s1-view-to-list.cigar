@@ -1,0 +1,4 @@
+strength medium
+pull add(xs: List<Int>) { xs.push(1) }
+stick v: ListView<Int> = [1]
+add(v)

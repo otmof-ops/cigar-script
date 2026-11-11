@@ -1,0 +1,4 @@
+strength medium
+pull add(xs: List<Any>) { xs.push("x") }
+stick a: List<Int> = [1]
+add(a)

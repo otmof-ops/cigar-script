@@ -1,0 +1,4 @@
+strength medium
+
+stick rows = ["a", "b"]
+rows into "report.csv"

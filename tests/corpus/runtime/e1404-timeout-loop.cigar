@@ -1,0 +1,9 @@
+strength full
+
+roll passes = 0
+within timeout(30ms) {
+  while true {
+    passes += 1
+    time.sleep_ms(10)
+  }
+}

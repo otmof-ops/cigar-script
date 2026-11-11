@@ -1,0 +1,5 @@
+strength medium
+pull apply(f: (Int) -> Int) -> Int { snuff f(2) }
+pull any_len(v: Any) -> Int { snuff 1 }
+pull num(v: Float) -> Int { snuff 1 }
+exhale apply(any_len), apply(num), apply(pack(n) => n * 2)

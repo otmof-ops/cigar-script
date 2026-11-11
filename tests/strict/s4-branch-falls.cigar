@@ -1,0 +1,5 @@
+strength medium
+pull f(n: Int) -> Int {
+  if n > 0 { snuff 1 } else { exhale "no" }
+}
+exhale f(1)

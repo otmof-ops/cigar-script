@@ -33,7 +33,7 @@ feature above the strength (`E1101`), type-checks medium and full, checks
 ownership at full, and then checks the result as `cig check` would.
 `cigar run` runs it, as a cig program: every burn journaled, a plan with
 `--dry-run`, rollback if the script fails. `foreign`, `unchecked` blocks,
-`within` contexts other than `retry` and `parallel`, and custom journaling
+user-declared `within` contexts, and custom journaling
 adapters are not built; a file that uses the first three gets `E1102`, which
 says so and names the issue. The syntax is **provisional** where the design
 questions (#1 to #5) are open. CigarScript is 0.1.0, not released, and not on
@@ -97,15 +97,16 @@ broke.
 | `cigar check` on a `.cig` file | **built.** Exactly what `cig check` does, of the cig version `cigar` is built on; a `.cig` file never gets a new error |
 | `cigar check` on a `.cigar` file | **built.** The `strength` declaration, the feature gate, lowering, the type and ownership checks, and then CigScript's own check |
 | `cigar run` | **built.** Checks, then runs as a cig program: plans, journals, rollback and run records are cig's; errors name your file and line |
-| `E1101` to `E1104`, `E1201` to `E1218`, `E1301` to `E1304`, `E1311` to `E1313`, `E1401` to `E1403`, `E1501`, `E1502`, `E1510`, `E1520` | **built.** [The language](docs/LANGUAGE.md#errors) says when each comes |
+| `E1101` to `E1104`, `E1201` to `E1218`, `E1301` to `E1304`, `E1311` to `E1313`, `E1401` to `E1405`, `E1501`, `E1502`, `E1510`, `E1520` | **built.** [The language](docs/LANGUAGE.md#errors) says when each comes |
 | `--strength`, `--json`, `--plain`, `--no-color`, folders | **built.** Exit `0` checked, `2` a check failed, `3` could not check |
 | mild: everything CigScript has | **built** |
 | medium: types, records, enums, `match`, generics, interfaces, modules, `into`, `measure`, the typed standard library | **built**, provisional ([#8](https://github.com/otmof-ops/cigar-script/issues/8), [#9](https://github.com/otmof-ops/cigar-script/issues/9), [#10](https://github.com/otmof-ops/cigar-script/issues/10), [#11](https://github.com/otmof-ops/cigar-script/issues/11), [#13](https://github.com/otmof-ops/cigar-script/issues/13)) |
-| full: `owned`, `borrow`, `move`, `parallel`, channels, `within retry` and `within parallel`, sized numbers, `Bytes`, `layer` | **built**, provisional ([#12](https://github.com/otmof-ops/cigar-script/issues/12), [#13](https://github.com/otmof-ops/cigar-script/issues/13)). `parallel` runs in loop order on one thread today, so the journal is the sequential run's |
+| full: `owned`, `borrow`, `move`, `parallel`, channels, `within retry`, `within parallel` and `within timeout`, sized numbers, `Bytes`, `layer` | **built**, provisional ([#12](https://github.com/otmof-ops/cigar-script/issues/12), [#13](https://github.com/otmof-ops/cigar-script/issues/13)). `parallel` runs in loop order on one thread today, so the journal is the sequential run's |
 | full: `foreign` | **not built** ([#5](https://github.com/otmof-ops/cigar-script/issues/5)). Every use is `E1102` |
-| full: `unchecked` blocks, other `within` contexts | **not built** ([#12](https://github.com/otmof-ops/cigar-script/issues/12), [#13](https://github.com/otmof-ops/cigar-script/issues/13)). Every use is `E1102` |
+| full: `unchecked` blocks, user-declared `within` contexts | **not built** ([#12](https://github.com/otmof-ops/cigar-script/issues/12), [#13](https://github.com/otmof-ops/cigar-script/issues/13)). Every use is `E1102` |
 | full: custom journaling adapters, scripts reading each other's results | **not built** ([#12](https://github.com/otmof-ops/cigar-script/issues/12), [#14](https://github.com/otmof-ops/cigar-script/issues/14)). No syntax yet |
-| the experience warning, `cig explain --layers` | **not built** |
+| `cigar explain --layers file:line:col` | **built** ([#13](https://github.com/otmof-ops/cigar-script/issues/13)); `cig explain --layers` forwards to it once cig-script does |
+| the experience warning | **not built** |
 | compiling a `.cigar` file | **not built.** CigCompile builds CigScript today; CigarScript comes through it later. `cigar run` runs it |
 | carton, the language server | **not built** ([#15](https://github.com/otmof-ops/cigar-script/issues/15), [#16](https://github.com/otmof-ops/cigar-script/issues/16)) |
 | `cig explain E1101` | no page yet: the codes are registered in cig when CigarScript ships; the message says all of it |

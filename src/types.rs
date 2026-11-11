@@ -47,6 +47,9 @@ pub enum Ty {
     /// on every arithmetic result.
     Sized(SizedInt),
     List(Box<Ty>),
+    /// `ListView<T>`: a list that can be read and not written through. It is
+    /// covariant in `T`, which a `List<T>` is not.
+    ListView(Box<Ty>),
     /// Keys are text in cig; `Map<V>` and `Map<Text, V>` are the same.
     Map(Box<Ty>),
     /// `T?`: a `T` or `null`.
@@ -140,6 +143,7 @@ impl fmt::Display for Ty {
             Ty::Bytes => write!(f, "Bytes"),
             Ty::Sized(s) => write!(f, "{}", s.name()),
             Ty::List(t) => write!(f, "List<{t}>"),
+            Ty::ListView(t) => write!(f, "ListView<{t}>"),
             Ty::Map(t) => write!(f, "Map<{t}>"),
             Ty::Opt(t) => write!(f, "{t}?"),
             Ty::Fn(ps, r) => {
@@ -312,6 +316,10 @@ pub const BUILTIN_TYPES: &[(&str, &str)] = &[
     ("Path", "text that names a file or folder"),
     ("Bytes", "raw bytes (full)"),
     ("List", "List<T>: a list of T"),
+    (
+        "ListView",
+        "ListView<T>: a list read through, never written (covariant)",
+    ),
     ("Map", "Map<V> or Map<Text, V>: text keys to V"),
     ("Channel", "Channel<T>: a channel of T (full)"),
 ];

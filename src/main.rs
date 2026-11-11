@@ -39,6 +39,8 @@ enum Command {
     Check(CheckArgs),
     /// Check a file, then run it: every burn journaled, rolled back if it fails.
     Run(RunArgs),
+    /// Peel an `into`, `measure` or `within` back to CigScript's core.
+    Explain(ExplainArgs),
     /// The checks only cigar can make, for `ciginstaller doctor --tools`.
     #[command(name = "__doctor", hide = true)]
     Doctor,
@@ -63,6 +65,13 @@ struct RunArgs {
     /// Arguments passed to the script as `args`.
     #[arg(last = true)]
     args: Vec<String>,
+}
+
+#[derive(Args)]
+struct ExplainArgs {
+    /// The place to peel, as an error shows it: sales.cigar:12:1
+    #[arg(long, value_name = "FILE:LINE:COL")]
+    layers: Option<String>,
 }
 
 #[derive(Args)]
@@ -109,7 +118,29 @@ fn run() -> i32 {
         }
         Some(Command::Check(a)) => check_cmd(&cli, a),
         Some(Command::Run(a)) => run_cmd(&cli, a),
+        Some(Command::Explain(a)) => explain_cmd(&cli, a),
         Some(Command::Doctor) => cigarscript::doctor::run(cli.json),
+    }
+}
+
+fn explain_cmd(top: &Cli, a: &ExplainArgs) -> i32 {
+    let flags = Flags {
+        paths: Vec::new(),
+        strength: None,
+        json: top.json,
+        plain: top.plain,
+        no_color: top.no_color,
+    };
+    let ctx = ctx_from(&flags);
+    match a.layers.as_deref() {
+        Some(position) => cigarscript::explain::run_layers(&ctx, position),
+        None => {
+            let d = cigscript::diagnostics::usage("cigar explain: name a place to peel")
+                .code("E800")
+                .with_hint("cigar explain --layers sales.cigar:12:1; for an error code, `cig explain E1401`");
+            cigscript::cli::report(&ctx, &d, None, None);
+            exit::USAGE
+        }
     }
 }
 
