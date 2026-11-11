@@ -1,0 +1,145 @@
+==================
+strength and sticks
+==================
+strength medium
+stick n: Int = 1_000
+roll name = "a${n}b"
+
+---
+
+(source_file
+  (strength_declaration)
+  (declaration name: (identifier) type: (named_type (identifier)) value: (integer))
+  (declaration name: (identifier) value: (string (string_content) (interpolation (identifier)) (string_content))))
+
+==================
+comments and raw strings
+==================
+# a comment
+stick re = 'C:\dir\n' # trailing
+
+---
+
+(source_file
+  (comment)
+  (declaration name: (identifier) value: (raw_string))
+  (comment))
+
+==================
+pull with types and coughs
+==================
+pull area(borrow s: Shape, xs: List<Int>) -> Result<Int, Text> coughs IoError {
+  snuff 1
+}
+
+---
+
+(source_file
+  (pull_declaration
+    name: (identifier)
+    (parameters
+      (parameter name: (identifier) type: (named_type (identifier)))
+      (parameter name: (identifier) type: (named_type (identifier) (type_arguments (named_type (identifier))))))
+    return_type: (named_type (identifier) (type_arguments (named_type (identifier)) (named_type (identifier))))
+    (identifier)
+    body: (block (return_statement (integer)))))
+
+==================
+optional and function types
+==================
+stick a: Int? = null
+stick f: (Int, Text) -> Bool = pack(x) => true
+
+---
+
+(source_file
+  (declaration name: (identifier) type: (optional_type (named_type (identifier))) value: (null))
+  (declaration
+    name: (identifier)
+    type: (function_type (named_type (identifier)) (named_type (identifier)) return_type: (named_type (identifier)))
+    value: (lambda (parameters (parameter name: (identifier))) body: (true))))
+
+==================
+control flow
+==================
+if a > 1 { exhale a } else if a < 0 { break } else { continue }
+while x { x -= 1 }
+for i in 0..10 { exhale i }
+
+---
+
+(source_file
+  (if_statement
+    condition: (binary_expression left: (identifier) right: (integer))
+    consequence: (block (exhale_statement (identifier)))
+    alternative: (if_statement
+      condition: (binary_expression left: (identifier) right: (integer))
+      consequence: (block (break_statement))
+      alternative: (block (continue_statement))))
+  (while_statement condition: (identifier) body: (block (assignment left: (identifier) right: (integer))))
+  (for_statement variable: (identifier) iterable: (binary_expression left: (integer) right: (integer)) body: (block (exhale_statement (identifier)))))
+
+==================
+try, burn and cough
+==================
+try { cough "x" } ashtray e { exhale e.message } finally { exhale 1 }
+burn unlit { exhale 2 }
+burn (s) { s.a = 1 } unburn { exhale s.a }
+
+---
+
+(source_file
+  (try_statement
+    body: (block (cough_statement (string (string_content))))
+    error: (identifier)
+    handler: (block (exhale_statement (member_expression object: (identifier) property: (identifier))))
+    cleanup: (block (exhale_statement (integer))))
+  (burn_statement body: (block (exhale_statement (integer))))
+  (burn_statement
+    (identifier)
+    body: (block (assignment left: (member_expression object: (identifier) property: (identifier)) right: (integer)))
+    compensation: (block (exhale_statement (member_expression object: (identifier) property: (identifier))))))
+
+==================
+operators and pipes
+==================
+stick z = a ?? b >> f(1) >> g
+stick w = not a and -b or c?.d[0]
+
+---
+
+(source_file
+  (declaration
+    name: (identifier)
+    value: (binary_expression
+      left: (binary_expression
+        left: (binary_expression left: (identifier) right: (identifier))
+        right: (call_expression function: (identifier) arguments: (arguments (integer))))
+      right: (identifier)))
+  (declaration
+    name: (identifier)
+    value: (binary_expression
+      left: (binary_expression
+        left: (unary_expression argument: (identifier))
+        right: (unary_expression argument: (identifier)))
+      right: (index_expression
+        object: (member_expression object: (identifier) property: (identifier))
+        index: (integer)))))
+
+==================
+chain, scope pack and literals
+==================
+pack { "./build", "~/Downloads" }
+chain release { fetch, build }
+stick m = {name: 1, "with space": [1, 2.5, 1e9]}
+
+---
+
+(source_file
+  (scope_declaration (string (string_content)) (string (string_content)))
+  (chain_declaration name: (identifier) (identifier) (identifier))
+  (declaration
+    name: (identifier)
+    value: (map_literal
+      (map_pair key: (identifier) value: (integer))
+      (map_pair key: (string (string_content)) value: (list_literal (integer) (float) (float))))))

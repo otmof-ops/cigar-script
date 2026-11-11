@@ -197,7 +197,7 @@ pub fn report_checked(ctx: &Ctx, name: &str, checked: &Checked) {
 /// The top-level files a path names: one file, or the `.cig` and
 /// `.cigar` files at the top of a folder.
 #[allow(clippy::result_large_err)]
-fn files_of(path: &Path) -> Result<Vec<PathBuf>, Diagnostic> {
+pub fn files_of(path: &Path) -> Result<Vec<PathBuf>, Diagnostic> {
     let meta = fs::metadata(path).map_err(|e| {
         usage(format!("{}: {e}", path.display()))
             .code("E801")

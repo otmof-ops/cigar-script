@@ -4,6 +4,7 @@
 cigar check <path>... [--strength mild|medium|full] [--deny any|warnings]
 cigar run <file> [--dry-run] [--no-rollback] [--max-steps <n>] [--strength mild|medium|full] [-- <args>...]
 cigar explain --layers <file>:<line>:<col>
+cigar fmt <path>... [--check]
 cigar-lsp
 cigar --version
 cigar help [command]
@@ -14,8 +15,8 @@ on stdout, `--plain` for the same information without the catchphrases
 (also `CIG_PLAIN`), `--no-color` to turn color off (also `NO_COLOR`). They
 go before or after the command.
 
-`cigar check` and `cigar run` are the two commands. `cigar` does not compile,
-format or package anything yet; see the [roadmap](roadmap.md) for what comes
+`cigar check`, `cigar run`, `cigar explain` and `cigar fmt` are the commands.
+`cigar` does not compile or package anything yet; see the [roadmap](roadmap.md) for what comes
 and in what order.
 
 ## `cigar check`
@@ -243,6 +244,65 @@ ciginstaller crash send <id>     # files it in otmof-ops/cigar-script
 your organization locks) means nothing is saved at all: `cigar` says so in one line and stops as
 it would have.
 
+## `cigar fmt`
+
+`cigar fmt <path>...` rewrites `.cigar` and `.cig` files in one style. There
+are no options for the style: a project that formats is a project whose
+diffs hold changes and nothing else. A path is a file, or a folder whose
+`.cig` and `.cigar` files at the top level are formatted (as with `check`).
+
+```
+cigar fmt sales.cigar tools/         # rewrite in place
+cigar fmt --check sales.cigar        # change nothing; for CI
+```
+
+A file already in the style is not touched (its modification time stays).
+`--check` writes nothing: it names each file that would change, with the
+line of the first change (`would reformat sales.cigar (first change at line
+4)`; under `--json`, one object per file, `{"file", "would_change", "line"}`)
+and exits `2` if there was any.
+
+**It reads a file the way `cigar check` does** (cigscript's own lexer, no
+second parser), so it cannot disagree with the checker about what a file
+says. A file that does not lex is reported and left as it was. The result is
+read again before it is written: if its tokens are not the file's, the file
+is left alone. Formatting is **idempotent** (formatting the result changes
+nothing), keeps **every comment**, and never changes a program: a formatted
+file has the same diagnostics and the same lowered program as before.
+
+### The style
+
+- Two spaces per level, never tabs. A level is one *line* that opens a `{`,
+  `(` or `[` and does not close it, so `foo([` and a list on the next lines
+  indent once. A line that starts with a closer sits at the opener's level.
+  A line that continues an expression (it starts with `>>`, `.`, `?.`, `and`,
+  `or` or `??`, or the line before ends with an operator) is indented one
+  level more.
+- One space around every binary operator, `=`, `=>`, `->`, `>>`, and `and`,
+  `or`; one after `,` and `:`, none before. None inside `( )` and `[ ]`. A
+  call and an index touch their name (`f(x)`, `xs[0]`); `a..b` is tight;
+  `-x` is tight; a generic is tight (`List<Int>`, `Map<Text, Int>`).
+- A map literal is tight (`{name: 1}`); a block, and a record or enum body or
+  record literal, has a space inside when it is on one line (`{ snuff 1 }`,
+  `Box { items: [1] }`) and `{}` is empty. A brace is a map when it follows
+  an operator, `(`, `[`, `,`, `:`, `snuff`, `exhale` or `cough`.
+- A trailing comment has one space before its `#`. A comment on its own line
+  sits at the level of the code after it. Comment text is never changed.
+- At most one blank line in a row, none at the start of a file, after a `{`
+  or before a `}`; no trailing spaces; one newline at the end; line endings are
+  LF. Where a file breaks lines, it keeps its breaks: a newline ends a
+  statement, so `cigar fmt` never joins or splits one.
+- Two spellings are left as written because they read differently: a word
+  against its number (`2s`, `500ms`), and a contextual keyword followed by
+  `(` or `[` (`measure(x)` or `measure (x)`; the list is in
+  [LANGUAGE.md](LANGUAGE.md#reserved-words)).
+
+Exit codes: `0` every file is formatted (or was written), `2` `--check` found
+a file that would change, or a file did not lex, `3` a usage problem (no path,
+a path that cannot be read or written, a file that is not `.cig` or
+`.cigar`). In an editor, `cigar-lsp` formats the open document the same way
+(see below). cigo's `format` stage runs this command.
+
 ## `cigar-lsp`
 
 `cigar-lsp` is the language server: the Language Server Protocol over
@@ -275,6 +335,9 @@ What it does, on a file the editor has open (full-document sync):
 - **Go to definition** and **find references** for `pull` functions, `stick`
   and `roll` names, parameters, records, enums, record fields, and the
   functions of the modules a file `use`s (the module's file is opened).
+- **Format document** (`textDocument/formatting`): the whole document as one
+  edit, from the formatter `cigar fmt` runs. No edits when it is already
+  formatted, and `null` when the text does not lex.
 - **Completion**: the keywords the file's strength allows, the names in
   scope, a record's fields after `.` where the type is known, and a module's
   `pub` names after `plan.`.
@@ -283,6 +346,9 @@ A file is checked as it is on disk plus what is open, but the checker reads
 a module from disk: an unsaved edit to a module shows in definitions and
 completion, and in diagnostics once it is saved. An inferred type (a `stick`
 with no annotation) is not shown on hover yet.
+
+Editors that start it, and the VS Code extension and tree-sitter grammar in
+`editors/`, are in [editors.md](editors.md).
 
 The server exits `0` after `shutdown` and `exit`, and `1` if it is told to
 `exit` without one.

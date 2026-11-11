@@ -8,6 +8,25 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **`cigar fmt`, the tree-sitter grammar and the VS Code extension (#16, part 2).**
+  `cigar fmt <path>...` rewrites `.cigar` and `.cig` files in one style with no
+  options (two-space indent, spacing and blank lines normalized, every comment
+  kept); `--check` changes nothing, names what would change and exits `2`, for
+  CI. It reads files with the lexer `cigar check` uses (no second parser), is
+  idempotent, and refuses a file whose tokens would change: a formatted file
+  has the same diagnostics and the same lowered program. `cigar-lsp` formats
+  the document too (`textDocument/formatting`, the same formatter).
+  `editors/tree-sitter-cigarscript/` is a grammar with highlight queries and a
+  test corpus; `editors/vscode/` is an extension (a TextMate grammar and a
+  client that starts `cigar-lsp` from `PATH` or a setting; no telemetry, no
+  network; `vscode-languageclient` is its one dependency, built with `npm ci`
+  from a committed lockfile). `.github/workflows/editors.yml` builds both and
+  runs `cigar fmt --check` on the repository's own files. Style rules:
+  [commands](docs/commands.md#cigar-fmt); setup: [editors](docs/editors.md).
+  Tests: `tests/fmt.rs` (idempotent over the corpus and CigScript's files,
+  comments kept, the same check results, `--check` exits non-zero) and
+  a formatting test in `tests/lsp.rs`.
+
 - **A crash in cigar joins the family's one queue (cig-installer#10).** A panic is written
   into cig's ashtray as a report from `cigar-script`, handed over the way `cigo` does it (`cig
   crash submit --origin cigar-script --repo otmof-ops/cigar-script`), or, with no `cig` on the

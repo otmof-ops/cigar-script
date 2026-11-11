@@ -44,6 +44,8 @@ enum Command {
     Run(RunArgs),
     /// Peel an `into`, `measure` or `within` back to CigScript's core.
     Explain(ExplainArgs),
+    /// Rewrite files in the one house style; `--check` only says what would change.
+    Fmt(FmtArgs),
     /// The checks only cigar can make, for `ciginstaller doctor --tools`.
     #[command(name = "__doctor", hide = true)]
     Doctor,
@@ -75,6 +77,15 @@ struct ExplainArgs {
     /// The place to peel, as an error shows it: sales.cigar:12:1
     #[arg(long, value_name = "FILE:LINE:COL")]
     layers: Option<String>,
+}
+
+#[derive(Args)]
+struct FmtArgs {
+    /// The files or folders to format.
+    paths: Vec<PathBuf>,
+    /// Change nothing: name each file that would change and exit 2 if any would.
+    #[arg(long)]
+    check: bool,
 }
 
 #[derive(Args)]
@@ -147,8 +158,22 @@ fn run() -> i32 {
         Some(Command::Check(a)) => check_cmd(&cli, a),
         Some(Command::Run(a)) => run_cmd(&cli, a),
         Some(Command::Explain(a)) => explain_cmd(&cli, a),
+        Some(Command::Fmt(a)) => fmt_cmd(&cli, a),
         Some(Command::Doctor) => cigarscript::doctor::run(cli.json),
     }
+}
+
+fn fmt_cmd(top: &Cli, a: &FmtArgs) -> i32 {
+    let flags = Flags {
+        paths: a.paths.clone(),
+        strength: None,
+        json: top.json,
+        plain: top.plain,
+        no_color: top.no_color,
+        deny: Deny::default(),
+    };
+    let ctx = ctx_from(&flags);
+    cigarscript::fmt::run(&ctx, &a.paths, a.check)
 }
 
 fn explain_cmd(top: &Cli, a: &ExplainArgs) -> i32 {
