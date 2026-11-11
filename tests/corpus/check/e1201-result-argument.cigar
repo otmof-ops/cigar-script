@@ -1,0 +1,6 @@
+strength medium
+
+pull show(r: Result<Int, Text>) {
+  exhale r
+}
+show(Ok("one"))

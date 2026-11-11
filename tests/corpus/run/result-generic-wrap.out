@@ -1,0 +1,3 @@
+Result.Ok(value: 1)
+Result.Ok(value: 3)
+Result.Err(error: "empty list")

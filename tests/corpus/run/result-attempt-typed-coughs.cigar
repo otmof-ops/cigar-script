@@ -1,0 +1,19 @@
+strength medium
+
+record ParseError { message: Text }
+
+pull parse(t: Text) -> Int coughs ParseError {
+  if t == "" {
+    cough ParseError { message: "empty" }
+  }
+  snuff t.to_int()
+}
+
+stick good: Result<Int, ParseError> = attempt(parse("42"))
+stick bad: Result<Int, ParseError> = attempt(parse(""))
+exhale good
+exhale bad
+match bad {
+  Ok(v) => exhale "parsed", v
+  Err(e) => exhale "caught", e.message
+}

@@ -1,0 +1,4 @@
+strength medium
+
+stick r: Result<Int, Text> = Err(7)
+exhale r

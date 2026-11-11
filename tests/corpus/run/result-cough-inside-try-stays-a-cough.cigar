@@ -1,0 +1,17 @@
+strength medium
+
+pull g() -> Result<Text, Text> {
+  try {
+    cough "boom"
+  } ashtray e {
+    snuff Ok("caught ${e.message}")
+  }
+  snuff Err("not reached")
+}
+
+pull h() -> Result<Text, Text> {
+  cough "boom"
+}
+
+exhale g()
+exhale h()

@@ -1,0 +1,7 @@
+strength medium
+
+pull risky(n) -> Result<Int, Text> {
+  stick v = n?
+  snuff Ok(v)
+}
+exhale risky(5)

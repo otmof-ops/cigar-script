@@ -1,0 +1,32 @@
+strength medium
+
+record IoError { message: Text }
+
+pull read(name: Text) -> Result<Text, IoError> {
+  if name == "missing" {
+    cough IoError { message: "no such file: " + name }
+  }
+  snuff Ok("data of " + name)
+}
+
+pull length(name: Text) -> Result<Int, IoError> {
+  snuff Ok((read(name)?).len())
+}
+
+pull both(a: Text, b: Text) -> Result<Int, IoError> {
+  stick total = length(a)? + length(b)?
+  snuff Ok(total)
+}
+
+pull guarded(name: Text) -> Result<Int, IoError> {
+  try {
+    stick n = length(name)?
+    snuff Ok(n)
+  } ashtray e {
+    snuff Err(IoError { message: "never" })
+  } 
+}
+
+exhale both("a", "bb")
+exhale both("a", "missing")
+exhale guarded("missing")

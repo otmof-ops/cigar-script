@@ -8,6 +8,17 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **`Result<T, E>` and `?` (#2).** `Result` is built in, with the variants
+  `Ok(value)` and `Err(error)` written bare, `match`ed exhaustively and
+  checked like any generic enum. `e?` on a `Result` in a `pull` that returns a
+  `Result` with a fitting error gives the `Ok` value or returns the `Err`; any
+  other `?` is the new `E1219`. A `cough` in a function that returns a
+  `Result` is its `Err` (`E1201` when it is not the error type), and
+  `attempt(call)` turns what a call coughs into an `Err`. A file's own enum
+  named `Result` keeps its meaning. `docs/LANGUAGE.md`'s "Types, values and
+  checks" is final, with the rules written, and `tests/corpus` has the
+  `Result`, `?` and `cough` cases (listed in its README) with their expected
+  errors.
 - **Held to Rust's standard, first four (#22 S1-S4).** `tests/strict/` has each
   program from the issue with its error, run by `tests/strict.rs`.
   A `T?` used as a `T` (method, field, index, arithmetic) is `E1209` until it

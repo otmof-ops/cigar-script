@@ -1,0 +1,9 @@
+strength medium
+
+pull half(n: Int) -> Result<Int, Text> {
+  snuff Ok(n / 2)
+}
+
+match half(4) {
+  Ok(v) => exhale v
+}

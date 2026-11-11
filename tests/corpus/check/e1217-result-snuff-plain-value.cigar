@@ -1,0 +1,6 @@
+strength medium
+
+pull half(n: Int) -> Result<Int, Text> {
+  snuff n + 1
+}
+exhale half(4)

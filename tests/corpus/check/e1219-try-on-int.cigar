@@ -1,0 +1,7 @@
+strength medium
+
+pull plus(n: Int) -> Result<Int, Text> {
+  stick m = (n + 1)?
+  snuff Ok(m)
+}
+exhale plus(1)

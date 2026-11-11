@@ -293,6 +293,30 @@ pub struct Program {
     pub module_fns: BTreeMap<String, FnSig>,
 }
 
+/// The built-in `enum Result<T, E> { Ok(value: T), Err(error: E) }` (#2),
+/// which every medium or full file has unless it declares a `Result` of
+/// its own. `Ok(v)` and `Err(e)` are its variants, spelled bare.
+pub fn result_decl() -> EnumDecl {
+    EnumDecl {
+        name: "Result".to_string(),
+        generics: vec!["T".to_string(), "E".to_string()],
+        variants: vec![
+            Variant {
+                name: "Ok".to_string(),
+                fields: vec![("value".to_string(), Ty::Param("T".to_string()))],
+                at: At::default(),
+            },
+            Variant {
+                name: "Err".to_string(),
+                fields: vec![("error".to_string(), Ty::Param("E".to_string()))],
+                at: At::default(),
+            },
+        ],
+        public: true,
+        at: At::default(),
+    }
+}
+
 /// The name of the lowered function that implements `method` of
 /// `interface` for `ty` (a layer is an interface with one method).
 pub fn impl_fn_name(interface: &str, ty: &Ty, method: &str) -> String {
@@ -322,4 +346,8 @@ pub const BUILTIN_TYPES: &[(&str, &str)] = &[
     ),
     ("Map", "Map<V> or Map<Text, V>: text keys to V"),
     ("Channel", "Channel<T>: a channel of T (full)"),
+    (
+        "Result",
+        "Result<T, E>: Ok(T) or Err(E), unless the file declares its own",
+    ),
 ];

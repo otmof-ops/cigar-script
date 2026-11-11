@@ -1,0 +1,23 @@
+strength medium
+
+record DiskFull { needed: Int }
+
+pull reserve(n: Int) -> Result<Int, DiskFull> {
+  if n > 100 {
+    cough DiskFull { needed: n }
+  }
+  snuff Ok(n)
+}
+
+pull reserve_both(a: Int, b: Int) -> Result<Int, DiskFull> {
+  stick x = reserve(a)?
+  stick y = reserve(b)?
+  snuff Ok(x + y)
+}
+
+exhale reserve_both(10, 20)
+exhale reserve_both(10, 200)
+match reserve(500) {
+  Ok(v) => exhale "reserved", v
+  Err(e) => exhale "needs", e.needed
+}

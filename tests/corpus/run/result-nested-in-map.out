@@ -1,0 +1,2 @@
+Result.Ok(value: 6)
+Result.Err(error: "negative")

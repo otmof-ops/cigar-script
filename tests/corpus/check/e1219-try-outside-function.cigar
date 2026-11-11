@@ -1,0 +1,8 @@
+strength medium
+
+pull half(n: Int) -> Result<Int, Text> {
+  snuff Ok(n / 2)
+}
+
+stick x = half(8)?
+exhale x

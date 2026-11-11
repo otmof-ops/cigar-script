@@ -1,0 +1,3 @@
+Result.Ok(value: 42)
+Result.Err(error: ParseError { message: "empty" })
+caught empty

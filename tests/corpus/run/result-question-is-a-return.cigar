@@ -1,0 +1,24 @@
+strength medium
+
+pull fails() -> Result<Int, Text> {
+  snuff Err("down")
+}
+
+pull guarded() -> Result<Int, Text> {
+  try {
+    stick n = fails()?
+    snuff Ok(n)
+  } ashtray e {
+    exhale "the ashtray never sees a ?"
+    snuff Ok(-1)
+  }
+}
+
+pull plain() -> Result<Int, Text> {
+  stick n = fails()?
+  exhale "not reached"
+  snuff Ok(n)
+}
+
+exhale guarded()
+exhale plain()

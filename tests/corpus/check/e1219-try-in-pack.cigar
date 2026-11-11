@@ -1,0 +1,11 @@
+strength medium
+
+pull half(n: Int) -> Result<Int, Text> {
+  snuff Ok(n / 2)
+}
+
+pull halves(xs: List<Int>) -> Result<List<Int>, Text> {
+  stick out = xs.map(pack(n) => half(n)?)
+  snuff Ok(out)
+}
+exhale halves([2, 4])

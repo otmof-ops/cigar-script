@@ -221,6 +221,50 @@ pull _cg_caught(e) {
   snuff e
 }
 
+# ----- Result, and `?` (#2)
+
+# `?` throws the `Err` it found, in a marker; the function that holds the
+# `?` catches the marker and returns the `Err` as its result (the lowering
+# writes that catch into the function itself). A `try` of
+# the same function hands the marker on, so it is never a user's cough.
+pull _cg_is_prop(c) {
+  snuff type_of(c) == "map" and c.has("__cg_propagate")
+}
+
+pull _cg_reraise(c) {
+  if _cg_is_prop(c) { cough c }
+  snuff null
+}
+
+# The built-in `Result<T, E>`: its variants' constructors, and `?`,
+# `attempt` and the cough of a function that returns a `Result`. A file that
+# declares a `Result` of its own does without them.
+# ===== the built-in Result: begin
+pull _cg_Result_Ok(value) { snuff {__enum: "Result", __variant: "Ok", value: value} }
+pull _cg_Result_Err(error) { snuff {__enum: "Result", __variant: "Err", error: error} }
+pull _cg_named_Result_Ok(f) { _cg_named_ok("Result", "Ok", ["value"], f); snuff _cg_Result_Ok(f.value) }
+pull _cg_named_Result_Err(f) { _cg_named_ok("Result", "Err", ["error"], f); snuff _cg_Result_Err(f.error) }
+
+# `cough e` in a function that returns a `Result`: the `Err`, as the result.
+pull _cg_cough_Err(e) { snuff _cg_Result_Err(e) }
+
+pull _cg_try(v) {
+  if _cg_variant(v, "Result", "Ok") { snuff v.value }
+  if _cg_variant(v, "Result", "Err") { cough {__cg_propagate: true, result: v} }
+  cough {code: "E1219", message: "E1219 `?` needs a Result, and this is " + _cg_what(v)}
+}
+
+# `attempt(call)`: `Ok` of what the call gives, or `Err` of what it coughed.
+pull _cg_attempt(f) {
+  try {
+    snuff _cg_Result_Ok(f())
+  } ashtray c {
+    _cg_reraise(c)
+    snuff _cg_Result_Err(_cg_caught(c))
+  }
+}
+# ===== the built-in Result: end
+
 # ----- showing a value
 
 # A value as `exhale` shows it: cig's own display, with records as

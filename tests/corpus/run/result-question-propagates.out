@@ -1,0 +1,3 @@
+Result.Ok(value: 19)
+Result.Err(error: IoError { message: "no such file: missing" })
+Result.Err(error: IoError { message: "no such file: missing" })

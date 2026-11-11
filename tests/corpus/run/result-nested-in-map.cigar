@@ -1,0 +1,17 @@
+strength medium
+
+pull check(n: Int) -> Result<Int, Text> {
+  if n < 0 { snuff Err("negative") }
+  snuff Ok(n)
+}
+
+pull total(xs: List<Int>) -> Result<Int, Text> {
+  roll sum = 0
+  for x in xs {
+    sum = sum + check(x)?
+  }
+  snuff Ok(sum)
+}
+
+exhale total([1, 2, 3])
+exhale total([1, -2, 3])

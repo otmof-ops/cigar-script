@@ -1,0 +1,44 @@
+strength medium
+
+record ParseError { message: Text }
+
+pull parse(t: Text) -> Int coughs ParseError {
+  if t == "" {
+    cough ParseError { message: "empty" }
+  }
+  snuff t.to_int()
+}
+
+pull checked(t: Text) -> Result<Int, ParseError> {
+  stick r = attempt(parse(t))
+  snuff r
+}
+
+pull twice(t: Text) -> Result<Int, ParseError> {
+  stick n = checked(t)?
+  if checked("1")? > n {
+    snuff Ok(0)
+  }
+  checked("2")?
+  snuff checked(t)
+}
+
+pull last(t: Text) -> Result<Int, ParseError> {
+  snuff Ok(checked(t)?)
+}
+
+pull pick(r: Result<Int, ParseError>) -> Text {
+  stick s = match r {
+    Result.Ok(v) => "ok ${v}"
+    Result.Err(e) => "err ${e.message}"
+  }
+  snuff s
+}
+
+exhale pick(twice("5"))
+exhale pick(twice(""))
+exhale pick(last("7"))
+exhale pick(Result.Ok(value: 3))
+stick e: Result<Int, ParseError> = Err(ParseError { message: "x" })
+exhale e
+exhale attempt(parse(""))
