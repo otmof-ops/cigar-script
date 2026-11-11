@@ -158,16 +158,20 @@ pub fn run_file(ctx: &Ctx, path: &Path, f: &RunFlags) -> i32 {
             return exit::USAGE;
         }
     };
-    if let (Some(err), Some(map)) = (child.stderr.take(), checked.map.as_ref()) {
-        relay(
-            err,
-            &name,
-            map,
-            &checked.source_as_cigscript_saw_it,
-            &checked.source_as_written,
-        );
-    }
-    match child.wait() {
+    let err = child.stderr.take();
+    let waited = crate::phases::phase("run", || {
+        if let (Some(err), Some(map)) = (err, checked.map.as_ref()) {
+            relay(
+                err,
+                &name,
+                map,
+                &checked.source_as_cigscript_saw_it,
+                &checked.source_as_written,
+            );
+        }
+        child.wait()
+    });
+    match waited {
         Ok(s) => s.code().unwrap_or(1),
         Err(_) => 1,
     }

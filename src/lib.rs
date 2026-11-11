@@ -20,6 +20,7 @@ pub mod gate;
 pub mod lower;
 pub mod lsp;
 pub mod own;
+pub mod phases;
 pub mod prepare;
 pub mod resolve;
 pub mod run;

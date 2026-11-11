@@ -108,6 +108,7 @@ fn main() {
     if cigarscript::run::carries_program() {
         std::process::exit(cigscript::cli::entry());
     }
+    cigarscript::phases::init_from_env();
     std::process::exit(run());
 }
 
