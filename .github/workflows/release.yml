@@ -1,8 +1,8 @@
 name: release
 
-# A tag `vX.Y.Z` builds cigar for every machine the family is released for and
-# leaves a DRAFT release holding each build, its .sha256, SHA256SUMS and a
-# build attestation. Nothing is published from here: the release is read and
+# A tag `vX.Y.Z` builds cigar and its language server, cigar-lsp, for every
+# machine the family is released for and leaves a DRAFT release holding each
+# build, its .sha256, SHA256SUMS and a build attestation. Nothing is published from here: the release is read and
 # published by hand once the licence gate has passed. A tag is the only
 # trigger; a pull request or a push to a branch builds nothing.
 on:
@@ -19,9 +19,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The asset names follow the family's single-binary releases (cig, CigCompile):
-        # cigar-vX.Y.Z-<os>-<arch>[.exe], each with a .sha256 beside it, which the
-        # installer's manifest reads.
+        # Each build is one archive, cigar-vX.Y.Z-<os>-<arch>.tar.gz, holding
+        # bin/cigar and bin/cigar-lsp (.exe on Windows), with a .sha256 beside it.
+        # The installer's manifest reads it as an archive (strip 0) with a shim
+        # for each program, so an editor finds cigar-lsp on PATH.
         include:
           - { os: ubuntu-latest,  target: x86_64-unknown-linux-musl,  asset: linux-x86_64,   ext: "" }
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, asset: linux-aarch64,  ext: "" }
@@ -47,17 +48,27 @@ jobs:
             echo "tag $GITHUB_REF_NAME does not match Cargo.toml version $have"
             exit 1
           fi
-      - run: cargo build --release --locked --bin cigar --target ${{ matrix.target }}
-      - name: it runs, and says its version
+      - run: cargo build --release --locked --bin cigar --bin cigar-lsp --target ${{ matrix.target }}
+      - name: they run
         shell: bash
         run: |
-          "target/${{ matrix.target }}/release/cigar${{ matrix.ext }}" --version
-      - name: name and checksum the asset
+          dir="target/${{ matrix.target }}/release"
+          "$dir/cigar${{ matrix.ext }}" --version
+          # The language server speaks on stdin and ends when it closes; any
+          # exit code but "could not run" will do here.
+          code=0
+          "$dir/cigar-lsp${{ matrix.ext }}" < /dev/null || code=$?
+          echo "cigar-lsp ended on an empty stdin with $code"
+          case "$code" in 126|127) exit 1 ;; esac
+      - name: pack and checksum the asset
         shell: bash
         run: |
-          name="cigar-${GITHUB_REF_NAME}-${{ matrix.asset }}${{ matrix.ext }}"
-          mkdir -p dist
-          cp "target/${{ matrix.target }}/release/cigar${{ matrix.ext }}" "dist/$name"
+          name="cigar-${GITHUB_REF_NAME}-${{ matrix.asset }}.tar.gz"
+          dir="target/${{ matrix.target }}/release"
+          mkdir -p dist stage/bin
+          cp "$dir/cigar${{ matrix.ext }}" "$dir/cigar-lsp${{ matrix.ext }}" stage/bin/
+          tar -czf "dist/$name" -C stage bin
+          tar -tzf "dist/$name"
           if command -v sha256sum >/dev/null; then
             (cd dist && sha256sum "$name" > "$name.sha256")
           else
@@ -98,10 +109,7 @@ jobs:
       - name: attest the builds
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: |
-            dist/cigar-v*-linux-*
-            dist/cigar-v*-macos-*
-            dist/cigar-v*-windows-*.exe
+          subject-path: dist/cigar-v*.tar.gz
       - name: the draft release
         env:
           GH_TOKEN: ${{ github.token }}
