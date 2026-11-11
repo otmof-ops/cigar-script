@@ -18,6 +18,20 @@ project follows semantic versioning.
   machine lock the installer reports) saves nothing. `src/crash.rs` has the tests: a deliberate
   panic in a child of the test binary leaves one report with `origin` `cigar-script`, and every way
   of saying `never` leaves none.
+
+- **`cigar-lsp`, the language server (#16, part 1).** A second program, built
+  from the same crates as the checker (no second parser): the Language Server
+  Protocol over stdio. Diagnostics on every change with their codes and
+  severities (errors, `W12xx` warnings, a `.cig` file's hints); hover with a
+  name's type, an error code's kind of no, and the layers of an `into`,
+  `measure` or `within` (the same reading as `cigar explain --layers`);
+  go to definition and find references for functions, `stick`/`roll` names,
+  parameters, records, enums, fields and the functions of `use`d modules;
+  completion of the keywords a strength allows, names in scope, record fields
+  after `.` and a module's `pub` names. Framed JSON-RPC is hand-written on
+  `serde_json`, so there is no new dependency. Not in this part: `cigar fmt`,
+  the VS Code extension and the tree-sitter grammar. Tests: `tests/lsp.rs`
+  drives the binary over stdio under a hard timeout.
 - **A number out of range inside a list or map is found when the file is
   checked, and a boundary failure names where (#22 L7 and L8).**
   `stick xs: List<u8> = [1, 2, 300]` is `E1510` at the `300` at check time,
