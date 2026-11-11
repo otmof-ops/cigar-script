@@ -1,0 +1,144 @@
+# SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
+# SPDX-License-Identifier: FSL-1.1-ALv2
+
+# The Rust variants of the memory options (docs/decisions/0002-memory.md, #3),
+# in the shape cig-script's docs/BENCH.md defines. Build first:
+#
+#     cargo build --release --manifest-path bench/memory-options/Cargo.toml
+#
+# then, from this folder:  cig bench --manifest bench/memory-options/bench.toml
+# (the paths below are from the manifest's folder). Every case's output is
+# checked against the .expect file of the CigarScript program it ports. The
+# "x100" cases repeat the workload a hundred times in one process so a Rust
+# run is long enough to time (run those with --samples 5 --per 1); the peak
+# memory of a repeat is the single run's.
+
+[bench]
+product = "memory-options"
+home    = "isolated"
+
+[defaults]
+samples = 9
+per     = 5
+warmup  = 1
+env     = { NO_COLOR = "1" }
+
+[[case]]
+name  = "trees / own"
+group = "trees"
+run   = ["target/release/memory-options", "trees", "own"]
+expect = { exit = 0, stdout = "../fixtures/memory/trees.expect" }
+
+[[case]]
+name  = "trees / rc"
+group = "trees"
+run   = ["target/release/memory-options", "trees", "rc"]
+expect = { exit = 0, stdout = "../fixtures/memory/trees.expect" }
+
+[[case]]
+name  = "trees / gc"
+group = "trees"
+run   = ["target/release/memory-options", "trees", "gc"]
+expect = { exit = 0, stdout = "../fixtures/memory/trees.expect" }
+
+[[case]]
+name  = "trees / own x100"
+group = "trees-x100"
+run   = ["target/release/memory-options", "trees", "own", "100"]
+expect = { exit = 0, stdout = "../fixtures/memory/trees.expect" }
+
+[[case]]
+name  = "trees / rc x100"
+group = "trees-x100"
+run   = ["target/release/memory-options", "trees", "rc", "100"]
+expect = { exit = 0, stdout = "../fixtures/memory/trees.expect" }
+
+[[case]]
+name  = "trees / gc x100"
+group = "trees-x100"
+run   = ["target/release/memory-options", "trees", "gc", "100"]
+expect = { exit = 0, stdout = "../fixtures/memory/trees.expect" }
+
+[[case]]
+name  = "nbody / own"
+group = "nbody"
+run   = ["target/release/memory-options", "nbody", "own"]
+expect = { exit = 0, stdout = "../fixtures/memory/nbody.expect" }
+
+[[case]]
+name  = "nbody / rc"
+group = "nbody"
+run   = ["target/release/memory-options", "nbody", "rc"]
+expect = { exit = 0, stdout = "../fixtures/memory/nbody.expect" }
+
+[[case]]
+name  = "nbody / gc"
+group = "nbody"
+run   = ["target/release/memory-options", "nbody", "gc"]
+expect = { exit = 0, stdout = "../fixtures/memory/nbody.expect" }
+
+[[case]]
+name  = "nbody / own x100"
+group = "nbody-x100"
+run   = ["target/release/memory-options", "nbody", "own", "100"]
+expect = { exit = 0, stdout = "../fixtures/memory/nbody.expect" }
+
+[[case]]
+name  = "nbody / rc x100"
+group = "nbody-x100"
+run   = ["target/release/memory-options", "nbody", "rc", "100"]
+expect = { exit = 0, stdout = "../fixtures/memory/nbody.expect" }
+
+[[case]]
+name  = "nbody / gc x100"
+group = "nbody-x100"
+run   = ["target/release/memory-options", "nbody", "gc", "100"]
+expect = { exit = 0, stdout = "../fixtures/memory/nbody.expect" }
+
+[[case]]
+name  = "lists / own"
+group = "lists"
+run   = ["target/release/memory-options", "lists", "own"]
+expect = { exit = 0, stdout = "../fixtures/memory/lists.expect" }
+
+[[case]]
+name  = "lists / rc"
+group = "lists"
+run   = ["target/release/memory-options", "lists", "rc"]
+expect = { exit = 0, stdout = "../fixtures/memory/lists.expect" }
+
+[[case]]
+name  = "lists / rc-copy"
+group = "lists"
+run   = ["target/release/memory-options", "lists", "rc-copy"]
+expect = { exit = 0, stdout = "../fixtures/memory/lists.expect" }
+
+[[case]]
+name  = "lists / gc"
+group = "lists"
+run   = ["target/release/memory-options", "lists", "gc"]
+expect = { exit = 0, stdout = "../fixtures/memory/lists.expect" }
+
+[[case]]
+name  = "lists / own x100"
+group = "lists-x100"
+run   = ["target/release/memory-options", "lists", "own", "100"]
+expect = { exit = 0, stdout = "../fixtures/memory/lists.expect" }
+
+[[case]]
+name  = "lists / rc x100"
+group = "lists-x100"
+run   = ["target/release/memory-options", "lists", "rc", "100"]
+expect = { exit = 0, stdout = "../fixtures/memory/lists.expect" }
+
+[[case]]
+name  = "lists / rc-copy x100"
+group = "lists-x100"
+run   = ["target/release/memory-options", "lists", "rc-copy", "100"]
+expect = { exit = 0, stdout = "../fixtures/memory/lists.expect" }
+
+[[case]]
+name  = "lists / gc x100"
+group = "lists-x100"
+run   = ["target/release/memory-options", "lists", "gc", "100"]
+expect = { exit = 0, stdout = "../fixtures/memory/lists.expect" }

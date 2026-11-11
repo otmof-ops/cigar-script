@@ -2,9 +2,10 @@
 
 **Status: draft.** This is the reference the checker is built from. Mild,
 medium and full are built, with the exceptions the [feature table](#the-feature-table)
-marks. The parts marked **provisional** follow the recommendation in their
-design question (#1 to #5); each says what changes if the decision goes
-another way. Nothing here is final until its design question is decided.
+marks. The design questions #1, #3, #4 and #5 are decided and written here
+as final. What is still marked **provisional** follows the recommendation in
+its own design question and says what changes if the decision goes another
+way.
 
 CigarScript is CigScript grown deeper, one **strength** at a time. Every
 CigScript program is CigarScript at the mild strength, and the same rule
@@ -14,7 +15,7 @@ holds at every strength: nothing touches the world outside a `burn { }`.
 
 | file | strength | what the checker accepts |
 |---|---|---|
-| `.cig` | always **mild** | exactly what `cig check` accepts, forever: no new errors, ever (#1) |
+| `.cig` | always **mild** | exactly what `cig check` accepts, forever: no new errors, ever; the deeper checker's findings come as [hints](#a-cig-file-gets-hints-never-errors) |
 | `.cigar` | the one it declares, **mild** when it declares none | the features of its strength and below |
 
 - A `.cigar` file declares its strength with `strength mild`, `strength
@@ -27,6 +28,27 @@ holds at every strength: nothing touches the world outside a `burn { }`.
   the strength goes up. *(Provisional.)*
 - **Turning down is checked.** `cigar check --strength mild` on a medium
   file lists every feature it uses above mild, each with its place.
+- **A `.cig` file gets hints, never errors.** The superset is exact and it
+  stays exact (#1, decided): every CigScript program is valid CigarScript,
+  and a `.cig` file keeps CigScript's own acceptance forever, so no release
+  of cigar gives a `.cig` file a new error. What the medium checker would
+  find in it, and CigScript only hits when the line runs (or never, on a
+  path that does not run), is said as a **hint**, through cig's renderer,
+  on stderr:
+
+  ```text
+  hint[E1216 check]: this would be an error at strength medium: `add` takes 2 argument(s), given 1
+    --> latent.cig:3:11
+  ```
+
+  `cigar check` still says `checked` and exits `0`, and `cigar run` runs the
+  file exactly as `cig run` runs it: the same output and the same exit, the
+  failing line failing where it always did. A hint has the code the error
+  would have, so `cig explain E1216` says what it means. Under `--json`,
+  `cigar check` writes each hint as a diagnostic object with that message.
+  A `.cig` file CigScript itself rejects gets CigScript's error and no
+  hints. To have the findings as errors, rename the file to `.cigar` and
+  declare `strength medium`: that is what `.cigar` is for.
 - **Strengths mix across files** in one project. A module is a file at
   medium or full (`pub` is medium's word), so a medium file can use a full
   module and a full file a medium one, each checked at its own strength. A
@@ -35,8 +57,7 @@ holds at every strength: nothing touches the world outside a `burn { }`.
 ## The feature table
 
 Each feature belongs to the lowest strength where it cannot surprise
-someone who doesn't know it exists (#4). *(Provisional: this is #4's
-proposed assignment.)* The checker's feature table is generated from the
+someone who doesn't know it exists (#4, decided). The checker's feature table is generated from the
 table below at build time; a row added here is a row the checker knows.
 
 `detect` is how the checker finds a use:
@@ -427,6 +448,126 @@ there: it does not lower or type-check a file that failed this one.
   construction, which the design requires of the parallel version too.
   `within retry(n)` runs its block up to `n` tries in all.
 
+## Memory
+
+*(Decided: #3. The reasons and the measurements are in
+[ADR 0002](decisions/0002-memory.md).)*
+
+- **Automatic by default.** At mild and medium nothing is freed by hand:
+  values are reference counted, and a value is released the moment its last
+  holder lets go, so a resource closes in a known order, which the journal
+  relies on. There are no collector pauses.
+- **Reuse.** A list, map or record held by one holder and replaced by an
+  updated copy is updated in place: the functional form costs no more than
+  the mutating one. The count says when that is safe.
+- **Cycles.** A cycle through a mutable container is found and released by a
+  cycle collector that runs when the count traffic says garbage may exist;
+  immutable data cannot form a cycle.
+- **Ownership at full.** `owned`, `borrow` and `move` are checked statically
+  and erased at run time. The model is deliberately smaller than Rust's: a
+  **borrow is scoped to a block** and checked locally, with no lifetime
+  parameters.
+- **The boundary rule.** A value crossing from full to medium is **copied or
+  wrapped in a counted handle**, which the compiler decides and `cig
+  explain --layers` shows. Nothing a medium file holds ever points into
+  storage a full file owns.
+
+## Calling Rust and C
+
+*(Decided: #5. The rules are final; the syntax below is what the first
+implementation builds, and `foreign` is still `E1102` until it lands.)*
+
+A foreign function is code CigarScript did not write and cannot watch, so
+the rules start from that. `foreign` is a full-strength feature.
+
+**C.** A `foreign "c"` block declares signatures; nothing else about the
+library is guessed.
+
+<!-- expect: E1102 -->
+```cigar
+strength full
+
+foreign "c" {
+  pure pull strlen(s: Text) -> Int
+  pull remove(path: Path) -> Int
+    journal with snapshot(path) undo restore(path)
+}
+
+burn {
+  exhale strlen("cigar")
+}
+```
+
+- **Linking is named in `cigar.toml`**, never in the source: a system
+  library by name, any other by path and the SHA-256 it must have (the file
+  is checked when the program is built and again when it is loaded).
+
+  ```toml
+  [foreign.c.libc]
+  system = "c"
+
+  [foreign.c.sha]
+  path   = "native/libsha.so"
+  sha256 = "9f2b..."
+  ```
+
+  A block names its library with `foreign "c" from "sha" { ... }`; with no
+  `from` it is the system libraries listed. `cigar.toml` is the same file
+  carton packages use (#15).
+- **Signatures are types, and only types that cross.** `Int`, `Float`,
+  `Bool`, `Text`, `Path`, the sized numbers, and `Bytes` with its length. A
+  `Text` is passed as a NUL-terminated UTF-8 string that lives for the call;
+  a `Text` result is copied, and a library that allocated it says how to
+  release it (`free(name)`). Any other type in a signature is an error where
+  it is written. A value coming back is checked at the boundary like any
+  value entering a typed place (`E1210`).
+
+**Rust.** A crate opts in, function by function, with an attribute from the
+`cigar-export` crate:
+
+```rust
+#[cigar::export]
+pub fn sha256_hex(data: &str) -> String { /* ... */ }
+
+#[cigar::export(pure)]
+pub fn double(n: i64) -> i64 { n * 2 }
+```
+
+The attribute generates the C-ABI shim and the CigarScript declaration file
+(`<crate>.foreign.cigar`) from the Rust signature, which can only use the
+types above. A panic is caught at the shim and arrives as a `cough`, never
+as an unwind through the runtime. Nothing is exported that does not carry
+the attribute, and an export is effectful unless it says `pure`.
+
+**The burn rule.**
+
+1. **Effectful unless declared `pure`.** A foreign function with no `pure` is
+   assumed to touch the world.
+2. **Burn-only.** An effectful foreign function is called only inside a
+   `burn { }`, the same rule as every other effect; outside one it is the
+   same burn error. A `pure` function may be called anywhere.
+3. **Irreversible unless journaled.** Inside a burn an effectful call is
+   journaled as an **irreversible** op, as a process the kernel cannot watch
+   is today. The plan (`--dry-run`) lists it as irreversible and does not
+   call it; rollback names it as not undone; a trial never repeats it.
+4. **An adapter makes it reversible.** `journal with snapshot(args) undo
+   restore(args)` names a before-state capture and its compensation, both
+   CigarScript functions in the program. The call lowers to a `burn (s) {
+   ... } unburn { ... }`: the snapshot runs first and its result is the
+   state the compensation gets back, so the op is **compensated**, not
+   irreversible. Both halves are required: one without the other is an error
+   where it is written.
+5. **`pure` is a promise the doctor tests.** A `pure` declaration that has
+   effects is the author's bug, and the doctor catches the common ones: it
+   dry-runs the program with the ghost's write check on, and a `pure` foreign
+   call that writes a file, opens a socket or starts a process is reported
+   with its declaration. It finds mistakes; it does not prove purity, and a
+   `pure` function it cannot catch is still the author's.
+6. **The guard still watches.** Foreign code runs in the program's process
+   with the program's privileges. The guard (otmof-ops/cig-orchestrator#55
+   and #57) watches that process as it watches any other: a declaration
+   lowers no guard level, and `pure` exempts nothing from it.
+
 ## Reserved words
 
 Every word below is reserved in `.cigar` files at every strength, wherever
@@ -451,21 +592,23 @@ in the feature table detects it. A `.cig` file reserves none of them.
 
 ## The design questions
 
-| question | provisional answer | if it goes another way |
-|---|---|---|
-| #1 how far the superset goes | `.cig` files never get new errors, only hints; `.cigar` files at medium and above get them as errors | the `.cig` row of the files table changes, and the superset test with it |
-| #2 the type system at medium | local inference inside functions, types written at module boundaries; `T?` with `?.` and `??`; `cough` stays, typed in signatures (`coughs`) | the checker's rules and the run-time checks change with it; files written to the provisional rules may need edits |
-| #3 memory | reference counting with reuse (Perceus-style) and a cycle collector for mutable containers; ownership at full | ownership is erased at run time, so the checker's rules would change and the run would not; stage C's runtime (otmof-ops/cig-compile#32) is built to the other choice |
-| #4 which feature at which strength | the feature table above | rows move between strengths in the table; the checker follows |
-| #5 calling Rust and C | `foreign` blocks, effectful unless declared `pure`, journaled as irreversible unless they come with an adapter | `foreign` is not built, so nothing built depends on it |
+| question | answer | status | where |
+|---|---|---|---|
+| #1 how far the superset goes | `.cig` files never get new errors, only hints; `.cigar` files at medium and above get them as errors | decided | [Files and strengths](#files-and-strengths); `tests/superset.rs` |
+| #2 the type system at medium | local inference inside functions, types written at module boundaries; `T?` with `?.` and `??`; `cough` stays, typed in signatures (`coughs`) | provisional | [Types, values and checks](#types-values-and-checks) |
+| #3 memory | reference counting with reuse, a cycle collector for mutable containers, ownership at full, borrows scoped to a block, copy or wrap at the boundary | decided | [Memory](#memory); [ADR 0002](decisions/0002-memory.md) |
+| #4 which feature at which strength | the feature table above | decided | [The feature table](#the-feature-table) |
+| #5 calling Rust and C | `foreign` blocks and `#[cigar::export]`, effectful unless declared `pure`, burn-only, irreversible unless journaled with a snapshot and an undo | decided (rules; not yet built) | [Calling Rust and C](#calling-rust-and-c) |
 
 The medium and full constructs also follow #9 (records, enums and `match`),
 #10 (modules, generics and interfaces) and #13 (layers) as their issues
-state; their syntax is provisional with them.
+state; their syntax is provisional with them. A decided question stays
+decided: a change is a new ADR that supersedes the old one.
 
 ## Not built yet
 
-- `foreign` (#5), `unchecked` blocks (#12), and `within` contexts other than
+- `foreign` and `#[cigar::export]` (#5: the rules are decided, the
+  implementation is not built), `unchecked` blocks (#12), and `within` contexts other than
   `retry` and `parallel` (#13): each is `E1102`.
 - Custom journaling adapters for a `burn` (#12) and scripts reading each
   other's results by context (#14): no syntax yet.
@@ -474,5 +617,6 @@ state; their syntax is provisional with them.
 - The semantics of each construct by reduction to CigScript's core are
   written here as each construct is built; the lowering is the working
   definition until they are.
-- The decisions from #1 to #5 in their final form: the answers above stay
-  **provisional** until the questions are decided.
+- The memory model's implementation (#3): reuse and the cycle collector are
+  the runtime's to build; today's runtime reference counts without reuse
+  (ADR 0002 has the numbers).

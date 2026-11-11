@@ -84,6 +84,10 @@ pub fn run_file(ctx: &Ctx, path: &Path, f: &RunFlags) -> i32 {
             );
         }
     }
+    if !ctx.json {
+        // Under --json the program's own output owns stdout.
+        crate::cli::report_hints(ctx, &name, &checked);
+    }
     let stem = path
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
