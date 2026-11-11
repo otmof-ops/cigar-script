@@ -260,6 +260,7 @@ fn initialize_advertises_what_it_does_and_shutdown_exits_zero() {
     assert_eq!(caps["hoverProvider"], true);
     assert_eq!(caps["definitionProvider"], true);
     assert_eq!(caps["referencesProvider"], true);
+    assert_eq!(caps["documentFormattingProvider"], true);
     assert_eq!(caps["completionProvider"]["triggerCharacters"][0], ".");
     assert_eq!(r["result"]["serverInfo"]["name"], "cigar-lsp");
     // Asking again is refused, and a request nobody knows is a clear no.
@@ -584,5 +585,63 @@ fn a_garbled_message_gets_a_parse_error_and_the_server_carries_on() {
     let m = s.recv();
     assert_eq!(m["error"]["code"], -32700);
     // And it still answers.
+    assert_eq!(s.shutdown(), Some(0));
+}
+
+#[test]
+fn formatting_returns_one_edit_from_the_same_formatter_as_cigar_fmt() {
+    let (_d, root, _) = project();
+    let f = root.join("fmt.cigar");
+    let mut s = Lsp::start(&root);
+    s.initialize(&root);
+    // A multi-byte character on the last line: the end of the range is in
+    // UTF-16 units, with no final newline.
+    let ugly =
+        "strength medium\npull  f( a:Int )->Int{\nsnuff a+1 # caf\u{e9}\n}\nexhale \"\u{1F600}\"  ";
+    s.open(&f, 1, ugly);
+    let r = s.request(
+        "textDocument/formatting",
+        json!({"textDocument": {"uri": uri(&f)},
+        "options": {"tabSize": 4, "insertSpaces": true}}),
+    );
+    let edits = r["result"].as_array().expect("edits");
+    assert_eq!(edits.len(), 1, "{r}");
+    let want = cigarscript::fmt::format(ugly).unwrap();
+    assert_eq!(edits[0]["newText"], want.as_str());
+    assert_eq!(
+        edits[0]["range"]["start"],
+        json!({"line": 0, "character": 0})
+    );
+    assert_eq!(
+        edits[0]["range"]["end"],
+        json!({"line": 4, "character": 13})
+    );
+    assert!(
+        want.contains("pull f(a: Int) -> Int {\n  snuff a + 1 # caf\u{e9}\n}\n"),
+        "{want}"
+    );
+
+    // Already formatted: no edits. Changed in the editor: the new text.
+    s.change(&f, 2, &want);
+    let r = s.request(
+        "textDocument/formatting",
+        json!({"textDocument": {"uri": uri(&f)}}),
+    );
+    assert_eq!(r["result"], json!([]), "{r}");
+    // Does not lex: null, and the server carries on.
+    s.change(&f, 3, "stick x = \"open\n");
+    let r = s.request(
+        "textDocument/formatting",
+        json!({"textDocument": {"uri": uri(&f)}}),
+    );
+    assert!(r["result"].is_null(), "{r}");
+    // Not open: null. No document at all: invalid params.
+    let r = s.request(
+        "textDocument/formatting",
+        json!({"textDocument": {"uri": uri(&root.join("no.cigar"))}}),
+    );
+    assert!(r["result"].is_null(), "{r}");
+    let r = s.request("textDocument/formatting", json!({}));
+    assert_eq!(r["error"]["code"], -32602);
     assert_eq!(s.shutdown(), Some(0));
 }

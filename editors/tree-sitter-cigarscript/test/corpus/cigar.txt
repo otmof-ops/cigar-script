@@ -1,0 +1,138 @@
+==================
+records and enums
+==================
+record Job<T> { id: Int, step: Move? }
+enum Shape { circle(r: Float), rect(w: Float, h: Float), none }
+
+---
+
+(source_file
+  (record_declaration
+    name: (identifier)
+    (type_parameters (identifier))
+    (field_declaration name: (identifier) type: (named_type (identifier)))
+    (field_declaration name: (identifier) type: (optional_type (named_type (identifier)))))
+  (enum_declaration
+    name: (identifier)
+    (variant name: (identifier) (field_declaration name: (identifier) type: (named_type (identifier))))
+    (variant name: (identifier)
+      (field_declaration name: (identifier) type: (named_type (identifier)))
+      (field_declaration name: (identifier) type: (named_type (identifier))))
+    (variant name: (identifier))))
+
+==================
+record literal and match
+==================
+stick a = Box { items: [1] }
+stick d = match a {
+  Shape.circle(r) if r > 0 => r
+  Err(e) => "no ${e}"
+  Box { items } => 1
+  _ => 0
+}
+
+---
+
+(source_file
+  (declaration
+    name: (identifier)
+    value: (record_literal type: (identifier) (record_field name: (identifier) value: (list_literal (integer)))))
+  (declaration
+    name: (identifier)
+    value: (match_expression
+      subject: (identifier)
+      (match_arm
+        pattern: (variant_pattern enum: (identifier) variant: (identifier) (identifier))
+        guard: (binary_expression left: (identifier) right: (integer))
+        body: (identifier))
+      (match_arm
+        pattern: (variant_pattern variant: (identifier) (identifier))
+        body: (string (string_content) (interpolation (identifier))))
+      (match_arm
+        pattern: (record_pattern record: (identifier) (field_pattern name: (identifier)))
+        body: (integer))
+      (match_arm pattern: (wildcard) body: (integer)))))
+
+==================
+interfaces, impls and modules
+==================
+use tools.plan.{Move}
+pub interface Sized { pull size(self) -> Int }
+impl Sized for Box { pull size(self) -> Int { snuff 2 } }
+
+---
+
+(source_file
+  (use_declaration
+    path: (module_path (identifier) (identifier) (import_list (identifier))))
+  (interface_declaration
+    name: (identifier)
+    (method_signature name: (identifier) return_type: (named_type (identifier))))
+  (impl_declaration
+    interface: (identifier)
+    type: (named_type (identifier))
+    (pull_declaration
+      name: (identifier)
+      (parameters (parameter name: (identifier)))
+      return_type: (named_type (identifier))
+      body: (block (return_statement (integer))))))
+
+==================
+into, measure and layers
+==================
+into for Report = write_report
+measure for Report = size_of
+layer audit
+rows into "out.csv"
+stick n = measure xs
+
+---
+
+(source_file
+  (measure_for type: (named_type (identifier)) value: (identifier))
+  (measure_for type: (named_type (identifier)) value: (identifier))
+  (layer_declaration name: (identifier))
+  (expression_statement (binary_expression left: (identifier) right: (string (string_content))))
+  (declaration name: (identifier) value: (measure_expression (identifier))))
+
+==================
+ownership, concurrency and within
+==================
+stick g = move pack(v) => v
+stick total = parallel(threads: 4) for n in 1..101 reduce(+) { snuff n }
+within retry(3, backoff: 2s) { exhale 1 }
+within timeout(500ms) { exhale 2 }
+stick ch = channel<Int>()
+
+---
+
+(source_file
+  (declaration name: (identifier) value: (move_expression (lambda (parameters (parameter name: (identifier))) body: (identifier))))
+  (declaration
+    name: (identifier)
+    value: (parallel_value
+      (parallel_options threads: (integer))
+      variable: (identifier)
+      iterable: (binary_expression left: (integer) right: (integer))
+      body: (block (return_statement (identifier)))))
+  (within_statement
+    (context (integer) (duration))
+    body: (block (exhale_statement (integer))))
+  (within_statement
+    (context (duration))
+    body: (block (exhale_statement (integer))))
+  (declaration name: (identifier) value: (channel_expression (named_type (identifier)))))
+
+==================
+raw identifiers
+==================
+stick r#match = 1
+exhale x.r#use, r#match
+
+---
+
+(source_file
+  (declaration name: (raw_identifier) value: (integer))
+  (exhale_statement
+    (member_expression object: (identifier) property: (raw_identifier))
+    (raw_identifier)))

@@ -1,0 +1,21 @@
+{
+  "name": "tree-sitter-cigarscript",
+  "version": "0.1.0",
+  "description": "A tree-sitter grammar for CigarScript (.cigar) and CigScript (.cig)",
+  "license": "FSL-1.1-ALv2",
+  "private": true,
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter test"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.cigarscript",
+      "file-types": ["cigar", "cig"],
+      "highlights": "queries/highlights.scm"
+    }
+  ],
+  "devDependencies": {
+    "tree-sitter-cli": "0.22.6"
+  }
+}

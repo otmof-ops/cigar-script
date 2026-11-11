@@ -15,6 +15,7 @@ pub mod doctor;
 pub mod experience;
 pub mod explain;
 pub mod features;
+pub mod fmt;
 pub mod gate;
 pub mod lower;
 pub mod lsp;

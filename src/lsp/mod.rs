@@ -181,6 +181,15 @@ impl<W: Write> Server<W> {
         if self.shutdown {
             return self.send(rpc::error(id, INVALID_REQUEST, "the server is shut down"));
         }
+        if method == "textDocument/formatting" {
+            let result = match p["textDocument"]["uri"].as_str() {
+                Some(uri) => self.formatting(uri),
+                None => {
+                    return self.send(rpc::error(id, INVALID_PARAMS, "needs textDocument"));
+                }
+            };
+            return self.send(rpc::response(id, result));
+        }
         let Some((uri, line, ch)) = position_params(p) else {
             let known = matches!(
                 method,
@@ -206,6 +215,31 @@ impl<W: Write> Server<W> {
             _ => return self.send(rpc::error(id, METHOD_NOT_FOUND, method)),
         };
         self.send(rpc::response(id, result))
+    }
+
+    /// `textDocument/formatting`: the whole document as one edit, from the
+    /// same formatter `cigar fmt` runs. No edits when it is already formatted;
+    /// `null` when the text does not lex (nothing to lay out) or is not open.
+    fn formatting(&self, uri: &str) -> Value {
+        let Some(doc) = self.docs.get(uri) else {
+            return Value::Null;
+        };
+        let Ok(out) = crate::fmt::format(&doc.text) else {
+            return Value::Null;
+        };
+        if out == doc.text {
+            return json!([]);
+        }
+        let end_line = doc.text.matches('\n').count();
+        let last = doc.text.rsplit('\n').next().unwrap_or("");
+        let end_ch: usize = last.chars().map(char::len_utf16).sum();
+        json!([{
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": end_line, "character": end_ch},
+            },
+            "newText": out,
+        }])
     }
 
     fn notification(&mut self, method: &str, p: &Value) -> io::Result<Flow> {
@@ -449,6 +483,7 @@ fn capabilities() -> Value {
             "hoverProvider": true,
             "definitionProvider": true,
             "referencesProvider": true,
+            "documentFormattingProvider": true,
             "completionProvider": {"triggerCharacters": ["."]},
         },
         "serverInfo": {"name": "cigar-lsp", "version": env!("CARGO_PKG_VERSION")},

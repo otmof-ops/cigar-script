@@ -1,0 +1,120 @@
+{
+  "name": "cigarscript",
+  "displayName": "CigarScript",
+  "description": "CigarScript (.cigar) and CigScript (.cig): highlighting, and errors, hover, go to definition, references, completion and formatting from cigar-lsp.",
+  "version": "0.1.0",
+  "publisher": "otmof-ops",
+  "license": "FSL-1.1-ALv2",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/otmof-ops/cigar-script.git",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters"
+  ],
+  "keywords": [
+    "cigarscript",
+    "cigscript",
+    "cigar",
+    "cig"
+  ],
+  "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "The language server is a program; a workspace you do not trust may not choose which one runs.",
+      "restrictedConfigurations": [
+        "cigarscript.server.path"
+      ]
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "The language server reads files on disk."
+    }
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "cigar",
+        "aliases": [
+          "CigarScript",
+          "cigar"
+        ],
+        "extensions": [
+          ".cigar"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "cig",
+        "aliases": [
+          "CigScript",
+          "cig"
+        ],
+        "extensions": [
+          ".cig"
+        ],
+        "firstLine": "^#!.*\\bcig\\b",
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "cigar",
+        "scopeName": "source.cigarscript",
+        "path": "./syntaxes/cigarscript.tmLanguage.json"
+      },
+      {
+        "language": "cig",
+        "scopeName": "source.cigarscript",
+        "path": "./syntaxes/cigarscript.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "CigarScript",
+      "properties": {
+        "cigarscript.server.path": {
+          "type": "string",
+          "default": "cigar-lsp",
+          "scope": "machine-overridable",
+          "markdownDescription": "The `cigar-lsp` program to start: a name found on `PATH`, or a full path. Needs a restart of the server (`CigarScript: Restart language server`) to change."
+        },
+        "cigarscript.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Log the messages between the editor and cigar-lsp to the CigarScript output channel."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "cigarscript.restartServer",
+        "title": "CigarScript: Restart language server"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package --skip-license"
+  },
+  "dependencies": {
+    "vscode-languageclient": "9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "18.19.67",
+    "@types/vscode": "1.82.0",
+    "@vscode/vsce": "2.32.0",
+    "typescript": "5.6.3"
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "CigarScript",
+  "scopeName": "source.cigarscript",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#declarations" },
+    { "include": "#string" },
+    { "include": "#raw-string" },
+    { "include": "#number" },
+    { "include": "#constant" },
+    { "include": "#keyword" },
+    { "include": "#type" },
+    { "include": "#call" },
+    { "include": "#operator" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.cigarscript",
+      "match": "(?<![A-Za-z0-9_])#.*$"
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "match": "\\b(pull)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.function.cigarscript" },
+            "2": { "name": "entity.name.function.cigarscript" }
+          }
+        },
+        {
+          "match": "\\b(record|enum|interface|layer)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.cigarscript" },
+            "2": { "name": "entity.name.type.cigarscript" }
+          }
+        },
+        {
+          "match": "\\b(impl)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+(for)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.cigarscript" },
+            "2": { "name": "entity.name.type.interface.cigarscript" },
+            "3": { "name": "keyword.control.cigarscript" },
+            "4": { "name": "entity.name.type.cigarscript" }
+          }
+        },
+        {
+          "match": "\\b(stick|roll)\\s+(r#[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.cigarscript" },
+            "2": { "name": "variable.other.constant.cigarscript" }
+          }
+        }
+      ]
+    },
+    "string": {
+      "name": "string.quoted.double.cigarscript",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.cigarscript",
+          "match": "\\\\([ntr0\\\\\"$]|u\\{[0-9A-Fa-f]+\\})"
+        },
+        {
+          "name": "meta.interpolation.cigarscript",
+          "begin": "\\$\\{",
+          "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.cigarscript" } },
+          "end": "\\}",
+          "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.cigarscript" } },
+          "patterns": [{ "include": "$self" }]
+        }
+      ]
+    },
+    "raw-string": {
+      "name": "string.quoted.single.cigarscript",
+      "match": "'[^']*'"
+    },
+    "number": {
+      "patterns": [
+        {
+          "name": "constant.numeric.duration.cigarscript",
+          "match": "\\b\\d+(ms|s|m|h)\\b"
+        },
+        {
+          "name": "constant.numeric.float.cigarscript",
+          "match": "\\b\\d[\\d_]*\\.\\d[\\d_]*([eE][+-]?\\d+)?\\b|\\b\\d[\\d_]*[eE][+-]?\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.cigarscript",
+          "match": "\\b(0[xX][0-9A-Fa-f_]+|0[bB][01_]+|\\d[\\d_]*)\\b"
+        }
+      ]
+    },
+    "constant": {
+      "name": "constant.language.cigarscript",
+      "match": "\\b(true|false|null)\\b"
+    },
+    "keyword": {
+      "patterns": [
+        {
+          "name": "keyword.control.cigarscript",
+          "match": "\\b(if|else|while|for|in|break|continue|match|snuff|try|ashtray|finally|cough|within|retry|timeout)\\b"
+        },
+        {
+          "name": "keyword.other.cigarscript",
+          "match": "\\b(exhale|burn|unlit|unburn|chain|pack|strength|use|pub|into|measure|owned|borrow|move|parallel|channel|coughs|collect|reduce|threads|backoff)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.cigarscript",
+          "match": "\\b(and|or|not)\\b"
+        },
+        {
+          "name": "storage.modifier.cigarscript",
+          "match": "\\b(stick|roll|pull|record|enum|interface|impl|layer)\\b"
+        },
+        {
+          "name": "support.constant.strength.cigarscript",
+          "match": "(?<=^strength\\s)(mild|medium|full)\\b"
+        }
+      ]
+    },
+    "type": {
+      "patterns": [
+        {
+          "name": "support.type.builtin.cigarscript",
+          "match": "\\b(Any|Null|Bool|Int|Float|Text|Path|List|ListView|Map|Bytes|Channel|u8|u16|u32|u64|i8|i16|i32|i64)\\b"
+        },
+        {
+          "name": "entity.name.type.cigarscript",
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+        }
+      ]
+    },
+    "call": {
+      "match": "\\b([A-Za-z_][A-Za-z0-9_]*)(?=\\()",
+      "captures": { "1": { "name": "entity.name.function.call.cigarscript" } }
+    },
+    "operator": {
+      "name": "keyword.operator.cigarscript",
+      "match": "->|=>|>>|\\?\\?|\\?\\.|\\.\\.|[+\\-*/%]=?|==|!=|<=|>=|[<>=?]"
+    }
+  }
+}

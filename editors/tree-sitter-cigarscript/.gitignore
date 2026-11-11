@@ -1,0 +1,11 @@
+# `tree-sitter generate` writes these; they are rebuilt, never committed.
+/src/
+/bindings/
+/binding.gyp
+/Cargo.toml
+/Package.swift
+/Makefile
+/setup.py
+/pyproject.toml
+/node_modules/
+/*.wasm
