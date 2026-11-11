@@ -1,0 +1,10 @@
+strength full
+stick squares = parallel(threads: 4) for n in 1..6 collect {
+  stick sq = n * n
+  sq
+}
+stick total: Int = parallel(threads: 4) for n in 1..101 reduce(+) {
+  n
+}
+exhale squares
+exhale total

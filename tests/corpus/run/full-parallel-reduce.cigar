@@ -1,0 +1,14 @@
+strength full
+
+stick total = parallel(threads: 4) for n in 1..101 reduce(+) {
+  n
+}
+exhale total
+stick low = parallel(threads: 2) for n in [5, 3, 9] reduce(min) {
+  n
+}
+exhale low
+stick none = parallel(threads: 2) for n in [] reduce(*) {
+  n
+}
+exhale none

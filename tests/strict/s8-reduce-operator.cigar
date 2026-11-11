@@ -1,0 +1,4 @@
+strength full
+stick r = parallel(threads: 2) for n in 1..4 reduce(-) {
+  n
+}

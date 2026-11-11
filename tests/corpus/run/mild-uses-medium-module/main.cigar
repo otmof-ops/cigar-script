@@ -1,0 +1,9 @@
+# RUN THIS FILE (run/mild-uses-medium-module/main.cigar); tools/plan.cigar is its module.
+# No `strength` line: this file is mild, and it `use`s a medium module.
+
+use tools.plan
+
+exhale plan.limit
+exhale plan.double(4)
+stick names = ["a", "b"]
+exhale plan.shout(names[0])

@@ -1,0 +1,5 @@
+strength full
+roll total = 0
+parallel(threads: 4) for n in 1..100 {
+  total += n
+}

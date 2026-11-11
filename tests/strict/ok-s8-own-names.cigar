@@ -1,0 +1,9 @@
+strength full
+stick base = 10
+parallel(threads: 2) for n in 1..5 {
+  roll local = base + n
+  local += 1
+  roll mine = []
+  mine.push(local)
+  exhale mine
+}

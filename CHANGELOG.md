@@ -8,6 +8,38 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **Shared writes in a parallel loop are refused, and the turns' values come
+  back safely (#22 S8).** The turns of a `parallel(threads: N) for` loop will
+  run side by side, so a turn writes only what it declares itself: a `roll`
+  reassignment, `push`, `pop`, `insert`, `remove`, `set` or a field or index
+  write to a name, list, map or record from outside the loop is `E1521`
+  (`` `total` is written by every turn of a parallel loop: use a channel, or
+  `parallel … reduce` ``), and so is a write through a name the turn made for
+  one (`` `grid` (as `row`) ``). Reading is fine, and a channel takes a send
+  from any turn. Two forms give the values back:
+  `stick squares = parallel(threads: 4) for n in xs collect { n * n }` keeps
+  every turn's last line in loop order, and `reduce(+)` (also `*`, `min` and
+  `max`, whose order does not change the result) combines them; an empty loop
+  reduces to `null`. A body whose last line is a statement, or another
+  operator, is `E1522`. Test: `parallel_body_cannot_write_shared`; the corpus
+  case that pushed from every turn now collects.
+- **The note for a run that cannot ask about `strength full` is said once per
+  project**, not on every run, so a CI job at full is not told each time.
+- **CigScript 1.20.0** is the version checked against (was 1.18.0): passes
+  (`pass.memo`) and the rest of 1.19 and 1.20 check as they run.
+
+- **Mixing and the experience warning (#7).** A mild file may `use` a
+  medium or full module (`use` is the one medium word a mild file may write;
+  `pub`, `record` and the rest are still `E1101`). The module is checked at
+  its own strength, and what the mild file passes is checked when it runs:
+  a wrong-typed value stops the run with `E1210`, naming the parameter.
+  `strength full` now asks once per project, on `cigar run`, whether the
+  person has worked with an ownership checker before; the answer is
+  remembered in the person's state folder keyed by the project's root,
+  never in the project. A run with no terminal never asks and says so once;
+  `strength_full_warning = off` in the person's config turns it off. New
+  `cigarscript::experience` is what cig-compile calls for the same notice
+  on `cigcompile build`. `docs/LANGUAGE.md` has both.
 - **Contextual keywords and raw identifiers (#22 D1 and L9).** The words
   CigarScript adds are keywords only where their syntax begins (`match x {`,
   `record Name`, `use path`, `layer name`, `move x`, `parallel(...) for`...).

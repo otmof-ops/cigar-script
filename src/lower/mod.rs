@@ -217,6 +217,7 @@ struct L<'a> {
     /// The lowered offsets (as original offsets, converted at the end) of
     /// every name given to `move`.
     move_keys: Vec<usize>,
+    parallel_keys: Vec<usize>,
     /// The modules this file has bound (`use`), by function name.
     bound_modules: BTreeSet<String>,
     /// Records and enums of a module this file uses that are not `pub`:
@@ -322,6 +323,7 @@ pub fn lower(src: &str, opts: &Options) -> Lowered {
         opts,
         modules: Vec::new(),
         move_keys: Vec::new(),
+        parallel_keys: Vec::new(),
         bound_modules: BTreeSet::new(),
         private_types: BTreeMap::new(),
         tparams: Vec::new(),
@@ -1229,6 +1231,7 @@ impl<'a> L<'a> {
                     let pc = self.matching(i + 1);
                     if matches!(self.k(pc + 1), T::For) {
                         self.e.blank(self.src, self.sp(i).start, self.sp(pc).end);
+                        self.parallel_keys.push(self.sp(pc + 1).start);
                         return self.stmt(pc + 1, end);
                     }
                 }
@@ -1484,8 +1487,163 @@ impl<'a> L<'a> {
                     .close(self.sp(e - 1).end, format!("; {}", guard(&name, t, &name)));
             }
         }
+        if self.is_word(j + 1, "parallel") {
+            if let Some(done) = self.parallel_value(j + 1, e) {
+                return done;
+            }
+        }
         self.expr(j + 1, e);
         e
+    }
+
+    /// `stick v = parallel(threads: n) for x in xs collect { ... }`, or
+    /// `reduce(op) { ... }` in place of `collect` (#22 S8). A turn's value is
+    /// its body's last line; `collect` gives the values back in loop order,
+    /// and `reduce` combines them with `+`, `*`, `min` or `max`, whose order
+    /// does not change the result, so the value is the sequential one by
+    /// construction. Lowered to a function called where it stands:
+    /// `(pack() { roll acc = []; for x in xs { acc.push(<last>) }; snuff acc })()`.
+    /// An empty loop collects `[]` and reduces to `null`.
+    fn parallel_value(&mut self, p: usize, e: usize) -> Option<usize> {
+        if !matches!(self.k(p + 1), T::LParen) {
+            return None;
+        }
+        let pc = self.matching(p + 1);
+        if !matches!(self.k(pc + 1), T::For) || !matches!(self.k(pc + 3), T::In) {
+            return None;
+        }
+        let iter = pc + 4;
+        // The word that ends the iterable at depth 0.
+        let mut depth = 0i32;
+        let mut k = iter;
+        let mut found: Option<(usize, usize, Option<String>)> = None;
+        while k < e {
+            let kk = self.k(k);
+            if Self::is_open(kk) {
+                depth += 1;
+            } else if Self::is_close(kk) {
+                depth -= 1;
+            } else if depth == 0 && self.is_word(k, "collect") && matches!(self.k(k + 1), T::LBrace)
+            {
+                found = Some((k, k + 1, None));
+                break;
+            } else if depth == 0 && self.is_word(k, "reduce") && matches!(self.k(k + 1), T::LParen)
+            {
+                let rc = self.matching(k + 1);
+                if matches!(self.k(rc + 1), T::LBrace) {
+                    let op = match (rc == k + 3, self.k(k + 2)) {
+                        (true, T::Plus) => "+".to_string(),
+                        (true, T::Star) => "*".to_string(),
+                        (true, _) if self.is_word(k + 2, "min") => "min".to_string(),
+                        (true, _) if self.is_word(k + 2, "max") => "max".to_string(),
+                        _ => {
+                            self.err_hint(
+                                "E1522",
+                                "`reduce` takes `+`, `*`, `min` or `max`",
+                                self.sp(k).start,
+                                self.sp(rc).end,
+                                "the turns finish in any order, so only an operator whose order does not change the result can combine them; `collect` keeps every value in loop order",
+                            );
+                            String::new()
+                        }
+                    };
+                    found = Some((k, rc + 1, Some(op)));
+                    break;
+                }
+            }
+            k += 1;
+        }
+        let (kw, open, op) = found?;
+        let close = self.matching(open);
+        if close + 1 != e {
+            return None;
+        }
+        // The body's statements; the last one is the turn's value.
+        let mut last = None;
+        let mut i = open + 1;
+        while i < close {
+            if matches!(self.k(i), T::Newline | T::Semicolon) {
+                i += 1;
+                continue;
+            }
+            let en = self.stmt_end(i, close);
+            last = Some((i, en));
+            i = en.max(i + 1);
+        }
+        let what = if op.is_some() { "reduce" } else { "collect" };
+        let Some((ls, le)) = last else {
+            self.err_hint(
+                "E1522",
+                format!("a `parallel … {what}` turn needs a value"),
+                self.sp(open).start,
+                self.sp(close).end,
+                "end the body with the turn's value, as its last line",
+            );
+            return Some(e);
+        };
+        if matches!(
+            self.k(ls),
+            T::Stick
+                | T::Roll
+                | T::If
+                | T::For
+                | T::While
+                | T::Burn
+                | T::Unlit
+                | T::Try
+                | T::Exhale
+                | T::Snuff
+                | T::Cough
+                | T::Break
+                | T::Continue
+                | T::Pull
+        ) {
+            self.err_hint(
+                "E1522",
+                format!("the last line of a `parallel … {what}` turn is its value, and this one is a statement"),
+                self.sp(ls).start,
+                self.sp(le - 1).end,
+                "end the body with an expression: the value this turn gives back",
+            );
+            return Some(e);
+        }
+        let n = self.fresh();
+        let acc = format!("__cg_p{n}");
+        let init = if op.is_some() { "null" } else { "[]" };
+        self.e.replace(
+            self.sp(p).start,
+            self.sp(pc).end,
+            format!("(pack() {{ roll {acc} = {init}; "),
+        );
+        self.parallel_keys.push(self.sp(pc + 1).start);
+        self.expr(iter, kw);
+        self.e
+            .blank(self.src, self.sp(kw).start, self.sp(open - 1).end);
+        self.stmts(open + 1, ls);
+        match op.as_deref() {
+            None => {
+                self.e.open(self.sp(ls).start, format!("{acc}.push("));
+                self.e.close(self.sp(le - 1).end, ")");
+            }
+            Some(op) => {
+                let v = format!("__cg_v{n}");
+                let combine = match op {
+                    "*" => format!("{acc} * {v}"),
+                    "min" => format!("math.min({acc}, {v})"),
+                    "max" => format!("math.max({acc}, {v})"),
+                    _ => format!("{acc} + {v}"),
+                };
+                self.e.open(self.sp(ls).start, format!("stick {v} = "));
+                self.e.close(
+                    self.sp(le - 1).end,
+                    format!("; if {acc} == null {{ {acc} = {v} }} else {{ {acc} = {combine} }}"),
+                );
+            }
+        }
+        self.expr(ls, le);
+        self.e
+            .close(self.sp(close).end, format!("; snuff {acc} }})()"));
+        Some(e)
     }
 
     /// `pull name<T>(a: T, b) -> R coughs E { body }`. `impl_of` names the
@@ -3626,6 +3784,11 @@ impl<'a> L<'a> {
         for o in self.move_keys {
             if let Some(l) = applied.lowered(o) {
                 prog.moves.insert(l);
+            }
+        }
+        for o in self.parallel_keys {
+            if let Some(l) = applied.lowered(o) {
+                prog.parallel_fors.insert(l);
             }
         }
         for (seq, off, t) in self.gen_bindings {

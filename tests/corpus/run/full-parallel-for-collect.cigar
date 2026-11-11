@@ -1,7 +1,6 @@
 strength full
 
-roll results = []
-parallel(threads: 4) for n in 1..6 {
-  results.push(n * n)
+stick results = parallel(threads: 4) for n in 1..6 collect {
+  n * n
 }
 exhale results

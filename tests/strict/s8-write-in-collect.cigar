@@ -1,0 +1,6 @@
+strength full
+roll seen = []
+stick r = parallel(threads: 2) for n in 1..4 collect {
+  seen.push(n)
+  n
+}

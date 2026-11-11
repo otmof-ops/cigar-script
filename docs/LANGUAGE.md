@@ -55,7 +55,27 @@ holds at every strength: nothing touches the world outside a `burn { }`.
 - **Strengths mix across files** in one project. A module is a file at
   medium or full (`pub` is medium's word), so a medium file can use a full
   module and a full file a medium one, each checked at its own strength. A
-  mild file cannot use a module: `use` is medium's. *(Provisional: #10.)*
+  **mild file may `use` a module** too (decided, #7): `use` is the one medium
+  word a mild file may write, and the module is checked at its own strength,
+  not the file's. A mild file may not write `pub`, `record` or any other
+  medium word. At the call, the types are inferred where the checker can
+  see them, and what a mild file passes in is **checked when it runs**: a
+  value that does not fit a typed parameter stops the run with `E1210`,
+  naming the function and the parameter (`double: n should be Int and is
+  Text`).
+- **The experience warning** for `full`. The first `cigar run` or
+  `cigcompile build` of a `strength full` file in a project explains what
+  full asks (Rust's ownership rules) and asks whether to go on. A yes is
+  remembered for that project and never asked again; a no stops the run and
+  is not remembered. What is remembered is in the person's state, keyed by
+  the project's root (the nearest folder with `cigar.toml`, `.cig-version`
+  or `.git`, else the file's folder), in `$XDG_STATE_HOME/cigar/full-warning`
+  (`~/.local/state/cigar/` without it); **nothing is written in the project**.
+  A run that is not interactive (no terminal to answer on) never asks: it
+  goes on, says once that it did not ask, and remembers nothing, so the next
+  run in a terminal asks. `strength_full_warning = off` in
+  `$XDG_CONFIG_HOME/cigar/config` (`~/.config/cigar/config`) turns the
+  notice off for that person everywhere. `cigar check` never asks.
 
 ## The feature table
 
@@ -206,6 +226,8 @@ page; until then the message carries the whole explanation.
 | `E1503` | a name given away on some paths and used after they join (names the branch); a name given away while a function value that borrows it is used later |
 | `E1510` | a number outside its sized type: at check time for a number written out (`stick a: u8 = 300`), **at run time** for one that is computed (`E1510 c is 300, outside u8 (0 to 255)`) |
 | `E1520` | **at run time**: a send on a closed channel |
+| `E1521` | a turn of a `parallel` loop writes a name, list, map or record declared outside the loop, directly or through a name for it made in the turn (`` `total` is written by every turn of a parallel loop ``) |
+| `E1522` | a `parallel … collect` or `reduce` body whose last line is not a value, or a `reduce` operator other than `+`, `*`, `min` or `max` |
 
 The run-time codes (`E1205`, `E1206`, `E1208`, `E1210`, `E1219`, `E1402`, `E1510` and
 `E1520`) are coughs whose message starts with the code. `try` and `ashtray`
@@ -376,6 +398,9 @@ the file's layers are.
 move-expr       = "move" , name
                 | "move" , lambda ;
 parallel-for    = "parallel" , "(" , "threads" , ":" , expr , ")" , "for" , name , "in" , expr , block ;
+parallel-value  = ( "stick" | "roll" ) , name , [ ":" , type ] , "=" ,
+                  "parallel" , "(" , "threads" , ":" , expr , ")" , "for" , name , "in" , expr ,
+                  ( "collect" | "reduce" , "(" , ( "+" | "*" | "min" | "max" ) , ")" ) , block ;
 channel-expr    = "channel" , "<" , type , ">" , "(" , ")" ;
 within-stmt     = "within" , context , block ;
 context         = "retry" , "(" , expr , [ "," , "backoff" , ":" , expr ] , ")"
@@ -619,6 +644,13 @@ type system are written; each rule has programs in `tests/corpus` and
 - **Concurrency.** A `parallel` loop and `within parallel` run **in loop
   order, on one thread, today**, so the journal is the sequential run's by
   construction, which the design requires of the parallel version too.
+  Because the turns will run side by side, a turn writes only what it
+  declares itself (#22 S8): writing a name, list, map or record from outside
+  the loop is `E1521`, through the name or through one the turn made for it,
+  and reading is fine. A turn's value comes back with `parallel … collect`
+  (in loop order) or `parallel … reduce(+)` (`+`, `*`, `min` or `max`, whose
+  order does not change the result: an empty loop reduces to `null`), or
+  goes through a channel.
   `within retry(n)` runs its block up to `n` tries in all.
 
 ## Memory
