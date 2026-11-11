@@ -250,7 +250,7 @@ step reads them the same way.
 | `E1403` | check | `break` or `continue` that would leave a `within retry` block |
 | `E1404` | cough, at run time | a `within timeout` block ran past its deadline |
 | `E1405` | check | `within timeout` written without a limit |
-| `E1501`, `E1502` | check | ownership, at full |
+| `E1501`, `E1502`, `E1503` | check | ownership, at full: a use after a move, a borrow that escapes, a capture or a branch that moved a name |
 | `E303` | check | `into` a path outside a burn (a warning inside a function), as `fs.write_text` is |
 | `E1210`, `E1510`, `E1205`, `E1206`, `E1208`, `E1520` | cough, at run time | a boundary, a sized number, a record's or a variant's fields given at run time, and a send on a closed channel; the message starts with the code |
 | `E800` | usage | no path given, a file that is not `.cig` or `.cigar`, a folder with no such files, a path that is neither a file nor a folder, or a bad `--strength` |

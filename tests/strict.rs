@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
 // SPDX-License-Identifier: FSL-1.1-ALv2
-//! Held to Rust's standard (#22, S1-S4): programs the checker must refuse,
+//! Held to Rust's standard (#22, S1-S7): programs the checker must refuse,
 //! each with the error it names first, and the programs beside them that
 //! must still pass. `tests/strict/sN-NAME.cigar` + `.err` (code on line 1,
 //! a substring of the message on line 2) is refused; `ok-sN-NAME.cigar`
@@ -171,4 +171,29 @@ fn orchestrate_cig_as_cigar_has_no_reserved_word_errors() {
         .map(|d| format!("{} {} at {:?}", d.code, d.message, d.line))
         .collect();
     assert!(reserved.is_empty(), "{}", reserved.join("\n"));
+}
+
+#[test]
+fn binding_moves_at_full() {
+    run("s5-");
+}
+
+#[test]
+fn closure_capture_borrows_or_moves() {
+    run("s6-");
+}
+
+#[test]
+fn possibly_moved_is_moved() {
+    run("s7-");
+}
+
+#[test]
+fn an_error_inside_an_interpolation_is_said_at_its_string() {
+    // cig parses `${...}` on its own; the error must not land on line 1.
+    let src = "strength full\nstick a = [1]\nstick b = a\nexhale \"x ${a.len()}\"\n";
+    let checked = check_file_source(Kind::Cigar, src, None, None);
+    let d = checked.errors.first().expect("an E1501");
+    assert_eq!(d.code, "E1501", "{}", d.message);
+    assert_eq!((d.line, d.col), (Some(4), Some(8)), "{}", d.message);
 }

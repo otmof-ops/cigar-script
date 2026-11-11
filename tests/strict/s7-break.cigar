@@ -1,0 +1,10 @@
+strength full
+pull consume(owned xs: List<Int>) -> Int { snuff xs.len() }
+stick data = [1, 2]
+for i in 1..3 {
+  if i == 2 {
+    exhale consume(data)
+    break
+  }
+}
+exhale data

@@ -99,7 +99,7 @@ until the questions are decided.
 | **E1104** | A name that starts `_cg_` or `__cg_`, which the lowering keeps for itself; or a file that lowers to CigScript cig refuses (a bug in `cigar`). | reserved identifier | **built** |
 | **E1201 to E1399** | Medium's type, record, `match`, module and interface errors, with spans on both sides of a mismatch: "expected `Path` here, because of this signature". `E1210` is found when the program runs. | type errors | **built** (#8 to #10) |
 | **E1401, E1402** | A layer with two meanings for a type, or none. | ambiguous or missing overload | **built** (#13) |
-| **E1501, E1502** | A name used after it was given away; a borrowed value returned, stored or given away. | use after move; borrow escape | **built** (#12) |
+| **E1501, E1502, E1503** | A name used after it was given away; a borrowed value returned, stored or given away; a name a closure borrowed and that was given away, or one moved on some paths and used after they join. | use after move; borrow escape; possibly moved | **built** (#12, #22) |
 | **E1510, E1520** | A number outside its sized type; a send on a closed channel. Both are found when the program runs. | overflow; closed channel | **built** (#12) |
 
 `E1101` to `E1104` and the codes above are registered in cig's error registry when CigarScript

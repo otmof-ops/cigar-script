@@ -1,0 +1,4 @@
+strength full
+stick data = [1, 2]
+stick m = {k: data}
+exhale data

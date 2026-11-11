@@ -2128,9 +2128,11 @@ impl<'a> L<'a> {
                         continue;
                     }
                     if name == "move"
-                        && self.ident(j + 1).is_some()
+                        && (self.ident(j + 1).is_some() || matches!(self.k(j + 1), T::Pack))
                         && self.strength == Strength::Full
                     {
+                        // `move x` gives `x` away; `move pack ...` is a
+                        // function value that owns what it captures.
                         let sp = self.sp(j);
                         self.e.blank(self.src, sp.start, sp.end);
                         self.move_keys.push(self.sp(j + 1).start);

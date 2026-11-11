@@ -1,0 +1,5 @@
+strength full
+record Box { items: List<Int> }
+stick a = Box { items: [1] }
+stick b = a
+exhale a.items.len()

@@ -1,0 +1,5 @@
+strength full
+pull consume(owned xs: List<Int>) -> Int { snuff xs.len() }
+stick data = [1, 2]
+if false { exhale 0 } else { exhale consume(data) }
+exhale data

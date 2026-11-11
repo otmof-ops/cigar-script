@@ -1,0 +1,8 @@
+strength full
+pull consume(owned xs: List<Int>) -> Int { snuff xs.len() }
+stick data = [1, 2]
+stick f = pack() => data.len()
+exhale f()
+exhale consume(data)
+stick g = pack(x) => x + 1
+exhale g(1)

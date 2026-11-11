@@ -33,18 +33,26 @@ built.)
 
 ## Ownership (#12)
 
-*(Provisional: #3.)* `owned`, `borrow` and `move` say who holds a value:
+`owned`, `borrow` and `move` say who holds a value (the memory decision is
+ADR 0002, #3; the rules below are #22's S5 to S7):
 
 - A name given to an `owned` parameter, or to `move`, is gone: using it again
-  in that block is `E1501`, and the message names the line where it went.
+  is `E1501`, and the message names the line where it went.
+- Binding moves at full: `stick alias = data`, `alias = data`, storing a list,
+  map, record or channel in a container, or `push`, `insert`, `set` and
+  `send`, gives it away; `.copy()` copies.
 - A `borrow` parameter is the caller's. Returning it, storing it (`push`,
   `insert`, `set`) or giving it away is `E1502`.
+- A `pack` that only reads a name borrows it; giving that name away while the
+  function is used later is `E1503`. A `move pack`, a stored or sent
+  function, or one that gives a name away owns what it captures.
+- A name moved on some paths is moved after the paths join: using it is
+  `E1503`, naming the branch. A path that ends in `snuff` or `cough` does not
+  join.
 - A parameter with neither word is shared, as in medium.
 
-The check is **static, per block, and conservative**: a move inside a branch
-or a loop body ends with that block, so it never reports a use that might be
-fine. At run time ownership is erased: `move x` is just `x`, and a program
-that checks runs the same with or without the words.
+The check is **static**; at run time ownership is erased: `move x` is just
+`x`, and a program that checks runs the same with or without the words.
 
 ```cigar
 strength full
