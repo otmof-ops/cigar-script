@@ -1,0 +1,11 @@
+strength medium
+
+record IoError { message: Text }
+
+pull open(name: Text) -> Result<Int, Text> {
+  if name == "" {
+    cough IoError { message: "empty" }
+  }
+  snuff Ok(1)
+}
+exhale open("a")

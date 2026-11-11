@@ -1,0 +1,3 @@
+Result.Ok(value: 30)
+Result.Err(error: DiskFull { needed: 200 })
+needs 500

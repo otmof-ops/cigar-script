@@ -1,0 +1,12 @@
+strength medium
+
+enum Result { Ok, Bad(why: Text) }
+
+pull f(x: Int) -> Result {
+  if x > 1 { snuff Result.Bad("big") }
+  snuff Result.Ok
+}
+match f(2) {
+  Ok => exhale "fine"
+  Bad(w) => exhale w
+}

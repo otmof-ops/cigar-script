@@ -1,0 +1,14 @@
+strength medium
+
+pull risky(n: Int) -> Int {
+  if n < 0 {
+    cough "negative"
+  }
+  snuff n
+}
+
+exhale attempt(risky(3))
+match attempt(risky(-3)) {
+  Ok(v) => exhale "fine", v
+  Err(e) => exhale "caught", e.message
+}

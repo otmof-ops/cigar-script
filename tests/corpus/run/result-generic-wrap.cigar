@@ -1,0 +1,16 @@
+strength medium
+
+pull first<T>(xs: List<T>) -> Result<T, Text> {
+  if xs.len() == 0 {
+    snuff Err("empty list")
+  }
+  snuff Ok(xs[0])
+}
+
+pull first_both(a: List<Int>, b: List<Int>) -> Result<Int, Text> {
+  snuff Ok(first(a)? + first(b)?)
+}
+
+exhale first([1, 2])
+exhale first_both([1], [2])
+exhale first_both([1], [])

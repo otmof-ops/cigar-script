@@ -1,0 +1,6 @@
+strength medium
+
+pull half(n: Int) -> Result<Int> {
+  snuff Ok(n / 2)
+}
+exhale half(4)

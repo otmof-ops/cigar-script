@@ -69,3 +69,44 @@ positional enum field is shown as its value (`Shape.circle(2.0)`).
     the code and `should be` (the descriptor text for a list is not given).
 16. **`measure for Move = move_cost`** is written with a named `pull`, not a lambda.
 17. **A match in the head of a block arm** (`ok => { ... }`) is used as a statement only.
+
+## The typed corpus for the type system (#2)
+
+The issue asks for at least 30 typed programs with their expected errors. The
+three folders held 48 `check/` programs with an expected error each (one cause
+each, named by their code), 48 `run/` programs and 9 `runtime/` ones before
+#2; with the 12 `check/`, 12 `run/` and 1 `runtime/` cases below there are 60,
+60 and 10. The ones that are the rules of `Result`, `?` and `cough` in
+docs/LANGUAGE.md ("Types, values and checks"):
+
+| file | what it holds |
+|---|---|
+| `check/e1219-try-outside-function` | `?` at the top of a file |
+| `check/e1219-try-in-plain-function` | `?` in a `pull` whose result is not a `Result` |
+| `check/e1219-try-in-pack` | `?` inside a `pack` |
+| `check/e1219-try-on-int` | `?` on a value that is not a `Result` |
+| `check/e1219-error-does-not-fit` | `?` whose error does not fit the function's |
+| `check/e1201-ok-wrong-type` | `Ok("seven")` where `Result<Int, Text>` is declared |
+| `check/e1201-err-wrong-type` | `Err(7)` where `Result<Int, Text>` is declared |
+| `check/e1201-result-argument` | a `Result<Text, _>` handed to a `Result<Int, Text>` parameter |
+| `check/e1201-cough-not-the-error-type` | a `cough` in a function that returns a `Result`, of a type that is not its error |
+| `check/e1211-result-missing-err` | a `match` on a `Result` with no `Err` arm |
+| `check/e1217-result-snuff-plain-value` | `snuff` of a plain value in a function that returns a `Result` |
+| `check/e1203-result-one-argument` | `Result<Int>` |
+| `runtime/e1219-not-a-result` | an untyped value reaches `?` |
+| `run/result-ok-err-match` | `Ok`, `Err` and `match` |
+| `run/result-question-propagates` | `?` through two calls, in an expression, inside a `try` |
+| `run/result-question-chain` | `?` in a condition and as a statement; `attempt`; `Result.Ok(value: 3)`; a `match` bound to a `stick` |
+| `run/result-question-is-a-return` | `?` is a return: the `ashtray` of the same function never sees it |
+| `run/result-cough-becomes-err` | `cough` in a function that returns a `Result` is its `Err` |
+| `run/result-cough-inside-try-stays-a-cough` | a `cough` inside a `try` of the same function is still caught by it |
+| `run/result-attempt-typed-coughs` | `attempt` of a function with a `coughs` list |
+| `run/result-attempt-untyped-cough` | `attempt` of a plain-text cough |
+| `run/result-generic-wrap` | `Result<T, Text>` from a generic function |
+| `run/result-nested-in-map` | `?` inside a `for` loop |
+| `run/result-own-enum` | a file's own `enum Result` keeps its meaning |
+| `run/result-bare-ok-in-own-enum` | another enum with an `Ok` variant keeps its bare pattern |
+
+18. **`attempt(call)` of a plain-text cough** gives `Err` of cig's cough map; the
+    corpus reads `e.message`, never prints the map (it carries a line number).
+19. **`?` and `?.`**: `f()?.x` is safe navigation. The corpus writes `(f()?).x`.

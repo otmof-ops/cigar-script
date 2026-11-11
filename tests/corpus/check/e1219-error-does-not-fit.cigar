@@ -1,0 +1,13 @@
+strength medium
+
+record ParseError { message: Text }
+
+pull parse(t: Text) -> Result<Int, ParseError> {
+  snuff Ok(t.to_int())
+}
+
+pull parsed(t: Text) -> Result<Int, Text> {
+  stick n = parse(t)?
+  snuff Ok(n)
+}
+exhale parsed("1")

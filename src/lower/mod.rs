@@ -24,6 +24,24 @@ use std::path::{Path, PathBuf};
 /// that needs them.
 pub const PRELUDE: &str = include_str!("prelude.cig");
 
+/// The run-time prelude, without the built-in `Result` constructors when the
+/// file declares a `Result` of its own (whose constructors it lowers itself).
+fn prelude(user_result: bool) -> String {
+    if !user_result {
+        return PRELUDE.to_string();
+    }
+    match (PRELUDE.find(RESULT_BEGIN), PRELUDE.find(RESULT_END)) {
+        (Some(a), Some(b)) if a < b => {
+            let tail = b + RESULT_END.len();
+            format!("{}{}", &PRELUDE[..a], &PRELUDE[tail..])
+        }
+        _ => PRELUDE.to_string(),
+    }
+}
+
+const RESULT_BEGIN: &str = "# ===== the built-in Result: begin";
+const RESULT_END: &str = "# ===== the built-in Result: end";
+
 /// A lowered file.
 pub struct Lowered {
     /// The CigScript text: the file rewritten, then its appended `pull`s.
@@ -209,6 +227,30 @@ struct L<'a> {
     public_next: bool,
     record_names: BTreeSet<String>,
     enum_names: BTreeSet<String>,
+    /// The built-in `Result<T, E>` is this file's (it was written about and
+    /// the file declares no `Result` of its own): `Ok`, `Err` and `attempt`
+    /// are its words.
+    builtin_result: bool,
+    /// The file declares an enum named `Result`: the built-in steps aside.
+    user_result: bool,
+    /// The functions being lowered, innermost last: does a `?` in it need
+    /// the function to catch what `?` throws?
+    try_fns: Vec<TryFn>,
+    /// How many `try` blocks of the function being lowered enclose the
+    /// statement.
+    try_depth: usize,
+    /// `?` positions already lowered (a range can be walked twice).
+    tries_done: BTreeSet<usize>,
+    /// The file declares a `pull attempt`: it is the file's, not the
+    /// built-in's.
+    user_attempt: bool,
+}
+
+/// A function body being lowered, for `?`.
+struct TryFn {
+    /// A `pull`: its body can catch a `?`. A `pack` cannot.
+    pull: bool,
+    used: bool,
 }
 
 struct Names<'b>(&'b BTreeSet<String>, &'b BTreeSet<String>);
@@ -278,6 +320,12 @@ pub fn lower(src: &str, opts: &Options) -> Lowered {
         public_next: false,
         record_names: BTreeSet::new(),
         enum_names: BTreeSet::new(),
+        builtin_result: false,
+        user_result: false,
+        try_fns: Vec::new(),
+        try_depth: 0,
+        tries_done: BTreeSet::new(),
+        user_attempt: false,
     };
     l.reserved_names();
     l.declarations();
@@ -609,6 +657,14 @@ impl<'a> L<'a> {
                 }
             }
         }
+        self.user_result = self.enum_names.contains("Result");
+        self.user_attempt = (0..len.saturating_sub(2))
+            .any(|i| matches!(self.k(i), T::Pull) && self.is_word(i + 1, "attempt"));
+        if !self.user_result && self.wants_result() {
+            self.builtin_result = true;
+            self.enum_names.insert("Result".to_string());
+            self.prog.enums.insert("Result".to_string(), result_decl());
+        }
         // Then the full declarations.
         let mut i = 0;
         while i < len.saturating_sub(1) {
@@ -650,6 +706,24 @@ impl<'a> L<'a> {
             }
             i += 1;
         }
+    }
+
+    /// Does the file write about a `Result`: the word, `Ok(`, `Err(`,
+    /// `attempt(`, or a `?` straight after a `)` or `]` (a call's `?`)?
+    fn wants_result(&self) -> bool {
+        let named = |n: &str| n == "Result" || n == "Ok" || n == "Err" || n == "attempt";
+        let words = self.toks.iter().enumerate().any(|(i, t)| {
+            matches!(&t.kind, T::Ident(n) if named(n))
+                && !matches!(
+                    self.toks[i.saturating_sub(1)].kind,
+                    T::Dot | T::SafeDot | T::Pull
+                )
+        });
+        words
+            || self
+                .opt
+                .iter()
+                .any(|&q| q > 0 && matches!(self.work.as_bytes()[q - 1], b')' | b']'))
     }
 
     /// A record, enum or interface named like one declared above it: E1214,
@@ -1152,7 +1226,13 @@ impl<'a> L<'a> {
                 let e = self.stmt_end(i, end);
                 // A record or enum coughed is shown as one when nothing
                 // catches it, and caught as itself.
-                if self.show && matches!(self.k(i), T::Cough) && i + 1 < e {
+                if self.cough_is_err() && matches!(self.k(i), T::Cough) && i + 1 < e {
+                    // In a function that returns a `Result`, a cough hands
+                    // the value back as its `Err`.
+                    let sp = self.sp(i);
+                    self.e.replace(sp.start, sp.end, "snuff _cg_cough_Err(");
+                    self.e.close(self.sp(e - 1).end, ")");
+                } else if self.show && matches!(self.k(i), T::Cough) && i + 1 < e {
                     self.e.open(self.sp(i + 1).start, "_cg_coughed(");
                     self.e.close(self.sp(e - 1).end, ")");
                 }
@@ -1195,6 +1275,19 @@ impl<'a> L<'a> {
         }
     }
 
+    /// Is a `cough` here the `Err` of a function that returns the built-in
+    /// `Result`? Not inside a `try` of the same function: that cough is the
+    /// `try`'s to catch.
+    fn cough_is_err(&self) -> bool {
+        self.builtin_result
+            && self.try_depth == 0
+            && self.try_fns.last().is_some_and(|f| f.pull)
+            && matches!(
+                self.rets.last(),
+                Some(Some((Ty::Enum(n, _), _))) if n == "Result"
+            )
+    }
+
     /// A statement with a header and blocks (`if`, `while`, `for`, `burn`,
     /// `try`, `else`...): the header's expressions, then every block.
     fn headed(&mut self, mut i: usize, e: usize) -> usize {
@@ -1208,7 +1301,12 @@ impl<'a> L<'a> {
                         )
                         || self.is_word(i.saturating_sub(1), "unburn") =>
                 {
+                    // The body of a `try`: a `?` in it is caught by the
+                    // `ashtray`, which hands it on.
+                    let in_try = matches!(self.k(i.saturating_sub(1)), T::Try);
+                    self.try_depth += usize::from(in_try);
                     i = self.block(i);
+                    self.try_depth -= usize::from(in_try);
                 }
                 T::Ashtray
                     if self.show
@@ -1222,7 +1320,7 @@ impl<'a> L<'a> {
                     self.e.replace(sp.start, sp.end, format!("__cg_c{n}"));
                     self.e.open(
                         self.sp(i + 2).end,
-                        format!(" stick {name} = _cg_caught(__cg_c{n});"),
+                        format!(" _cg_reraise(__cg_c{n}); stick {name} = _cg_caught(__cg_c{n});"),
                     );
                     i += 2;
                 }
@@ -1354,9 +1452,27 @@ impl<'a> L<'a> {
             .extend(sig.generics.iter().map(|g| g.0.clone()));
         self.rets.push(sig.ret.clone().map(|r| (r, shown.clone())));
         self.fn_keys.push((self.sp(p).start, sig));
+        self.try_fns.push(TryFn {
+            pull: true,
+            used: false,
+        });
+        let depth = std::mem::take(&mut self.try_depth);
         let after = self.block(j);
+        self.try_depth = depth;
         self.rets.pop();
         self.tparams = saved;
+        if self.try_fns.pop().is_some_and(|f| f.used) {
+            // A `?` in the body throws the `Err` out through here: the
+            // function catches it and gives it back as its result.
+            let n = self.fresh();
+            self.e.open(self.sp(j).end, " try {");
+            self.e.close(
+                self.sp(after - 1).start,
+                format!(
+                    " }} ashtray __cg_p{n} {{ if _cg_is_prop(__cg_p{n}) {{ snuff __cg_p{n}.result }}; cough __cg_p{n} }} "
+                ),
+            );
+        }
         after
     }
 
@@ -1826,6 +1942,9 @@ impl<'a> L<'a> {
     fn expr(&mut self, i: usize, e: usize) {
         let mut j = i;
         while j < e {
+            if j > i {
+                self.tries_in_gap(i, j);
+            }
             let k = self.k(j).clone();
             match &k {
                 T::Pack => {
@@ -1880,6 +1999,25 @@ impl<'a> L<'a> {
                             self.e.close(self.sp(close).end, ")");
                             self.shorthand_fields(b, close);
                             j = b + 1;
+                            continue;
+                        }
+                    }
+                    // The built-in `Result`: `Ok(v)`, `Err(e)`, `attempt(call)`.
+                    if self.builtin_result
+                        && matches!(self.k(j + 1), T::LParen)
+                        && !matches!(self.k(j.wrapping_sub(1)), T::Dot | T::SafeDot | T::Pull)
+                    {
+                        if name == "Ok" || name == "Err" {
+                            j = self.variant_ref("Result", j, j, e);
+                            continue;
+                        }
+                        if name == "attempt" && !self.user_attempt {
+                            self.e.replace(
+                                self.sp(j).start,
+                                self.sp(j + 1).end,
+                                "_cg_attempt(pack() => ",
+                            );
+                            j += 2;
                             continue;
                         }
                     }
@@ -1989,6 +2127,76 @@ impl<'a> L<'a> {
                 _ => {}
             }
             j += 1;
+        }
+        self.tries_in_gap(i, e.max(i + 1));
+    }
+
+    /// A `?` written between token `j - 1` and token `j`, which cig's lexer
+    /// never saw: the `?` of `expr?`, which sends an `Err` out of the
+    /// function. It is `_cg_try(expr)`; the function around it catches what
+    /// `_cg_try` throws (`finish_try`).
+    fn tries_in_gap(&mut self, lo: usize, j: usize) {
+        if j == 0 || j > self.toks.len() - 1 {
+            return;
+        }
+        let from = self.sp(j - 1).end;
+        let to = self.sp(j).start;
+        if to <= from {
+            return;
+        }
+        let qs: Vec<usize> = self.opt.range(from..to).copied().collect();
+        for q in qs {
+            if !self.tries_done.insert(q) {
+                continue;
+            }
+            let start = self.operand_start(lo, j - 1);
+            self.e.open(self.sp(start).start, "_cg_try(");
+            self.e.close(from, ")");
+            self.e.blank(self.src, q, q + 1);
+            if let Some(f) = self.try_fns.last_mut() {
+                f.used = f.used || f.pull;
+            }
+        }
+    }
+
+    /// The first token of the postfix chain that ends at token `j`
+    /// (`a.b(c)[0]`), not before `lo`.
+    fn operand_start(&self, lo: usize, mut j: usize) -> usize {
+        loop {
+            match self.k(j) {
+                T::RParen | T::RBracket => {
+                    let mut depth = 0i32;
+                    let mut o = j;
+                    loop {
+                        let kk = self.k(o);
+                        if Self::is_close(kk) {
+                            depth += 1;
+                        } else if Self::is_open(kk) {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        if o <= lo {
+                            return j;
+                        }
+                        o -= 1;
+                    }
+                    j = o;
+                    if j > lo && (self.ends_expr(j - 1) && !matches!(self.k(j - 1), T::RBrace)) {
+                        j -= 1;
+                        continue;
+                    }
+                    return j;
+                }
+                T::RBrace | T::Comma | T::Newline => return j,
+                _ => {}
+            }
+            if j >= lo + 2 && matches!(self.k(j - 1), T::Dot | T::SafeDot) {
+                j -= 2;
+                continue;
+            }
+            return j;
         }
     }
 
@@ -2122,11 +2330,19 @@ impl<'a> L<'a> {
     /// `Enum.variant` or `Enum.variant(args)` at `j`: the constructor call.
     fn enum_ref(&mut self, j: usize, e: usize) -> usize {
         let en = self.ident(j).unwrap();
-        let v = self.ident(j + 2).unwrap();
+        self.variant_ref(&en, j, j + 2, e)
+    }
+
+    /// `Enum.variant(...)` with the enum's name at `j` and the variant at
+    /// `vi` (`j + 2`), or the bare `Ok(...)`/`Err(...)` of the built-in
+    /// `Result`, where both are the same token.
+    fn variant_ref(&mut self, en: &str, j: usize, vi: usize, e: usize) -> usize {
+        let en = en.to_string();
+        let v = self.ident(vi).unwrap();
         let decl = self.prog.enums.get(&en).cloned();
-        let Some(decl) = decl else { return j + 3 };
+        let Some(decl) = decl else { return vi + 1 };
         let Some(var) = decl.variants.iter().find(|x| x.name == v).cloned() else {
-            let sp = self.sp(j + 2);
+            let sp = self.sp(vi);
             let names: Vec<&str> = decl.variants.iter().map(|x| x.name.as_str()).collect();
             self.err_hint(
                 "E1207",
@@ -2135,15 +2351,15 @@ impl<'a> L<'a> {
                 sp.end,
                 format!("its variants are {}", names.join(", ")),
             );
-            return j + 3;
+            return vi + 1;
         };
-        if matches!(self.k(j + 3), T::LParen) {
-            let pc = self.matching(j + 3);
+        if matches!(self.k(vi + 1), T::LParen) {
+            let pc = self.matching(vi + 1);
             // Each argument's first token, and whether it is `name: value`.
             let mut starts: Vec<usize> = Vec::new();
             let mut depth = 0i32;
             let mut arg_start = true;
-            for a in j + 4..pc {
+            for a in vi + 2..pc {
                 let k = self.k(a).clone();
                 if depth == 0 && arg_start && !matches!(k, T::Newline) {
                     starts.push(a);
@@ -2183,7 +2399,7 @@ impl<'a> L<'a> {
                         .iter()
                         .any(|&a| self.ident(a).as_deref() == Some(f.as_str()))
                     {
-                        let sp = self.sp(j + 2);
+                        let sp = self.sp(vi);
                         self.err_hint(
                             "E1208",
                             format!("`{en}.{v}` is missing the field `{f}`"),
@@ -2195,12 +2411,12 @@ impl<'a> L<'a> {
                 }
                 self.e.replace(
                     self.sp(j).start,
-                    self.sp(j + 3).end,
+                    self.sp(vi + 1).end,
                     format!("_cg_named_{en}_{v}({{"),
                 );
                 self.e.replace(self.sp(pc).start, self.sp(pc).end, "})");
             } else if named.iter().any(|n| *n) {
-                let sp = self.sp(j + 2);
+                let sp = self.sp(vi);
                 self.err_hint(
                     "E1208",
                     format!("`{en}.{v}` gives some fields by name and some by place"),
@@ -2209,14 +2425,11 @@ impl<'a> L<'a> {
                     format!("name every field ({}), or none", fields.join(", ")),
                 );
             } else {
-                self.e.replace(
-                    self.sp(j).start,
-                    self.sp(j + 2).end,
-                    format!("_cg_{en}_{v}"),
-                );
+                self.e
+                    .replace(self.sp(j).start, self.sp(vi).end, format!("_cg_{en}_{v}"));
                 let count = starts.len();
                 if count != fields.len() {
-                    let sp = self.sp(j + 2);
+                    let sp = self.sp(vi);
                     self.err(
                         "E1208",
                         format!(
@@ -2230,11 +2443,11 @@ impl<'a> L<'a> {
                     );
                 }
             }
-            self.expr(j + 4, pc);
+            self.expr(vi + 2, pc);
             pc + 1
         } else {
             if !var.fields.is_empty() {
-                let sp = self.sp(j + 2);
+                let sp = self.sp(vi);
                 self.err(
                     "E1208",
                     format!(
@@ -2246,13 +2459,10 @@ impl<'a> L<'a> {
                     sp.end,
                 );
             }
-            self.e.replace(
-                self.sp(j).start,
-                self.sp(j + 2).end,
-                format!("_cg_{en}_{v}()"),
-            );
+            self.e
+                .replace(self.sp(j).start, self.sp(vi).end, format!("_cg_{en}_{v}()"));
             let _ = e;
-            j + 3
+            vi + 1
         }
     }
 
@@ -2295,7 +2505,14 @@ impl<'a> L<'a> {
         let after = pc + 1;
         if matches!(self.k(after), T::LBrace) {
             self.rets.push(None);
+            self.try_fns.push(TryFn {
+                pull: false,
+                used: false,
+            });
+            let depth = std::mem::take(&mut self.try_depth);
             let next = self.block(after);
+            self.try_depth = depth;
+            self.try_fns.pop();
             self.rets.pop();
             return next;
         }
@@ -2450,6 +2667,7 @@ impl<'a> L<'a> {
                             .all(|n| e.variants.iter().any(|v| v.name == *n))
                 })
                 .collect();
+            let cands = self.without_builtin(cands);
             return if cands.len() == 1 {
                 Some(cands[0].name.clone())
             } else {
@@ -2467,10 +2685,22 @@ impl<'a> L<'a> {
                 })
             })
             .collect();
+        let cands = self.without_builtin(cands);
         if cands.len() == 1 {
             Some(cands[0].name.clone())
         } else {
             None
+        }
+    }
+
+    /// When a file's own enum shares variant names with the built-in
+    /// `Result` (`Ok`), a bare pattern means its own: `Result.Ok(x)` says
+    /// the other.
+    fn without_builtin<'e>(&self, cands: Vec<&'e EnumDecl>) -> Vec<&'e EnumDecl> {
+        if self.builtin_result && cands.len() > 1 {
+            cands.into_iter().filter(|e| e.name != "Result").collect()
+        } else {
+            cands
         }
     }
 
@@ -3286,7 +3516,7 @@ impl<'a> L<'a> {
         }
         text.push_str(PRELUDE_MARK);
         text.push('\n');
-        text.push_str(PRELUDE);
+        text.push_str(&prelude(self.user_result));
         let mut prog = std::mem::take(&mut self.prog);
         for (o, s) in self.fn_keys {
             if let Some(l) = applied.lowered(o) {
@@ -3506,9 +3736,9 @@ fn full_only(t: &Ty) -> Option<&'static str> {
 fn split_code(m: &str) -> (&'static str, String) {
     const CODES: &[&str] = &[
         "E1104", "E1201", "E1202", "E1203", "E1204", "E1205", "E1206", "E1207", "E1208", "E1209",
-        "E1211", "E1212", "E1213", "E1214", "E1215", "E1216", "E1217", "E1218", "E1301", "E1302",
-        "E1303", "E1304", "E1311", "E1312", "E1313", "E1401", "E1402", "E1403", "E1404", "E1405",
-        "E1501", "E1502",
+        "E1211", "E1212", "E1213", "E1214", "E1215", "E1216", "E1217", "E1218", "E1219", "E1301",
+        "E1302", "E1303", "E1304", "E1311", "E1312", "E1313", "E1401", "E1402", "E1403", "E1404",
+        "E1405", "E1501", "E1502",
     ];
     for c in CODES {
         if let Some(rest) = m.strip_prefix(c) {

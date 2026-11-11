@@ -1,0 +1,16 @@
+strength medium
+
+enum Status { Ok, Failed(why: Text) }
+
+pull f(x: Int) -> Status {
+  if x > 1 { snuff Status.Failed("big") }
+  snuff Status.Ok
+}
+match f(2) {
+  Ok => exhale "fine"
+  Failed(w) => exhale w
+}
+match f(0) {
+  Ok => exhale "fine"
+  Failed(w) => exhale w
+}

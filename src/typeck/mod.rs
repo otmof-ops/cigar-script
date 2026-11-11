@@ -1632,7 +1632,17 @@ impl<'a> Ck<'a> {
                     self.define(p, t, true, annotated);
                 }
                 let ret = match body {
-                    LambdaBody::Expr(x) => self.infer(x),
+                    LambdaBody::Expr(x) => {
+                        self.ctx.push(FnCtx {
+                            name: "pack".into(),
+                            ret: None,
+                            coughs: vec![],
+                            try_depth: 1,
+                        });
+                        let r = self.infer(x);
+                        self.ctx.pop();
+                        r
+                    }
                     LambdaBody::Block(b) => {
                         let names = assigned(&b.stmts);
                         self.closure_assigned.extend(names);
@@ -1847,6 +1857,15 @@ impl<'a> Ck<'a> {
                     }
                     return Ty::Bool;
                 }
+                if name == "_cg_try" && args.len() == 1 {
+                    return self.try_operator(&args[0]);
+                }
+                if name == "_cg_cough_Err" && args.len() == 1 {
+                    return self.cough_as_err(&args[0]);
+                }
+                if name == "_cg_attempt" && args.len() == 1 {
+                    return self.attempt(&args[0]);
+                }
                 if name == "_cg_coughed" && args.len() == 1 {
                     // `cough R { ... }`, lowered: still an `R` to `coughs`.
                     return self.infer(&args[0]);
@@ -1917,6 +1936,123 @@ impl<'a> Ck<'a> {
             self.infer(a);
         }
         Ty::Any
+    }
+
+    /// `e?` (lowered `_cg_try(e)`): `e` is a `Result<T, E>`, the function
+    /// around it returns a `Result<U, F>` with `E` fitting `F`, and the value
+    /// is the `T` (E1219 otherwise).
+    fn try_operator(&mut self, operand: &Expr) -> Ty {
+        let t = self.infer(operand);
+        let span = operand.span;
+        let (fname, ret, in_pack) = match self.ctx.last() {
+            Some(c) => (c.name.clone(), c.ret.clone(), c.name == "pack"),
+            None => (String::new(), None, false),
+        };
+        let note = "`?` hands an `Err` back as the function's own result";
+        if self.ctx.is_empty() {
+            self.err(
+                "E1219",
+                "`?` outside a function: there is nothing to return the error from".into(),
+                span,
+                Some(format!(
+                    "{note}; put it in a `pull` that returns `Result<T, E>`, or `match` the value"
+                )),
+            );
+        } else if in_pack {
+            self.err(
+                "E1219",
+                "`?` inside a `pack`: a `pack` has no `Result` to return the error as".into(),
+                span,
+                Some(format!(
+                    "{note}; `match` the value here, or do the `?` in the `pull` around the `pack`"
+                )),
+            );
+        } else if let Some(Ty::Enum(rn, ra)) = ret
+            .clone()
+            .filter(|r| matches!(r, Ty::Enum(n, _) if n == "Result"))
+        {
+            if let Ty::Enum(_, oa) = &t {
+                if let (Some(oe), Some(fe)) = (oa.get(1), ra.get(1)) {
+                    if !assignable(oe, fe) {
+                        self.err(
+                            "E1219",
+                            format!("`?` would hand back a `{oe}` as the error, and `{fname}` returns `{rn}<_, {fe}>`"),
+                            span,
+                            Some(format!("expected `{fe}` here, because of the result type of `{fname}`; change the error with `match`, or the result type of `{fname}`")),
+                        );
+                    }
+                }
+            }
+        } else {
+            self.err(
+                "E1219",
+                format!("`?` in `{fname}`, which is not declared to return a `Result`"),
+                span,
+                Some(format!("{note}; declare `{fname}` as `-> Result<T, E>`")),
+            );
+        }
+        match t {
+            Ty::Enum(n, a) if n == "Result" => a.first().cloned().unwrap_or(Ty::Any),
+            Ty::Any | Ty::Never => Ty::Any,
+            other => {
+                self.err(
+                    "E1219",
+                    format!("`?` needs a `Result`, and this is `{other}`"),
+                    span,
+                    Some("only a `Result<T, E>` has an error to hand back".into()),
+                );
+                Ty::Any
+            }
+        }
+    }
+
+    /// `cough e` in a function that returns a `Result` (lowered
+    /// `snuff _cg_cough_Err(e)`): `e` must be the error type.
+    fn cough_as_err(&mut self, value: &Expr) -> Ty {
+        let t = self.infer(value);
+        if let Some((Ty::Enum(_, ra), fname)) = self
+            .ctx
+            .last()
+            .and_then(|c| c.ret.clone().map(|r| (r, c.name.clone())))
+        {
+            if let Some(fe) = ra.get(1) {
+                let hint = format!(
+                    "expected `{fe}` here, because `{fname}` returns a `Result` and a cough is its `Err`"
+                );
+                if self.expect(value, &t, fe, "E1201", hint) && needs_check(&t, fe) {
+                    self.check_here(value, fe, &format!("{fname} coughs"));
+                }
+            }
+        }
+        Ty::Never
+    }
+
+    /// `attempt(call)` (lowered `_cg_attempt(pack() => call)`): a
+    /// `Result<T, E>`: the call's `T`, and the one type its `coughs` list
+    /// holds (`Any` when it holds none or several).
+    fn attempt(&mut self, lambda: &Expr) -> Ty {
+        let t = self.infer(lambda);
+        let ok = match t {
+            Ty::Fn(_, r) => *r,
+            _ => Ty::Any,
+        };
+        let mut err = Ty::Any;
+        if let ExprKind::Lambda {
+            body: LambdaBody::Expr(x),
+            ..
+        } = &lambda.kind
+        {
+            if let ExprKind::Call { callee, .. } = &x.kind {
+                if let ExprKind::Ident(n) = &callee.kind {
+                    if let Some(s) = self.fns.get(n) {
+                        if s.coughs.len() == 1 {
+                            err = s.coughs[0].clone();
+                        }
+                    }
+                }
+            }
+        }
+        Ty::Enum("Result".into(), vec![ok, err])
     }
 
     /// A channel's `send`, `receive`, `close` and `closed`. A send is made

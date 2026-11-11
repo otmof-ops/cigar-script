@@ -165,6 +165,7 @@ page; until then the message carries the whole explanation.
 | `E1216` | a call with the wrong number of arguments |
 | `E1217` | a `snuff` whose value is not the function's declared result |
 | `E1218` | a `cough` of a record the function's `coughs` list does not hold |
+| `E1219` | a `?` that cannot send its error anywhere: outside a function, inside a `pack`, in a function whose result is not a `Result`, on a value that is not a `Result`, or with an error that does not fit the function's. Also coughed at run time when an untyped value reaches `?` and is not a `Result` |
 | `E1210` | **at run time**: a value entering a typed place does not fit it (`E1210 double: n should be Int and is Text "x"`) |
 
 **Modules and interfaces** (medium)
@@ -199,7 +200,7 @@ page; until then the message carries the whole explanation.
 | `E1510` | a number outside its sized type: at check time for a number written out (`stick a: u8 = 300`), **at run time** for one that is computed (`E1510 c is 300, outside u8 (0 to 255)`) |
 | `E1520` | **at run time**: a send on a closed channel |
 
-The run-time codes (`E1205`, `E1206`, `E1208`, `E1210`, `E1402`, `E1510` and
+The run-time codes (`E1205`, `E1206`, `E1208`, `E1210`, `E1219`, `E1402`, `E1510` and
 `E1520`) are coughs whose message starts with the code. `try` and `ashtray`
 catch them, and the caught value has `code` and `message`.
 
@@ -438,7 +439,9 @@ there: it does not lower or type-check a file that failed this one.
 
 ## Types, values and checks
 
-*(Provisional: #2.)*
+This section is final (#2). It is the one place the rules of the medium
+type system are written; each rule has programs in `tests/corpus` and
+`tests/strict`, listed in `tests/corpus/README.md`.
 
 - **Assignability.** `Any` fits and is fitted by every type. `Null` fits `T?`,
   and `T` fits `T?`. `Int` fits `Float`. `Path` and `Text` fit each other.
@@ -469,10 +472,86 @@ there: it does not lower or type-check a file that failed this one.
   must `snuff` (or `cough`, or end in a loop that never ends) on every path.
   A path that falls off the end is `E1217` at the closing `}`, with a note on
   the branch that lacks one.
+- **Errors are `cough`, or values.** A function says what it may cough in
+  its signature (`coughs ParseError`, E1218), and a function can instead
+  return a **`Result<T, E>`**, which holds either `Ok(value)` or
+  `Err(error)`. The two are one failure seen two ways, and CigarScript
+  moves between them at fixed places, written under *`Result` and `?`*
+  below. `cough` stays the everyday form; the `Result` is what code at full
+  strength handles as a value.
 - **Inference.** `stick x = e` takes `e`'s type, and so does `roll x = e` (a
   `roll` first set to `null` is `Any`). An unannotated parameter is `Any`,
   and an unannotated result is `Any` to callers: **signatures are the
   boundary.**
+- **`Result` and `?`.** `Result<T, E>` is built in: an enum with the
+  variants `Ok(value: T)` and `Err(error: E)`, written bare (`Ok(7)`,
+  `Err("no")`) or as `Result.Ok(7)`, and taken apart with `match`, which
+  must cover both (`E1211`). It is invariant like any generic type, and an
+  `Ok(7)` whose `E` is not yet known is a `Result<Int, Any>`, which fits
+  any `Result<Int, E>`. A file that declares an enum of its own named
+  `Result` keeps it, and the built-in is not there for that file; when
+  another enum of the file has a variant named `Ok` or `Err`, a bare
+  pattern means that enum's, and `Result.Ok(x)` the built-in's.
+
+  - **`e?`** is for an `e` that is a `Result<T, E>`, written in a `pull`
+    declared `-> Result<U, F>` where `E` fits `F`. If `e` is `Ok(v)` the
+    value of `e?` is `v`. If it is `Err(x)` the function stops there and
+    its result is that `Err(x)`: `?` is a return, not a cough, so a `try`
+    in the same function never sees it, and a `finally` still runs. `?`
+    goes after any operand and binds tighter than an operator
+    (`a()? + b()?`); `f()?.x` is `f()` with `?.`, so write `(f()?).x`.
+  - **`E1219`** is every other `?`: at the top of a file, inside a `pack`,
+    in a `pull` whose result is not a `Result`, on a value that is not a
+    `Result` (`Int`, `T?`), or on a `Result` whose error does not fit the
+    function's. An `Any` value is checked when the program runs, and
+    coughs `E1219` there if it is not a `Result`.
+  - **`cough` in a function that returns a `Result`** is its `Err`: `cough
+    e` there means `snuff Err(e)`, and `e` must fit `E` (`E1201`, saying
+    so). A `cough` inside a `try` of the same function stays a cough for
+    that `try` to catch. Coughs from other functions pass through as
+    coughs, as ever; `?` is how an `Err` goes up, `cough` is how a failure
+    starts.
+  - **`attempt(call)`** is the other way: it runs `call` and gives
+    `Ok(what it returned)`, or `Err(what it coughed)`. Its type is
+    `Result<T, E>` with `T` the call's, and `E` the one type in the callee's
+    `coughs` list, or `Any` when it lists none or several (a cough of plain
+    text arrives as cig's cough, with `message` and `value`). `attempt` is
+    how a typed `coughs` signature becomes a value: `stick r: Result<Int,
+    ParseError> = attempt(parse(t))`. A function of your own named
+    `attempt` is yours.
+
+  ```cigar
+  strength medium
+
+  record ParseError { message: Text }
+
+  pull parse(t: Text) -> Int coughs ParseError {
+    if t == "" {
+      cough ParseError { message: "empty" }
+    }
+    snuff t.to_int()
+  }
+
+  pull checked(t: Text) -> Result<Int, ParseError> {
+    snuff attempt(parse(t))
+  }
+
+  pull doubled(t: Text) -> Result<Int, ParseError> {
+    stick n = checked(t)?
+    snuff Ok(n * 2)
+  }
+
+  match doubled("21") {
+    Ok(v) => exhale "ok", v
+    Err(e) => exhale "error", e.message
+  }
+  ```
+
+  At run time a `Result` is an enum value (`Result.Ok(value: 42)`), and
+  `?` is lowered to a call that throws the `Err` in a marker that the
+  function around it catches and returns, written into the function where
+  it stands, so no line moves. A cough that passes through such a function
+  is reported at its closing `}`.
 - **Checked boundaries.** A value entering a typed place (an annotated
   `stick`, a typed parameter, a typed result at each `snuff`) is checked when
   the program runs, and a value that does not fit coughs `E1210`. The
@@ -650,7 +729,7 @@ in the feature table detects it. A `.cig` file reserves none of them.
 | question | answer | status | where |
 |---|---|---|---|
 | #1 how far the superset goes | `.cig` files never get new errors, only hints; `.cigar` files at medium and above get them as errors | decided | [Files and strengths](#files-and-strengths); `tests/superset.rs` |
-| #2 the type system at medium | local inference inside functions, types written at module boundaries; `T?` with `?.` and `??`; `cough` stays, typed in signatures (`coughs`) | provisional | [Types, values and checks](#types-values-and-checks) |
+| #2 the type system at medium | local inference inside functions, types written at module boundaries; `T?` with `?.` and `??`; `cough` stays, typed in signatures (`coughs`), and `Result<T, E>` with `?` carries the same failures as values, `cough` becoming `Err` in a function that returns one | decided | [Types, values and checks](#types-values-and-checks) |
 | #3 memory | reference counting with reuse, a cycle collector for mutable containers, ownership at full, borrows scoped to a block, copy or wrap at the boundary | decided | [Memory](#memory); [ADR 0002](decisions/0002-memory.md) |
 | #4 which feature at which strength | the feature table above | decided | [The feature table](#the-feature-table) |
 | #5 calling Rust and C | `foreign` blocks and `#[cigar::export]`, effectful unless declared `pure`, burn-only, irreversible unless journaled with a snapshot and an undo | decided (rules; not yet built) | [Calling Rust and C](#calling-rust-and-c) |

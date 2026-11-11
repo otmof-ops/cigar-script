@@ -1,0 +1,4 @@
+half is 4
+no: odd: 7
+Result.Ok(value: 2)
+Result.Err(error: "odd: 5")
