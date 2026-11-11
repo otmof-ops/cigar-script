@@ -3,6 +3,8 @@
 ```
 cigar check <path>... [--strength mild|medium|full] [--deny any|warnings]
 cigar run <file> [--dry-run] [--no-rollback] [--max-steps <n>] [--strength mild|medium|full] [-- <args>...]
+cigar explain --layers <file>:<line>:<col>
+cigar-lsp
 cigar --version
 cigar help [command]
 ```
@@ -240,6 +242,50 @@ ciginstaller crash send <id>     # files it in otmof-ops/cigar-script
 `reports = never` (`ciginstaller config set reports never`, `CIG_REPORTS=never`, or a setting
 your organization locks) means nothing is saved at all: `cigar` says so in one line and stops as
 it would have.
+
+## `cigar-lsp`
+
+`cigar-lsp` is the language server: the Language Server Protocol over
+stdin and stdout, for any editor that can start one. It takes no arguments
+and no flags; it is a second program next to `cigar`, built from the same
+crates, so what it says is what `cigar check` and `cigar explain --layers`
+say. Nothing but protocol messages is written to stdout.
+
+An editor starts it for `.cig` and `.cigar` files. The setting is the
+command `cigar-lsp` (found on `PATH`, or its full path), the transport stdio,
+and the language ids `cigar` and `cig`. In Neovim, for example:
+
+```lua
+vim.lsp.start({ name = "cigar-lsp", cmd = { "cigar-lsp" },
+                root_dir = vim.fs.dirname(vim.api.nvim_buf_get_name(0)) })
+```
+
+What it does, on a file the editor has open (full-document sync):
+
+- **Diagnostics** on every change: the same findings `cigar check` gives,
+  with their codes. Errors are errors, warnings (`W12xx`) are warnings, and
+  what a `.cig` file would find at strength medium is a hint. A burst of
+  edits is checked once, for the last one.
+- **Hover.** On a name, its type where the checker knows it (an annotated
+  `stick` or `roll`, a parameter, a field, a function's signature). On an
+  error or warning, its code and what kind of no it is, in the words of
+  `cig explain`; a code cigar adds has no page there yet, so it gets its
+  range's kind and meaning. On an `into`, `measure` or `within`, the layers,
+  read the way `cigar explain --layers` reads them.
+- **Go to definition** and **find references** for `pull` functions, `stick`
+  and `roll` names, parameters, records, enums, record fields, and the
+  functions of the modules a file `use`s (the module's file is opened).
+- **Completion**: the keywords the file's strength allows, the names in
+  scope, a record's fields after `.` where the type is known, and a module's
+  `pub` names after `plan.`.
+
+A file is checked as it is on disk plus what is open, but the checker reads
+a module from disk: an unsaved edit to a module shows in definitions and
+completion, and in diagnostics once it is saved. An inferred type (a `stick`
+with no annotation) is not shown on hover yet.
+
+The server exits `0` after `shutdown` and `exit`, and `1` if it is told to
+`exit` without one.
 
 ## Exit codes
 

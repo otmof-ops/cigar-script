@@ -17,6 +17,10 @@ path = "src/lib.rs"
 name = "cigar"
 path = "src/main.rs"
 
+[[bin]]
+name = "cigar-lsp"
+path = "src/bin/cigar-lsp.rs"
+
 [dependencies]
 cigscript = { git = "https://github.com/otmof-ops/cig-script", tag = "v1.20.0" }
 clap = { version = "4", features = ["derive"] }

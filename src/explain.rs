@@ -201,6 +201,13 @@ impl std::ops::Deref for Entry {
     }
 }
 
+/// The layer or `within` at a byte offset in the file as written: what an
+/// editor shows on hover (#16). It reads the same choices `--layers` does.
+pub fn explain_at(source: &str, map: &crate::check::SourceMap, off: usize) -> Option<Explained> {
+    let all = collect(source, map.layers.as_slice(), map.withins());
+    at(&all, off).map(|e| e.explained.clone())
+}
+
 fn collect(source: &str, layers: &[LayerNote], withins: &[WithinNote]) -> Vec<Entry> {
     let mut out: Vec<Entry> = Vec::new();
     for l in layers {

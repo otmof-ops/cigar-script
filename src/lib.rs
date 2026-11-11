@@ -17,6 +17,7 @@ pub mod explain;
 pub mod features;
 pub mod gate;
 pub mod lower;
+pub mod lsp;
 pub mod own;
 pub mod prepare;
 pub mod resolve;
