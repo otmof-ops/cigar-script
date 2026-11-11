@@ -1,0 +1,5 @@
+strength full
+
+stick raw = json.parse('{"a": 1, "b": 256}')
+stick m: Map<u8> = raw
+exhale m

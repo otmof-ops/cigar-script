@@ -267,6 +267,11 @@ fn constant_division_by_zero_is_found_at_check_time() {
     run("l6-");
 }
 
+#[test]
+fn literals_out_of_range_in_containers_are_found_at_check_time() {
+    run("l7-");
+}
+
 fn deny(
     src: &str,
     kind: Kind,

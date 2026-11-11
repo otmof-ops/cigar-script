@@ -1,0 +1,6 @@
+strength full
+
+record User { name: Text, age: u8 }
+
+stick m = json.parse<Map<List<User>>>('{"users": [{"name": "x", "age": "old"}]}')
+exhale m

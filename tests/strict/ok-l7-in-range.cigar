@@ -1,0 +1,7 @@
+strength full
+stick xs: List<u8> = [0, 1, 255]
+stick m: Map<i8> = {"lo": -128, "hi": 127}
+stick g: List<List<u16>> = [[0, 65535], []]
+exhale xs
+exhale m
+exhale g

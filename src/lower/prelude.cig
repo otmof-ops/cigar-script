@@ -108,8 +108,66 @@ pull _cg_why(v, d, w) {
     stick m = "E1510 " + w + " is " + str(v) + ", outside " + d.name + " (" + str(d.lo) + " to " + str(d.hi) + ")"
     snuff {code: "E1510", message: m}
   }
-  stick m = "E1210 " + w + " should be " + _cg_tname(d) + " and is " + _cg_what(v)
+  roll m = "E1210 " + w + " should be " + _cg_tname(d) + " and is " + _cg_what(v)
+  if d.k != "any" {
+    # Only now, when the value is already known not to fit, is it walked to
+    # find where: the happy path never pays for the path.
+    stick root = _cg_root(w)
+    stick at = _cg_trace(v, d, root, root)
+    if at != null { m = m + ": " + at }
+  }
   snuff {code: "E1210", message: m}
+}
+
+# What a value is called in a path: the name it was given, or `value` when
+# the place has no name of its own ("the result", "Shape.rect h").
+pull _cg_root(w) {
+  if w.contains(" ") { snuff "value" }
+  snuff w
+}
+
+# The first part of `v` that does not fit `d`, said by its path (`xs[2]`,
+# `m.users[0].age`) and what is there; null when the failure is `v` itself
+# (the message already says it) or nothing is found. A record read from JSON
+# has not been given its tags yet, so its fields are walked by name.
+pull _cg_trace(v, d, p, root) {
+  if _cg_fits(v, d) { snuff null }
+  stick k = d.k
+  stick t = type_of(v)
+  if k == "opt" { snuff _cg_trace(v, d.of, p, root) }
+  if k == "list" and t == "list" {
+    roll i = 0
+    for x in v {
+      stick r = _cg_trace(x, d.of, p + "[" + str(i) + "]", root)
+      if r != null { snuff r }
+      i += 1
+    }
+    snuff null
+  }
+  if k == "map" and t == "map" and not _cg_is_record(v, null) and not _cg_is_enum(v, null) {
+    for key in v {
+      stick r = _cg_trace(v[key], d.of, p + "." + key, root)
+      if r != null { snuff r }
+    }
+    snuff null
+  }
+  if k == "record" and t == "map" and not v.has("__record") and not v.has("__enum") {
+    stick ds = _cg_rdescs()[d.name]
+    for f in ds {
+      if not v.has(f) { snuff p + " is missing the field " + f }
+      stick r = _cg_trace(v[f], ds[f], p + "." + f, root)
+      if r != null { snuff r }
+    }
+    for f in v {
+      if not ds.has(f) { snuff p + " has no field " + f }
+    }
+    snuff null
+  }
+  if p == root { snuff null }
+  if k == "sized" and t == "int" {
+    snuff p + " is " + str(v) + ", outside " + d.name + " (" + str(d.lo) + " to " + str(d.hi) + ")"
+  }
+  snuff p + " is " + _cg_what(v) + ", not " + _cg_tname(d)
 }
 
 # A value entering a typed place inside an expression.
@@ -126,7 +184,18 @@ pull _cg_sized(v, lo, hi, name) {
 
 # json.parse<T>(text), json.load<T>(path): the value read, made a T.
 pull _cg_as(d, v) {
-  snuff _cg_check(_cg_tagged(v, d), d, "the value read")
+  try {
+    snuff _cg_check(_cg_tagged(v, d), d, "the value read")
+  } ashtray c {
+    # A record inside a list or map coughed without saying where it sits:
+    # said by its path instead.
+    roll top = d
+    if d.k == "opt" { top = d.of }
+    if top.k != "list" and top.k != "map" { cough c }
+    stick at = _cg_trace(v, d, "value", "value")
+    if at == null { cough c }
+    cough {code: "E1210", message: "E1210 the value read should be " + _cg_tname(d) + " and is " + _cg_what(v) + ": " + at}
+  }
 }
 
 # csv.read<T>(path): every row made a T.

@@ -1,0 +1,8 @@
+strength medium
+
+record Pixel { shades: List<Int> }
+
+pull mk(v) {
+  snuff Pixel { shades: v }
+}
+exhale mk(json.parse('[0, 1, "x"]'))

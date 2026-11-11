@@ -1,0 +1,2 @@
+E1210
+value.users[0].age is Text "old", not u8

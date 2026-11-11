@@ -3748,6 +3748,24 @@ impl<'a> L<'a> {
             "pull _cg_records() {{ snuff {{{}}} }}\n",
             records.join(", ")
         ));
+        // Each record's field types, for the path a boundary failure names.
+        let rdescs: Vec<String> = self
+            .prog
+            .records
+            .iter()
+            .map(|(n, r)| {
+                let fields: Vec<String> = r
+                    .fields
+                    .iter()
+                    .map(|(f, t)| format!("{f}: {}", ty::descriptor(t)))
+                    .collect();
+                format!("{n}: {{{}}}", fields.join(", "))
+            })
+            .collect();
+        text.push_str(&format!(
+            "pull _cg_rdescs() {{ snuff {{{}}} }}\n",
+            rdescs.join(", ")
+        ));
         for (fname, m) in self.opts.modules.borrow().iter() {
             let exports: Vec<String> = m
                 .exports

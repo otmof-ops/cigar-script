@@ -8,6 +8,17 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **A number out of range inside a list or map is found when the file is
+  checked, and a boundary failure names where (#22 L7 and L8).**
+  `stick xs: List<u8> = [1, 2, 300]` is `E1510` at the `300` at check time,
+  at any depth and in an argument, a `snuff` or a record field, and a
+  number the checker can fold (`[b + 10]`) counts. When the values only
+  arrive at run time, `E1210` for a list or map now says which one:
+  `E1210 xs should be List<u8> and is List: xs[2] is 300, outside u8 (0 to 255)`,
+  `value.users[0].age is Text "old", not u8` for `json.parse<T>`. The path is
+  worked out only after the value is known not to fit, so the happy path is
+  unchanged. Tests: `literals_out_of_range_in_containers_are_found_at_check_time`
+  and the `e1210-*-path` cases in `tests/corpus/runtime`.
 - **The strictness gaps are found when the file is checked (#22 L1 to L6).**
   At medium and full, `cigar check` now warns of a parameter of a top-level
   `pull` that has no type the body settles (`W1230`, an error at full and

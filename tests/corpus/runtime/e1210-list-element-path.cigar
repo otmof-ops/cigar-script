@@ -1,0 +1,5 @@
+strength full
+
+stick raw = json.parse('[1, 2, 300]')
+stick xs: List<u8> = raw
+exhale xs

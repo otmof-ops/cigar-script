@@ -1,0 +1,7 @@
+strength full
+
+pull total(xs: List<u8>) -> Int { snuff xs.len() }
+
+stick raw = json.parse('{"k": [1, 256]}')
+stick m: Map<List<u8>> = raw
+exhale total(m["k"])

@@ -1,0 +1,4 @@
+strength full
+record Pixel { shades: List<u8> }
+stick p = Pixel{shades: [0, 255, 256]}
+exhale p

@@ -1,0 +1,5 @@
+strength full
+stick xs: List<u16> = [1, 2, 300]
+stick ys: List<Int> = [1, 2, 300]
+exhale xs
+exhale ys

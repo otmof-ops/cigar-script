@@ -1,0 +1,3 @@
+strength full
+pull total(xs: List<u8>) -> Int { snuff xs.len() }
+exhale total([1, 300])
