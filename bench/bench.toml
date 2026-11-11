@@ -1,54 +1,591 @@
-# The benchmark manifest for cigar-script, in the shape cig-script's
-# docs/BENCH.md defines. This slice measures the checker's work only:
-# `cigar check` on the CigScript example corpus as mild, the same set
-# through `cig check` for comparison, and a generated 1,000-line mild
-# file at each strength. The generated fixtures are produced by
-# `fixtures/make-big.sh` as a case `setup`, so this repo carries nothing
-# large.
+# SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
+# SPDX-License-Identifier: FSL-1.1-ALv2
+
+# The benchmark manifest for cigar-script (#17), in the shape cig-script's
+# docs/BENCH.md defines. Run it from the repository root:
+#
+#     cig bench bench/bench.toml                    every case (the nightly)
+#     cig bench bench/bench.toml --group check-1k   one group
+#     cig bench bench/bench.toml --timings          where `cigar check` spends it
+#
+# What is measured, by group:
+#
+#   check-100, check-1k, check-10k, check-100k
+#                  `cigar check` of the same program at mild, medium and full
+#                  (#7), at 100, 1,000, 10,000 and 100,000 lines
+#   inference      generics-heavy code at medium and full (#10)
+#   exhaustiveness `match` over five-variant enums, every one covered (#9)
+#   superset       cig's shared compute set, as it is, run as `cig run` and as
+#                  mild `cigar run` (#1). Reported, never gated: the +2% the
+#                  issue asks for is read from the two columns (DECISIONS 1)
+#   check-corpus   the CigScript examples through `cigar check` and `cig check`
+#   memory-*       today's runtime on the three programs of docs/decisions/0002
+#
+# The generated programs come from `fixtures/generate.py` (no clock, no random
+# numbers; `fixtures/SHA256SUMS` holds every file's sha256) into `generated/`,
+# which is not committed. The superset group copies cig's `bench/compute` from
+# $CIGSCRIPT_SRC (below) with `fixtures/superset.sh`.
+#
+# Waiting: these groups of the issue cannot be measured yet. Each is added in
+# the change that makes it possible, not before.
+#
+#   types for speed   waits on cig-compile#34 (stage D) and on typed programs
+#                     the compiler can build; the programs and the checker are
+#                     here, the compiled side is not
+#   memory, automatic against ownership at full
+#                     waits on cigar-script#12 (ownership at full is checked,
+#                     not run differently yet); `trees`, `nbody` and the 100 MB
+#                     buffer program need a second runtime to be a comparison.
+#                     The runtime-today half is below
+#   interop           waits on cigar-script#5 (calling Rust and C)
+#   tooling           waits on cigar-script#16 (the language server: start,
+#                     completion, a diagnostic after an edit; budgets 300 ms
+#                     and 50 ms)
+#   context reads     waits on cigar-script#14 (`stats.total` across files)
+#   `--stats`, allocations
+#                     reads CIG_STATS_FD; cigar writes timings only (#17),
+#                     counters come when the runtime behind `cigar run` reports
+#                     them
+
+format = 1
 
 [bench]
 product = "cigar"
 version = ["cigar", "--version"]
 home    = "isolated"
+build   = ["cargo", "build", "--release", "--locked", "--bin", "cigar"]
+binary  = "target/release/cigar"
+watch   = ["src/**", "Cargo.toml", "bench/**"]
 
 [defaults]
 samples = 9
 per     = 5
 warmup  = 1
-env     = { NO_COLOR = "1", CIG_DOCTOR = "0" }
+# The harness starts every case from an empty environment, so the CigScript
+# checkout is named here. It is relative to this folder: the sibling checkout
+# `../../CigScript`, which is where the repository's CI puts it.
+env     = { NO_COLOR = "1", CIG_DOCTOR = "0", CIGSCRIPT_SRC = "../../CigScript" }
+
+# ----- the checker, by size and strength ----------------------------------------
+
+[[case]]
+name  = "cigar check: 100 lines at mild"
+group = "check-100"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/size-100-mild.cigar"]
+per   = 5
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 100 lines at medium"
+group = "check-100"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/size-100-medium.cigar"]
+per   = 5
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 100 lines at full"
+group = "check-100"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/size-100-full.cigar"]
+per   = 5
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 1,000 lines at mild"
+group = "check-1k"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/size-1000-mild.cigar"]
+per   = 5
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 1,000 lines at medium"
+group = "check-1k"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/size-1000-medium.cigar"]
+per   = 5
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 1,000 lines at full"
+group = "check-1k"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/size-1000-full.cigar"]
+per   = 5
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 10,000 lines at mild"
+group = "check-10k"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/size-10000-mild.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 10,000 lines at medium"
+group = "check-10k"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/size-10000-medium.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 10,000 lines at full"
+group = "check-10k"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/size-10000-full.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 100,000 lines at mild"
+group = "check-100k"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/size-100000-mild.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 100,000 lines at medium"
+group = "check-100k"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/size-100000-medium.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 100,000 lines at full"
+group = "check-100k"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/size-100000-full.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+# ----- inference and exhaustiveness (#10, #9) ------------------------------------
+
+[[case]]
+name  = "cigar check: 1,000 lines of generics-heavy at medium"
+group = "inference"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/generics-1000-medium.cigar"]
+per   = 5
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 1,000 lines of generics-heavy at full"
+group = "inference"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/generics-1000-full.cigar"]
+per   = 5
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 10,000 lines of generics-heavy at medium"
+group = "inference"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/generics-10000-medium.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 10,000 lines of generics-heavy at full"
+group = "inference"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/generics-10000-full.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 1,000 lines of exhaustive `match` at medium"
+group = "exhaustiveness"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/match-1000-medium.cigar"]
+per   = 5
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 1,000 lines of exhaustive `match` at full"
+group = "exhaustiveness"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/match-1000-full.cigar"]
+per   = 5
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 10,000 lines of exhaustive `match` at medium"
+group = "exhaustiveness"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/match-10000-medium.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar check: 10,000 lines of exhaustive `match` at full"
+group = "exhaustiveness"
+setup = ["python3", "fixtures/generate.py", "generated"]
+run   = ["cigar", "check", "generated/match-10000-full.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+# ----- the superset: cig's compute set, as it is (#1) ---------------------------
+# Each program twice, from the same bytes: `cig run x.cig` and `cigar run
+# x.cigar` (mild), through `fixtures/same.sh`, which holds the output of both to
+# cig's own .expect file: a program that prints something else exits 1, and the
+# case is WRONG, so "the same output" is enforced here too. `cigar run`
+# builds its program in an isolated home each sample, which `cig run` does not:
+# the gap is what the superset costs on a cold home, not the interpreter's speed.
+
+[[case]]
+name  = "cig run: closures"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/closures.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: closures"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/closures.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: csv"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/csv.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: csv"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/csv.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: deltablue"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/deltablue.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: deltablue"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/deltablue.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: dispatch"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/dispatch.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: dispatch"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/dispatch.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: fannkuch"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/fannkuch.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: fannkuch"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/fannkuch.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: fib"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/fib.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: fib"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/fib.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: json-deep"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/json-deep.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: json-deep"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/json-deep.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: json"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/json.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: json"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/json.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: lists"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/lists.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: lists"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/lists.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: loop"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/loop.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: loop"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/loop.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: mandel"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/mandel.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: mandel"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/mandel.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: maps"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/maps.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: maps"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/maps.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: nbody"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/nbody.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: nbody"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/nbody.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: regex-ish"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/regex-ish.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: regex-ish"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/regex-ish.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: richards"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/richards.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: richards"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/richards.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: sieve"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/sieve.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: sieve"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/sieve.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: spectral"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/spectral.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: spectral"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/spectral.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: strbuild"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/strbuild.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: strbuild"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/strbuild.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: strings"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/strings.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: strings"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/strings.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: trees"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/trees.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: trees"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/trees.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cig run: words"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cig", "generated/superset/words.cig"]
+per   = 1
+expect = { exit = 0 }
+
+[[case]]
+name  = "cigar run: words"
+group = "superset"
+setup = ["sh", "fixtures/superset.sh", "generated/superset"]
+run   = ["sh", "fixtures/same.sh", "cigar", "generated/superset/words.cigar"]
+per   = 1
+expect = { exit = 0 }
+
+# ----- the CigScript examples ---------------------------------------------------
 
 [[case]]
 name  = "cigar check: CigScript examples, as mild"
-group = "check"
-setup = ["sh", "-c", "fixtures/make-big.sh"]
-run   = ["sh", "-c", "cigar check ${CIGSCRIPT_SRC:-.}/examples"]
+group = "check-corpus"
+run   = ["sh", "-c", "cigar check ${CIGSCRIPT_SRC}/examples"]
 expect = { exit = 0 }
 
 [[case]]
 name  = "cig check: CigScript examples, for comparison"
-group = "check"
-run   = ["sh", "-c", "for f in ${CIGSCRIPT_SRC:-.}/examples/*.cig; do cig check $f > /dev/null; done"]
-expect = { exit = 0 }
-
-[[case]]
-name  = "cigar check: a generated 1,000-line mild file"
-group = "check-1k"
-setup = ["sh", "-c", "fixtures/make-big.sh"]
-run   = ["cigar", "check", "fixtures/big-mild.cigar"]
-expect = { exit = 0 }
-
-[[case]]
-name  = "cigar check: the same file at medium"
-group = "check-1k"
-setup = ["sh", "-c", "fixtures/make-big.sh"]
-run   = ["cigar", "check", "fixtures/big-medium.cigar"]
-expect = { exit = 0 }
-
-[[case]]
-name  = "cigar check: the same file at full"
-group = "check-1k"
-setup = ["sh", "-c", "fixtures/make-big.sh"]
-run   = ["cigar", "check", "fixtures/big-full.cigar"]
+group = "check-corpus"
+run   = ["sh", "-c", "for f in ${CIGSCRIPT_SRC}/examples/*.cig; do cig check $f > /dev/null; done"]
 expect = { exit = 0 }
 
 # The memory group (docs/decisions/0002-memory.md, #3): today's runtime on the

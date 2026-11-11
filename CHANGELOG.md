@@ -8,6 +8,22 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **The benchmark suite on `cig bench` (#17).** `bench/bench.toml` measures `cigar
+  check` at mild, medium and full on generated programs of 100, 1,000, 10,000 and
+  100,000 lines, generics-heavy code and exhaustive `match`, and runs cig's shared
+  compute set (21 programs) as `cig run` and as mild `cigar run`, each held to cig's
+  expected output (`bench/fixtures/same.sh`). The programs come from
+  `bench/fixtures/generate.py`, which is reproducible: `bench/fixtures/SHA256SUMS`
+  holds every file's sha256. `cigar` writes its phases (`lex`, `gate`, `lower`,
+  `typeck`, `own`, `cig`, `run`) as v1 timing lines to the descriptor
+  `CIG_TIMINGS_FD` names, and to nothing when it is unset (`src/phases.rs`; the
+  variable is not passed on to the program `cigar run` starts). Timings are reported,
+  never gated. `.github/workflows/bench-nightly.yml` runs the suite every night on
+  cig-script's reusable workflow and keeps the history on `bench-history`. The
+  README's "Measuring CigarScript" lists what waits on other issues. `tests/bench.rs`
+  has `superset_programs_same_output`, `generated_fixtures_are_reproducible` and
+  `strength_phases_reported`. `bench/fixtures/make-big.sh` is replaced by the generator.
+
 - **`cigar fmt`, the tree-sitter grammar and the VS Code extension (#16, part 2).**
   `cigar fmt <path>...` rewrites `.cigar` and `.cig` files in one style with no
   options (two-space indent, spacing and blank lines normalized, every comment

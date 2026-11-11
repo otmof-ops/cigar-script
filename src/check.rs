@@ -236,7 +236,10 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
     };
     // Reading the declaration can itself fail at lex time; a lex error
     // is reported as the only finding.
-    let decl = match strength::read(source) {
+    let open = crate::phases::begin();
+    let read = strength::read(source);
+    open.end("lex");
+    let decl = match read {
         Ok(d) => d,
         Err(d) => {
             return done(
@@ -259,7 +262,10 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
     // checked at its own strength, and what the file passes it is checked
     // when it runs. `use` is the one medium word a mild file may write.
     let mut mild_uses_modules = false;
-    match gate::scan_all(&decl.blanked, effective) {
+    let open = crate::phases::begin();
+    let scanned = gate::scan_all(&decl.blanked, effective);
+    open.end("gate");
+    match scanned {
         Ok(found) => {
             for d in found.errors {
                 if effective == Strength::Mild && is_modules_finding(&d) {
@@ -284,7 +290,7 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
     }
     if effective == Strength::Mild && !mild_uses_modules {
         // Mild is CigScript: the blanked source goes to cig as it is.
-        let (errors, mut warnings) = parse_and_check(&decl.blanked);
+        let (errors, mut warnings) = crate::phases::phase("cig", || parse_and_check(&decl.blanked));
         warnings.extend(gate_warnings);
         warnings.sort_by_key(|d: &Diagnostic| (d.line.unwrap_or(0), d.col.unwrap_or(0)));
         return done(
@@ -307,7 +313,7 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
         name: env.name.clone(),
         compile: &compile_module,
     };
-    let lowered = lower::lower(&decl.blanked, &opts);
+    let lowered = crate::phases::phase("lower", || lower::lower(&decl.blanked, &opts));
     if !lowered.diags.is_empty() {
         let errors = placed(lowered.diags, source);
         return done(
@@ -322,7 +328,10 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
     let program = lowered.program.clone();
 
     // 2. cig reads the lowered text.
-    let ast = match cigscript::syntax::parse(&lowered.text) {
+    let open = crate::phases::begin();
+    let parsed = cigscript::syntax::parse(&lowered.text);
+    open.end("cig");
+    let ast = match parsed {
         Ok(a) => a,
         Err(d) => {
             let late = d.span.is_some_and(|s| s.start >= lowered.appended_at());
@@ -341,41 +350,51 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
 
     // 3. Types and ownership.
     let original = |p: usize| lowered.original(p);
-    let out = typeck::check_all_in(&ast, &lowered.program, &original, source);
+    let out = crate::phases::phase("typeck", || {
+        typeck::check_all_in(&ast, &lowered.program, &original, source)
+    });
     let mut errors = out.errors;
     let mut warnings = out.warnings;
     // What a strict checker says that is not a type error (#22, L1-L4).
     let written = |p: usize| lowered.copied(p);
-    let found = typeck::lint::run(
-        &ast,
-        &lowered.program,
-        &lowered.text,
-        effective,
-        env.deny,
-        &original,
-        &written,
-    );
+    let found = crate::phases::phase("typeck", || {
+        typeck::lint::run(
+            &ast,
+            &lowered.program,
+            &lowered.text,
+            effective,
+            env.deny,
+            &original,
+            &written,
+        )
+    });
     errors.extend(found.errors);
     warnings.extend(found.warnings);
     if effective == Strength::Full {
-        errors.extend(own::check(&ast, &lowered.program, &original));
+        errors.extend(crate::phases::phase("own", || {
+            own::check(&ast, &lowered.program, &original)
+        }));
     }
 
     // 4. What the types decided.
-    let applied = resolve::apply(&lowered.text, &out.resolutions);
+    let applied =
+        crate::phases::phase("typeck", || resolve::apply(&lowered.text, &out.resolutions));
     let text = applied.text.clone();
 
     // 5. cig's own check, of what will run.
     let back = |p: usize| lowered.original(applied.original(p));
     let appended = |p: usize| applied.original(p) >= lowered.appended_at();
-    match cigscript::syntax::parse(&text) {
+    let open = crate::phases::begin();
+    let parsed = cigscript::syntax::parse(&text);
+    open.end("cig");
+    match parsed {
         Err(d) => {
             let at = d.span.map(|s| s.start).unwrap_or(0);
             let d = mapped(d, &back);
             errors.push(if appended(at) { internal(d) } else { d });
         }
         Ok(ast2) => {
-            let rep: Report = cigscript::check::check(&ast2, &[]);
+            let rep: Report = crate::phases::phase("cig", || cigscript::check::check(&ast2, &[]));
             let modules_failed = env.modules.borrow().values().any(|m| !m.errors.is_empty());
             for d in rep.errors {
                 let at = d.span.map(|s| s.start);

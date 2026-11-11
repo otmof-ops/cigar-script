@@ -166,6 +166,59 @@ target/release/cigar --version
 
 `cargo test` runs the checker's tests and the docs test. `cigar run` is part of the same binary.
 
+## Measuring CigarScript
+
+`bench/bench.toml` is the manifest for `cig bench`, the family's benchmark tool
+([docs](https://github.com/otmof-ops/cig-script/blob/main/docs/BENCH.md)). From a
+checkout with `cargo build --release` done, `cig`, `cigar` and a CigScript
+checkout beside this one (`../CigScript`):
+
+```sh
+cig bench bench/bench.toml                         # every case: the nightly
+cig bench bench/bench.toml --group check-1k        # one group
+cig bench bench/bench.toml --group superset        # cig run against mild cigar run
+cig bench bench/bench.toml --timings               # where `cigar check` spends it
+cig bench bench/bench.toml --against origin/main   # A/B against another ref
+```
+
+| group | what it measures |
+|---|---|
+| `check-100`, `check-1k`, `check-10k`, `check-100k` | `cigar check` of the same program at mild, medium and full, at 100, 1,000, 10,000 and 100,000 lines |
+| `inference` | generics-heavy code at medium and full, 1,000 and 10,000 lines |
+| `exhaustiveness` | `match` over five-variant enums, every one covered, 1,000 and 10,000 lines |
+| `superset` | cig's shared compute set (21 programs) as `cig run` and as mild `cigar run`; each must print cig's own expected output, or the case is `WRONG` and gets no time |
+| `check-corpus` | the CigScript examples through `cigar check` and `cig check` |
+| `memory-*` | today's runtime on the three programs of the [memory decision](docs/decisions/0002-memory.md) |
+
+The programs come from `bench/fixtures/generate.py`, which uses no clock and no
+random numbers: its output is the same on every machine, and
+`bench/fixtures/SHA256SUMS` holds the sha256 of every file
+(`python3 bench/fixtures/generate.py --check <dir>` compares). They are written
+into `bench/generated/`, which is not committed.
+
+**Timings are reported, never gated.** The superset group puts the two columns
+side by side so the cost of running CigScript as CigarScript can be read; it
+does not fail a build. `cigar run` builds its program once per home, so on the
+isolated home every sample gets, that build is in the `cigar` column.
+
+**Phases.** When `CIG_TIMINGS_FD` names an open descriptor, `cigar` writes the
+time of each phase to it as one JSON line (`{"v":1,"product":"cigar","phase":"typeck","ms":0.412}`),
+and `cig bench --timings` shows them: `lex` (the strength declaration), `gate`
+(the feature gate), `lower`, `typeck`, `own` (strength full only), `cig`
+(CigScript's own check of what will run) and `run` (the program, under `cigar
+run`). Unset, `cigar` reads no clock and writes nothing.
+
+**Not measured yet,** each waiting on the issue that makes it possible: types
+for speed ([cig-compile#34](https://github.com/otmof-ops/cig-compile/issues/34)),
+automatic memory against ownership at full
+([#12](https://github.com/otmof-ops/cigar-script/issues/12)), calling Rust and C
+([#5](https://github.com/otmof-ops/cigar-script/issues/5)), the language server
+([#16](https://github.com/otmof-ops/cigar-script/issues/16)) and reading other
+scripts' results ([#14](https://github.com/otmof-ops/cigar-script/issues/14)).
+
+The suite runs nightly (`.github/workflows/bench-nightly.yml`) and its results
+go to the `bench-history` branch, where `cig bench history` reads them.
+
 ## Part of CigScript
 
 CigarScript is built on CigScript, the language at
