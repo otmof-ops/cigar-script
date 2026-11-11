@@ -134,6 +134,25 @@ fn check_file(ctx: &Ctx, path: &Path, strength: Option<Strength>) -> FileOutcome
     }
 }
 
+/// Say each hint a `.cig` file earned from the deeper checker: on stderr,
+/// through cig's renderer, as a hint and never as an error. Under `--json`
+/// each is one diagnostic object, as the warnings are.
+pub fn report_hints(ctx: &Ctx, name: &str, checked: &Checked) {
+    for h in &checked.hints {
+        if ctx.json {
+            cigscript::cli::report(ctx, h, Some(name), Some(&checked.source_as_written));
+        } else {
+            eprint!(
+                "{}",
+                ctx.yellow(
+                    &h.render(Some(name), Some(&checked.source_as_written))
+                        .replacen("error[", "hint[", 1),
+                ),
+            );
+        }
+    }
+}
+
 pub fn report_checked(ctx: &Ctx, name: &str, checked: &Checked) {
     if ctx.json {
         // One diagnostic per line, each carrying the file. Matches the
@@ -144,6 +163,7 @@ pub fn report_checked(ctx: &Ctx, name: &str, checked: &Checked) {
         for w in &checked.warnings {
             cigscript::cli::report(ctx, w, Some(name), Some(&checked.source_as_written));
         }
+        report_hints(ctx, name, checked);
         if checked.ok() {
             // `cig check --json` prints one summary object per file;
             // match that shape at the top level.
@@ -165,6 +185,7 @@ pub fn report_checked(ctx: &Ctx, name: &str, checked: &Checked) {
                 ),
             );
         }
+        report_hints(ctx, name, checked);
         println!("checked {name}");
         return;
     }

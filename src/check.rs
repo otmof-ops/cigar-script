@@ -60,6 +60,10 @@ pub struct Checked {
     pub source_as_written: String,
     pub errors: Vec<Diagnostic>,
     pub warnings: Vec<Diagnostic>,
+    /// What the deeper checker finds in a `.cig` file, which keeps
+    /// CigScript's exact acceptance: each error it would give at strength
+    /// medium, as a hint (issue #1). Always empty for a `.cigar` file.
+    pub hints: Vec<Diagnostic>,
     /// The declarations and signatures lowering found (medium and full).
     pub program: types::Program,
     /// Where each place in `source_as_cigscript_saw_it` was written, when the
@@ -112,27 +116,25 @@ pub fn check_file_source(
     override_strength: Option<Strength>,
     file: Option<&Path>,
 ) -> Checked {
+    let modules = RefCell::new(BTreeMap::new());
+    let root = file.map(|f| match f.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
+        _ => PathBuf::from("."),
+    });
+    let name = file
+        .and_then(|f| f.file_stem())
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "this file".to_string());
+    let env = Env {
+        file,
+        root: root.as_deref(),
+        stack: Vec::new(),
+        modules: &modules,
+        name,
+    };
     match kind {
-        Kind::Cig => check_cig(source),
-        Kind::Cigar => {
-            let modules = RefCell::new(BTreeMap::new());
-            let root = file.map(|f| match f.parent() {
-                Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
-                _ => PathBuf::from("."),
-            });
-            let name = file
-                .and_then(|f| f.file_stem())
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "this file".to_string());
-            let env = Env {
-                file,
-                root: root.as_deref(),
-                stack: Vec::new(),
-                modules: &modules,
-                name,
-            };
-            check_cigar(source, override_strength, &env)
-        }
+        Kind::Cig => check_cig(source, &env),
+        Kind::Cigar => check_cigar(source, override_strength, &env),
     }
 }
 
@@ -145,8 +147,12 @@ struct Env<'a> {
     name: String,
 }
 
-fn check_cig(source: &str) -> Checked {
+/// What a `.cig` file says in a hint, ahead of what the deeper checker said.
+pub const HINT_PREFIX: &str = "this would be an error at strength medium: ";
+
+fn check_cig(source: &str, env: &Env) -> Checked {
     let (errors, warnings) = parse_and_check(source);
+    let hints = medium_hints(source, &errors, env);
     Checked {
         kind: Kind::Cig,
         strength: Strength::Mild,
@@ -154,9 +160,30 @@ fn check_cig(source: &str) -> Checked {
         source_as_written: source.to_string(),
         errors,
         warnings,
+        hints,
         program: types::Program::default(),
         map: None,
     }
+}
+
+/// A `.cig` file never gets a new error (issue #1): the file is checked
+/// again as medium CigarScript, and each error that finds, which CigScript
+/// did not give, comes back as a hint at the place it is. The file is not
+/// changed by it, and what runs is what `cig run` runs.
+fn medium_hints(source: &str, mild_errors: &[Diagnostic], env: &Env) -> Vec<Diagnostic> {
+    // A file CigScript cannot read has its error already; nothing deeper to say.
+    if !mild_errors.is_empty() {
+        return Vec::new();
+    }
+    let deeper = check_cigar(source, Some(Strength::Medium), env);
+    deeper
+        .errors
+        .into_iter()
+        .map(|mut d| {
+            d.message = format!("{HINT_PREFIX}{}", d.message);
+            d
+        })
+        .collect()
 }
 
 fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> Checked {
@@ -171,6 +198,7 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
             source_as_written: source.to_string(),
             errors,
             warnings,
+            hints: Vec::new(),
             program,
             map,
         }

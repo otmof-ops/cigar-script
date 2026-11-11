@@ -50,3 +50,25 @@ group = "check-1k"
 setup = ["sh", "-c", "fixtures/make-big.sh"]
 run   = ["cigar", "check", "fixtures/big-full.cigar"]
 expect = { exit = 0 }
+
+# The memory group (docs/decisions/0002-memory.md, #3): today's runtime on the
+# three programs the options were measured on. The Rust variants of the same
+# programs are in memory-options/bench.toml; same programs, same expected output.
+
+[[case]]
+name  = "memory: binary trees, the CigarScript runtime today"
+group = "memory-trees"
+run   = ["cigar", "run", "fixtures/memory/trees.cig"]
+expect = { exit = 0, stdout = "fixtures/memory/trees.expect" }
+
+[[case]]
+name  = "memory: n-body, the CigarScript runtime today"
+group = "memory-nbody"
+run   = ["cigar", "run", "fixtures/memory/nbody.cig"]
+expect = { exit = 0, stdout = "fixtures/memory/nbody.expect" }
+
+[[case]]
+name  = "memory: lists: sort, filter, map, the CigarScript runtime today"
+group = "memory-lists"
+run   = ["cigar", "run", "fixtures/memory/lists.cig"]
+expect = { exit = 0, stdout = "fixtures/memory/lists.expect" }

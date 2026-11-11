@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
+# SPDX-License-Identifier: FSL-1.1-ALv2
+
+# The memory options of docs/decisions/0002-memory.md (#3), measured: the
+# same three programs under plain ownership, reference counting and a
+# tracing collector. Its own workspace: nothing here is built with cigar.
+
+[package]
+name = "memory-options"
+version = "0.0.0"
+edition = "2021"
+license = "FSL-1.1-ALv2"
+publish = false
+
+[workspace]
+
+[dependencies]
+# The tracing collector. MIT licensed (kyren/gc-arena), the one the Piccolo
+# Lua VM runs on.
+gc-arena = "0.5"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
