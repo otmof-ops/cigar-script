@@ -1,0 +1,5 @@
+strength medium
+
+stick raw = json.parse('[[1], [2, "x"]]')
+stick xs: List<List<Int>> = raw
+exhale xs

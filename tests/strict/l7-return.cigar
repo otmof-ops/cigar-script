@@ -1,0 +1,3 @@
+strength full
+pull pair() -> List<u16> { snuff [1, 65536] }
+exhale pair()

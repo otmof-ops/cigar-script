@@ -250,7 +250,7 @@ step reads them the same way.
 | `W1231` | warning | code after a `snuff`, `cough`, `break`, `continue`, or a `match` or `if` whose every branch ends |
 | `W1232` | warning | a `stick`, `roll`, parameter or `use` that nothing reads; `_` silences it |
 | `W1233` | warning | the result of a pure method or a `-> T` function dropped; `_ = f()` says it is meant |
-| `E502`, `E1510` | check | a divisor, or a sized number, that the checker works out before the program runs (`10 / 0`, `stick c: u8 = b + 10`); they stop the run as well when the number is only known then |
+| `E502`, `E1510` | check | a divisor, or a sized number, that the checker works out before the program runs (`10 / 0`, `stick c: u8 = b + 10`, `[1, 2, 300]` into `List<u8>`); they stop the run as well when the number is only known then |
 | `E1200` to `E1399` | check | medium's type, record, `match`, module and interface errors |
 | `E1401`, `E1402` | check | layers: two meanings for a type, or none |
 | `E1403` | check | `break` or `continue` that would leave a `within retry` block |
@@ -259,7 +259,7 @@ step reads them the same way.
 | `E1501`, `E1502`, `E1503` | check | ownership, at full: a use after a move, a borrow that escapes, a capture or a branch that moved a name |
 | `E1521`, `E1522` | check | a parallel loop's turn that writes a name, list, map or record from outside the loop; a `parallel … collect` or `reduce` whose last line is not a value, or a `reduce` operator other than `+`, `*`, `min` or `max` |
 | `E303` | check | `into` a path outside a burn (a warning inside a function), as `fs.write_text` is |
-| `E1210`, `E1510`, `E1205`, `E1206`, `E1208`, `E1520` | cough, at run time | a boundary, a sized number, a record's or a variant's fields given at run time, and a send on a closed channel; the message starts with the code |
+| `E1210`, `E1510`, `E1205`, `E1206`, `E1208`, `E1520` | cough, at run time | a boundary (for a list or map, with the path to the first value that does not fit: `xs[2] is 300, outside u8`), a sized number, a record's or a variant's fields given at run time, and a send on a closed channel; the message starts with the code |
 | `E800` | usage | no path given, a file that is not `.cig` or `.cigar`, a folder with no such files, a path that is neither a file nor a folder, or a bad `--strength` |
 | `E801` | usage | a path that cannot be read, including one that does not exist |
 | `E802` | usage | `cigar run` could not build or start its program |

@@ -1,0 +1,4 @@
+strength full
+stick b: u8 = 250
+stick xs: List<u8> = [b + 10]
+exhale xs

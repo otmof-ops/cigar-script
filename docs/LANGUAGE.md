@@ -196,7 +196,7 @@ page; until then the message carries the whole explanation.
 | `E1217` | a `snuff` whose value is not the function's declared result |
 | `E1218` | a `cough` of a record the function's `coughs` list does not hold |
 | `E1219` | a `?` that cannot send its error anywhere: outside a function, inside a `pack`, in a function whose result is not a `Result`, on a value that is not a `Result`, or with an error that does not fit the function's. Also coughed at run time when an untyped value reaches `?` and is not a `Result` |
-| `E1210` | **at run time**: a value entering a typed place does not fit it (`E1210 double: n should be Int and is Text "x"`) |
+| `E1210` | **at run time**: a value entering a typed place does not fit it (`E1210 double: n should be Int and is Text "x"`). For a list or map the message names the path to the first part that does not fit: `E1210 xs should be List<u8> and is List: xs[2] is 300, outside u8 (0 to 255)`, `m.users[0].age is Text "old", not u8`. The path starts at the name the value was given (`xs`, `m`, `Pixel.shades`), or at `value` for a place with no name of its own (a result, `json.parse<T>`) |
 
 **Modules and interfaces** (medium)
 
@@ -228,7 +228,7 @@ page; until then the message carries the whole explanation.
 | `E1501` | a name used after it was given to an `owned` parameter, to `move`, to a binding or a container, or into a `move pack`: names the line it went |
 | `E1502` | a `borrow` parameter returned, stored (`push`, `insert`, `set`) or given away |
 | `E1503` | a name given away on some paths and used after they join (names the branch); a name given away while a function value that borrows it is used later |
-| `E1510` | a number outside its sized type: at check time for a number the checker can work out (written out, or a `stick` of numbers through `+ - * / %`: `stick a: u8 = 300`, `stick c: u8 = b + 10` with `stick b: u8 = 250`), **at run time** for one that is computed (`E1510 c is 300, outside u8 (0 to 255)`) |
+| `E1510` | a number outside its sized type: at check time for a number the checker can work out (written out, including inside a list or map written out, at any depth: `stick a: u8 = 300`, `stick xs: List<u8> = [1, 2, 300]`; or a `stick` of numbers through `+ - * / %`: `stick c: u8 = b + 10` with `stick b: u8 = 250`), **at run time** for one that is computed (`E1510 c is 300, outside u8 (0 to 255)`) |
 | `E1520` | **at run time**: a send on a closed channel |
 | `E1521` | a turn of a `parallel` loop writes a name, list, map or record declared outside the loop, directly or through a name for it made in the turn (`` `total` is written by every turn of a parallel loop ``) |
 | `E1522` | a `parallel … collect` or `reduce` body whose last line is not a value, or a `reduce` operator other than `+`, `*`, `min` or `max` |
@@ -680,7 +680,14 @@ type system are written; each rule has programs in `tests/corpus` and
   and an enum as `"ok"` or `{"failed": {"reason": "x"}}`.
 - **Sized numbers** are range-checked where a value enters a sized place and
   in the result of arithmetic between sized values: outside the range is
-  `E1510`. `Bytes` is checked as `Any` until cig has a bytes value.
+  `E1510`. A number written out that a sized type cannot hold is `E1510` at
+  check time wherever it sits: a `stick`, an argument, a `snuff`, a record
+  field, or an element of a list or map written out (`[1, 2, 300]` into
+  `List<u8>`), pointing at the number. A list or map that only gets its
+  numbers at run time fails as `E1210` naming the path to the first one out of
+  range (`xs[2] is 300, outside u8 (0 to 255)`); the path is only worked out
+  once the value is known not to fit, so a value that fits costs nothing more.
+  `Bytes` is checked as `Any` until cig has a bytes value.
 - **Ownership** is static and erased at run time (`move x` is `x`). A name
   given away on any path is moved after the paths join (`E1503`); a name whose
   type the check cannot tell is treated as a copy.

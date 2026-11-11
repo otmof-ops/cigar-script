@@ -618,6 +618,51 @@ impl<'a> Ck<'a> {
         }
     }
 
+    /// `v`, which `e` works out to, against the range of `sz`: E1510 when it
+    /// is outside, said where `e` is written.
+    fn out_of_range(&mut self, e: &Expr, sz: SizedInt, v: i64, hint: &str) -> bool {
+        let (lo, hi) = sz.range();
+        if v >= lo && v <= hi {
+            return false;
+        }
+        let msg = if int_literal(e).is_some() {
+            format!("`{v}` is outside `{}` ({lo} to {hi})", sz.name())
+        } else {
+            // Worked out before the program runs: say how.
+            format!(
+                "`{}` is {v}, outside `{}` ({lo} to {hi})",
+                self.text_of(e.span),
+                sz.name()
+            )
+        };
+        self.err("E1510", msg, e.span, Some(hint.to_string()));
+        true
+    }
+
+    /// Every number the checker can work out inside a list or map written
+    /// out (however deep) against the sized type it is going into. Each one
+    /// outside its range is reported at the number.
+    fn container_range(&mut self, e: &Expr, want: &Ty, hint: &str) -> bool {
+        let el = match strip_opt(want) {
+            Ty::List(a) | Ty::ListView(a) | Ty::Map(a) => *a,
+            _ => return false,
+        };
+        let items: Vec<&Expr> = match &e.kind {
+            ExprKind::List(items) => items.iter().collect(),
+            ExprKind::Map(entries) => entries.iter().map(|(_, v)| v).collect(),
+            _ => return false,
+        };
+        let mut reported = false;
+        for x in items {
+            if let (Ty::Sized(sz), Some(v)) = (strip_opt(&el), self.fold(x)) {
+                reported |= self.out_of_range(x, sz, v, hint);
+            } else {
+                reported |= self.container_range(x, &el, hint);
+            }
+        }
+        reported
+    }
+
     /// Report `found` not fitting `want` (E1209 for null into a non-optional).
     fn expect(
         &mut self,
@@ -629,21 +674,13 @@ impl<'a> Ck<'a> {
     ) -> bool {
         // A number written out that a sized type cannot hold.
         if let (Ty::Sized(sz), Some(v)) = (strip_opt(want), self.fold(e)) {
-            let (lo, hi) = sz.range();
-            if v < lo || v > hi {
-                let msg = if int_literal(e).is_some() {
-                    format!("`{v}` is outside `{}` ({lo} to {hi})", sz.name())
-                } else {
-                    // Worked out before the program runs: say how.
-                    format!(
-                        "`{}` is {v}, outside `{}` ({lo} to {hi})",
-                        self.text_of(e.span),
-                        sz.name()
-                    )
-                };
-                self.err("E1510", msg, e.span, Some(hint));
+            if self.out_of_range(e, sz, v, &hint) {
                 return false;
             }
+        }
+        // The same for the numbers inside a list or map written out (#22 L7).
+        if self.container_range(e, want, &hint) {
+            return false;
         }
         if fits(found, want, is_fresh(e)) {
             return true;
