@@ -1,0 +1,5 @@
+strength full
+stick data = [1, 2]
+stick f = move pack() => data.len()
+exhale data.len()
+exhale f()

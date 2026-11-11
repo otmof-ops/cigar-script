@@ -198,8 +198,9 @@ page; until then the message carries the whole explanation.
 
 | code | when |
 |---|---|
-| `E1501` | a name used after it was given to an `owned` parameter or to `move`: names the line it went |
+| `E1501` | a name used after it was given to an `owned` parameter, to `move`, to a binding or a container, or into a `move pack`: names the line it went |
 | `E1502` | a `borrow` parameter returned, stored (`push`, `insert`, `set`) or given away |
+| `E1503` | a name given away on some paths and used after they join (names the branch); a name given away while a function value that borrows it is used later |
 | `E1510` | a number outside its sized type: at check time for a number written out (`stick a: u8 = 300`), **at run time** for one that is computed (`E1510 c is 300, outside u8 (0 to 255)`) |
 | `E1520` | **at run time**: a send on a closed channel |
 
@@ -369,7 +370,8 @@ the file's layers are.
 ### Ownership, concurrency and `within` (full; #12, #13)
 
 ```ebnf
-move-expr       = "move" , name ;
+move-expr       = "move" , name
+                | "move" , lambda ;
 parallel-for    = "parallel" , "(" , "threads" , ":" , expr , ")" , "for" , name , "in" , expr , block ;
 channel-expr    = "channel" , "<" , type , ">" , "(" , ")" ;
 within-stmt     = "within" , context , block ;
@@ -392,6 +394,36 @@ and the cough comes when control gets back to the block. It reads the clock
 Nesting order is significant: `retry` around `timeout` gives every try its own
 deadline, `timeout` around `retry` gives all the tries one. A context with no
 limit, `within timeout() { ... }`, is `E1405`.
+
+**Moves** (#22 S5 to S7; the same rules as Rust's, in a smaller model). A
+*non-copy* value is a list, a map, a record or a channel; ints, floats, bools,
+text and `null` are copies. The check knows a name holds one from a literal,
+a call whose result is declared as one, an annotation, an `owned` parameter,
+`.copy()` of one, or another such name; a name it cannot tell is treated as a
+copy, so it never reports a use that is fine.
+
+- **A binding moves (S5).** `stick alias = data` (or `alias = data`, or
+  putting `data` in a list or map literal, in a field or element assignment,
+  or giving it to `push`, `insert`, `set` or `send`) gives `data` away, so
+  using `data` afterwards is `E1501`. `data.copy()` copies it instead.
+- **A function value borrows or moves (S6).** A `pack` that only reads a
+  non-copy name borrows it. Giving the name away while the function is used
+  later is `E1503` (`` `data` is borrowed by the function on line 4, which is
+  still used on line 6 ``); giving it away after the function's last use is
+  fine. `move pack(...) => ...` owns what it reads, as does a `pack` that is
+  stored (`push`, `insert`, `set`, a field or element) or sent, or whose body
+  gives a name away: using that name afterwards is `E1501`.
+- **Possibly moved is moved (S7).** A name given away on some path is gone
+  where the paths join: after an `if` without an `else`, after one arm of an
+  `if` or a `match`, and after a loop that gives it away before a `break`.
+  Using it is `E1503`, and the message names the branch (`` `data` may have
+  been given away on line 4 (inside this `if`) ``). A path that ends in
+  `snuff` or `cough` does not join. A name given away on every path is `E1501`.
+  This is `full` only: medium's hints still never report a use that might be
+  fine.
+
+`borrow` as an expression (`stick alias = borrow data`) is not built; copy
+with `.copy()`.
 
 A channel has the methods `send(x)`, `receive()` (a `T?`: `null` when empty)
 and `close()`.
@@ -578,8 +610,9 @@ type system are written; each rule has programs in `tests/corpus` and
 - **Sized numbers** are range-checked where a value enters a sized place and
   in the result of arithmetic between sized values: outside the range is
   `E1510`. `Bytes` is checked as `Any` until cig has a bytes value.
-- **Ownership** is static, per block and conservative, and erased at run
-  time (`move x` is `x`).
+- **Ownership** is static and erased at run time (`move x` is `x`). A name
+  given away on any path is moved after the paths join (`E1503`); a name whose
+  type the check cannot tell is treated as a copy.
 - **Concurrency.** A `parallel` loop and `within parallel` run **in loop
   order, on one thread, today**, so the journal is the sequential run's by
   construction, which the design requires of the parallel version too.

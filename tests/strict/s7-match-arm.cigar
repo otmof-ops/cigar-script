@@ -1,0 +1,9 @@
+strength full
+pull consume(owned xs: List<Int>) -> Int { snuff xs.len() }
+stick data = [1, 2]
+stick n = 2
+match n {
+  1 => exhale consume(data)
+  _ => exhale 0
+}
+exhale data

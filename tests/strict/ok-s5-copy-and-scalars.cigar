@@ -1,0 +1,13 @@
+strength full
+pull consume(owned xs: List<Int>) -> Int { snuff xs.len() }
+stick data = [1, 2]
+stick copy = data.copy()
+stick n = 3
+stick m = n
+stick t = "hi"
+stick u = t
+exhale consume(copy)
+exhale data.len() + n + m
+exhale t + u
+stick alias = data
+exhale alias.len()

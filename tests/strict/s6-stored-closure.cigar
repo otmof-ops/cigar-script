@@ -1,0 +1,5 @@
+strength full
+stick data = [1, 2]
+roll fns = []
+fns.push(pack() => data.len())
+exhale data.len()

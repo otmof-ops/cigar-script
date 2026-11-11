@@ -21,6 +21,18 @@ project follows semantic versioning.
   syntax (`match x {`), not on a variable called `match`. `strength` after a
   `.` or as a key is a name too. `docs/LANGUAGE.md`'s "Reserved words" has the
   rules; `tests/strict/` and `tests/corpus` have the cases.
+- **Held to Rust's standard, moves (#22 S5, S6, S7).** At `full`, binding a
+  list, map, record or channel moves it (`stick alias = data`, storing it in a
+  container, sending it): using the old name is `E1501`; `.copy()` copies. A
+  `pack` that only reads a name borrows it, and giving the name away while the
+  function is used later is the new `E1503`; `move pack(...) => ...`, a stored
+  or sent function, or one that gives a name away owns what it captures. A
+  name given away on some paths is moved after they join, also `E1503`, naming
+  the branch; paths that end in `snuff` or `cough` do not join, and a `break`
+  joins after the loop. A name the check cannot type is treated as a copy.
+  `tests/strict/` has each program with its code (`binding_moves_at_full`,
+  `closure_capture_borrows_or_moves`, `possibly_moved_is_moved`);
+  `docs/LANGUAGE.md` has the three rules.
 - **`Result<T, E>` and `?` (#2).** `Result` is built in, with the variants
   `Ok(value)` and `Err(error)` written bare, `match`ed exhaustively and
   checked like any generic enum. `e?` on a `Result` in a `pull` that returns a
