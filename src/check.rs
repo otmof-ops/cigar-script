@@ -233,9 +233,19 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
     let mut errors = decl.errors;
     // What the gate warns of (W1234) goes with the file wherever it ends.
     let mut gate_warnings = Vec::new();
+    // A mild file may `use` a module (#7, DECISIONS 20): the module is
+    // checked at its own strength, and what the file passes it is checked
+    // when it runs. `use` is the one medium word a mild file may write.
+    let mut mild_uses_modules = false;
     match gate::scan_all(&decl.blanked, effective) {
         Ok(found) => {
-            errors.extend(found.errors);
+            for d in found.errors {
+                if effective == Strength::Mild && is_modules_finding(&d) {
+                    mild_uses_modules = true;
+                } else {
+                    errors.push(d);
+                }
+            }
             gate_warnings = placed(found.warnings, source);
         }
         Err(d) => errors.push(d),
@@ -250,7 +260,7 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
             None,
         );
     }
-    if effective == Strength::Mild {
+    if effective == Strength::Mild && !mild_uses_modules {
         // Mild is CigScript: the blanked source goes to cig as it is.
         let (errors, mut warnings) = parse_and_check(&decl.blanked);
         warnings.extend(gate_warnings);
@@ -380,6 +390,17 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
         layers: out.layers,
     };
     done(effective, text, errors, warnings, program, Some(map))
+}
+
+/// Is this the gate's finding for the word `use`? A mild file may write
+/// it (modules mix across strengths), so the finding is not an error there.
+fn is_modules_finding(d: &Diagnostic) -> bool {
+    use crate::features::{Detect, FEATURES};
+    d.code == "E1101"
+        && FEATURES
+            .iter()
+            .filter(|f| matches!(f.detect, Detect::Word("use")))
+            .any(|f| d.message.starts_with(&format!("using {} needs", f.name)))
 }
 
 /// Compile a module: what `use` needs from it. Its errors are its own,

@@ -1,0 +1,6 @@
+strength full
+stick ch = channel<Int>()
+parallel(threads: 4) for n in 1..5 {
+  ch.send(n * 10)
+}
+ch.close()

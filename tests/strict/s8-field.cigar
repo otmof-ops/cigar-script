@@ -1,0 +1,6 @@
+strength full
+record Tally { n: Int }
+roll t = Tally { n: 0 }
+parallel(threads: 2) for i in 1..5 {
+  t.n = i
+}

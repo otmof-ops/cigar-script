@@ -1,0 +1,12 @@
+strength medium
+# A medium module: not run on its own.
+
+pub stick limit = 3
+
+pub pull double(n: Int) -> Int {
+  snuff n * 2
+}
+
+pub pull shout(s: Text) -> Text {
+  snuff s + "!"
+}

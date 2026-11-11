@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Jay Taylor (https://github.com/otmof-ops/cigar-script)
 // SPDX-License-Identifier: FSL-1.1-ALv2
-//! Held to Rust's standard (#22, S1-S7): programs the checker must refuse,
+//! Held to Rust's standard (#22, S1-S8): programs the checker must refuse,
 //! each with the error it names first, and the programs beside them that
 //! must still pass. `tests/strict/sN-NAME.cigar` + `.err` (code on line 1,
 //! a substring of the message on line 2) is refused; `ok-sN-NAME.cigar`
@@ -80,6 +80,11 @@ fn mutable_containers_are_invariant() {
 #[test]
 fn function_parameters_are_contravariant() {
     run("s2-");
+}
+
+#[test]
+fn parallel_body_cannot_write_shared() {
+    run("s8-");
 }
 
 #[test]

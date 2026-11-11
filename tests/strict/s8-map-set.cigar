@@ -1,0 +1,5 @@
+strength full
+roll m = {}
+parallel(threads: 2) for i in 1..5 {
+  m.set("k", i)
+}

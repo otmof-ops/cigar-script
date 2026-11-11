@@ -138,14 +138,26 @@ threads come with the kernel's per-thread segments (cig). A program written
 now does not change when they arrive, because its journal and its results
 are already the sequential ones.
 
+A turn writes only what it declares itself: the turns will run side by
+side, so a write to a name, list, map or record from outside the loop is
+`E1521` (`` `results` is written by every turn of a parallel loop ``), and
+so is a write through a name the turn made for one. A turn's value comes
+back three ways: `collect` gives every turn's last line back in loop order,
+`reduce(+)` combines them with `+`, `*`, `min` or `max`, and a channel
+takes a send from any turn.
+
 ```cigar
 strength full
 
-roll results = []
-parallel(threads: 4) for n in 1..6 {
-  results.push(n * n)
+stick results = parallel(threads: 4) for n in 1..6 collect {
+  n * n
 }
 exhale results
+
+stick total = parallel(threads: 4) for n in 1..101 reduce(+) {
+  n
+}
+exhale total
 
 stick ch = channel<Int>()
 parallel(threads: 4) for n in 1..5 {
@@ -164,6 +176,7 @@ exhale got
 ```sh
 $ cigar run parallel.cigar
 [1, 4, 9, 16, 25]
+5050
 [10, 20, 30, 40]
 ```
 

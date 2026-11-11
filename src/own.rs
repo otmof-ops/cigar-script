@@ -64,6 +64,11 @@ pub fn check(
         closures: HashMap::new(),
         loops: Vec::new(),
         inside: None,
+        vars: {
+            let mut v = HashSet::new();
+            declared_names(&ast.body, &mut v);
+            v
+        },
     };
     let mut moved = HashMap::new();
     o.stmts(&ast.body, &mut moved);
@@ -92,6 +97,9 @@ struct Own<'a> {
     loops: Vec<LoopCtx>,
     /// The string whose `${...}` is being walked: where its errors are said.
     inside: Option<Span>,
+    /// Every name the program declares: what a parallel loop's turn could
+    /// write that it does not own (#22 S8).
+    vars: HashSet<String>,
 }
 
 /// Where a loop's `break` and `continue` leave the moves.
@@ -278,7 +286,351 @@ fn block_names(ss: &[Stmt], out: &mut Vec<String>) {
     }
 }
 
+/// Methods that change a list or a map where it is: a parallel loop's turn
+/// calling one on a value from outside the loop writes it (#22 S8).
+const MUTATORS: &[&str] = &["push", "pop", "insert", "remove", "set", "delete", "clear"];
+
+/// The variable at the root of `a`, `a.b`, `a[i]` or `a.b[i].c`.
+fn path_root(e: &Expr) -> Option<&String> {
+    match &e.kind {
+        ExprKind::Ident(n) => Some(n),
+        ExprKind::Member { object, .. } | ExprKind::Index { object, .. } => path_root(object),
+        _ => None,
+    }
+}
+
+/// Every name a `stick`, `roll`, `for`, `burn (state)`, `ashtray` or a
+/// parameter declares, anywhere in `ss`.
+fn declared_names(ss: &[Stmt], out: &mut HashSet<String>) {
+    for s in ss {
+        match s {
+            Stmt::Declare { name, .. } => {
+                out.insert(name.clone());
+            }
+            Stmt::For { var, body, .. } => {
+                out.insert(var.clone());
+                declared_names(&body.stmts, out);
+            }
+            Stmt::While { body, .. } => declared_names(&body.stmts, out),
+            Stmt::If {
+                branches,
+                otherwise,
+                ..
+            } => {
+                for (_, b) in branches {
+                    declared_names(&b.stmts, out);
+                }
+                if let Some(b) = otherwise {
+                    declared_names(&b.stmts, out);
+                }
+            }
+            Stmt::Try {
+                body,
+                catch_var,
+                handler,
+                finally,
+                ..
+            } => {
+                declared_names(&body.stmts, out);
+                out.extend(catch_var.iter().cloned());
+                for b in handler.iter().chain(finally.iter()) {
+                    declared_names(&b.stmts, out);
+                }
+            }
+            Stmt::Burn {
+                state,
+                body,
+                unburn,
+                ..
+            } => {
+                out.extend(state.iter().cloned());
+                declared_names(&body.stmts, out);
+                if let Some(u) = unburn {
+                    declared_names(&u.stmts, out);
+                }
+            }
+            Stmt::Pull(f) => {
+                out.extend(f.params.iter().cloned());
+                declared_names(&f.body.stmts, out);
+            }
+            _ => {}
+        }
+    }
+}
+
 impl Own<'_> {
+    /// #22 S8: the turns of a `parallel` loop may run side by side, so a
+    /// turn writes only what it declares itself: never a name, list, map or
+    /// record from outside the loop, directly or through a name it made for
+    /// one. Reading is fine, and a channel takes a send from any turn.
+    fn parallel_writes(&mut self, var: &str, body: &[Stmt]) {
+        let mut inner = HashSet::from([var.to_string()]);
+        let mut alias = HashMap::new();
+        self.turn_stmts(body, &mut inner, &mut alias);
+    }
+
+    /// The outer name a write to `n` reaches from inside a turn, if any.
+    fn outer_of(
+        &self,
+        n: &str,
+        inner: &HashSet<String>,
+        alias: &HashMap<String, String>,
+    ) -> Option<String> {
+        if let Some(o) = alias.get(n) {
+            return Some(o.clone());
+        }
+        if n.starts_with("__cg_") || inner.contains(n) || !self.vars.contains(n) {
+            return None;
+        }
+        Some(n.to_string())
+    }
+
+    fn shared_write(&mut self, outer: &str, via: &str, span: Span) {
+        let who = if outer == via {
+            format!("`{outer}`")
+        } else {
+            format!("`{outer}` (as `{via}`)")
+        };
+        self.err(
+            "E1521",
+            format!("{who} is written by every turn of a parallel loop: use a channel, or `parallel … reduce`"),
+            span,
+            "the turns can run at the same time: give each turn's value back with `parallel … collect`, \
+             combine them with `parallel … reduce(+)`, or send them on a channel"
+                .to_string(),
+        );
+    }
+
+    /// Point `n`, a name the turn declared, at what `value` reaches outside.
+    fn point(
+        &self,
+        n: &str,
+        value: &Expr,
+        inner: &HashSet<String>,
+        alias: &mut HashMap<String, String>,
+    ) {
+        match path_root(value).and_then(|r| self.outer_of(r, inner, alias)) {
+            Some(o) => {
+                alias.insert(n.to_string(), o);
+            }
+            None => {
+                alias.remove(n);
+            }
+        }
+    }
+
+    fn turn_stmts(
+        &mut self,
+        ss: &[Stmt],
+        inner: &mut HashSet<String>,
+        alias: &mut HashMap<String, String>,
+    ) {
+        for s in ss {
+            self.turn_stmt(s, inner, alias);
+        }
+    }
+
+    /// A nested block: what it declares ends with it.
+    fn turn_block(&mut self, b: &Block, inner: &HashSet<String>, alias: &HashMap<String, String>) {
+        let (mut i, mut a) = (inner.clone(), alias.clone());
+        self.turn_stmts(&b.stmts, &mut i, &mut a);
+    }
+
+    fn turn_stmt(
+        &mut self,
+        s: &Stmt,
+        inner: &mut HashSet<String>,
+        alias: &mut HashMap<String, String>,
+    ) {
+        match s {
+            Stmt::Declare { name, value, .. } => {
+                self.turn_expr(value, inner, alias);
+                inner.insert(name.clone());
+                self.point(name, value, inner, alias);
+            }
+            Stmt::Assign {
+                target,
+                value,
+                span,
+                ..
+            } => {
+                self.turn_expr(value, inner, alias);
+                let root = match target {
+                    AssignTarget::Var(n) if inner.contains(n) && !alias.contains_key(n) => {
+                        // The turn's own name, pointed somewhere else.
+                        self.point(n, value, inner, alias);
+                        None
+                    }
+                    AssignTarget::Var(n) if inner.contains(n) => {
+                        self.point(n, value, inner, alias);
+                        None
+                    }
+                    AssignTarget::Var(n) => Some(n),
+                    AssignTarget::Index { object, index } => {
+                        self.turn_expr(index, inner, alias);
+                        self.turn_expr(object, inner, alias);
+                        path_root(object)
+                    }
+                    AssignTarget::Member { object, .. } => {
+                        self.turn_expr(object, inner, alias);
+                        path_root(object)
+                    }
+                };
+                if let Some(r) = root {
+                    if let Some(o) = self.outer_of(r, inner, alias) {
+                        self.shared_write(&o, r, *span);
+                    }
+                }
+            }
+            Stmt::Expr(e) | Stmt::Cough { value: e, .. } => self.turn_expr(e, inner, alias),
+            Stmt::Snuff { value: Some(v), .. } => self.turn_expr(v, inner, alias),
+            Stmt::Exhale { values, .. } => {
+                for v in values {
+                    self.turn_expr(v, inner, alias);
+                }
+            }
+            Stmt::If {
+                branches,
+                otherwise,
+                ..
+            } => {
+                for (c, b) in branches {
+                    self.turn_expr(c, inner, alias);
+                    self.turn_block(b, inner, alias);
+                }
+                if let Some(b) = otherwise {
+                    self.turn_block(b, inner, alias);
+                }
+            }
+            Stmt::While { cond, body, .. } => {
+                self.turn_expr(cond, inner, alias);
+                self.turn_block(body, inner, alias);
+            }
+            Stmt::For {
+                var, iter, body, ..
+            } => {
+                self.turn_expr(iter, inner, alias);
+                let mut i = inner.clone();
+                i.insert(var.clone());
+                let mut a = alias.clone();
+                a.remove(var);
+                self.turn_stmts(&body.stmts, &mut i, &mut a);
+            }
+            Stmt::Try {
+                body,
+                catch_var,
+                handler,
+                finally,
+                ..
+            } => {
+                self.turn_block(body, inner, alias);
+                if let Some(h) = handler {
+                    let mut i = inner.clone();
+                    i.extend(catch_var.iter().cloned());
+                    let mut a = alias.clone();
+                    self.turn_stmts(&h.stmts, &mut i, &mut a);
+                }
+                if let Some(f) = finally {
+                    self.turn_block(f, inner, alias);
+                }
+            }
+            Stmt::Burn {
+                state,
+                label,
+                body,
+                unburn,
+                ..
+            } => {
+                if let Some(l) = label {
+                    self.turn_expr(l, inner, alias);
+                }
+                let mut i = inner.clone();
+                i.extend(state.iter().cloned());
+                let a = alias.clone();
+                self.turn_stmts(&body.stmts, &mut i.clone(), &mut a.clone());
+                if let Some(u) = unburn {
+                    self.turn_stmts(&u.stmts, &mut i, &mut a.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn turn_expr(&mut self, e: &Expr, inner: &HashSet<String>, alias: &HashMap<String, String>) {
+        match &e.kind {
+            ExprKind::Method {
+                receiver,
+                name,
+                args,
+                ..
+            } => {
+                if MUTATORS.contains(&name.as_str()) {
+                    if let Some(r) = path_root(receiver) {
+                        if let Some(o) = self.outer_of(r, inner, alias) {
+                            self.shared_write(&o, r, e.span);
+                        }
+                    }
+                }
+                self.turn_expr(receiver, inner, alias);
+                for a in args {
+                    self.turn_expr(a, inner, alias);
+                }
+            }
+            ExprKind::Str(parts) => {
+                let outer = self.inside;
+                self.inside = Some(outer.unwrap_or(e.span));
+                for p in parts {
+                    if let StrPiece::Expr(x) = p {
+                        self.turn_expr(x, inner, alias);
+                    }
+                }
+                self.inside = outer;
+            }
+            ExprKind::List(items) => {
+                for i in items {
+                    self.turn_expr(i, inner, alias);
+                }
+            }
+            ExprKind::Map(entries) => {
+                for (k, v) in entries {
+                    if let MapKey::Dynamic(x) = k {
+                        self.turn_expr(x, inner, alias);
+                    }
+                    self.turn_expr(v, inner, alias);
+                }
+            }
+            ExprKind::Unary { expr, .. } => self.turn_expr(expr, inner, alias),
+            ExprKind::Binary { lhs, rhs, .. } | ExprKind::Pipe { lhs, rhs } => {
+                self.turn_expr(lhs, inner, alias);
+                self.turn_expr(rhs, inner, alias);
+            }
+            ExprKind::Call { callee, args } => {
+                self.turn_expr(callee, inner, alias);
+                for a in args {
+                    self.turn_expr(a, inner, alias);
+                }
+            }
+            ExprKind::Member { object, .. } => self.turn_expr(object, inner, alias),
+            ExprKind::Index { object, index } => {
+                self.turn_expr(object, inner, alias);
+                self.turn_expr(index, inner, alias);
+            }
+            ExprKind::Lambda { params, body } => {
+                let mut i = inner.clone();
+                i.extend(params.iter().cloned());
+                let mut a = alias.clone();
+                for p in params {
+                    a.remove(p);
+                }
+                match body {
+                    LambdaBody::Expr(x) => self.turn_expr(x, &i, &a),
+                    LambdaBody::Block(b) => self.turn_stmts(&b.stmts, &mut i, &mut a),
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn err(&mut self, code: &'static str, msg: String, span: Span, hint: String) {
         let span = self.inside.unwrap_or(span);
         let (s, e) = ((self.original)(span.start), (self.original)(span.end));
@@ -544,9 +896,15 @@ impl Own<'_> {
                 true
             }
             Stmt::For {
-                var, iter, body, ..
+                var,
+                iter,
+                body,
+                span,
             } => {
                 self.expr(iter, moved);
+                if self.prog.parallel_fors.contains(&span.start) {
+                    self.parallel_writes(var, &body.stmts);
+                }
                 self.looping(&body.stmts, moved, Some(var));
                 true
             }

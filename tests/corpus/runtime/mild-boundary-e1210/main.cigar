@@ -1,0 +1,7 @@
+# RUN THIS FILE: a mild file passes a text where the medium module wants an Int.
+# The value comes from a list, so only the boundary can see it when it runs.
+
+use tools.plan
+
+stick vals = ["twelve", 5]
+exhale plan.double(vals[0])

@@ -88,6 +88,19 @@ pub fn run_file(ctx: &Ctx, path: &Path, f: &RunFlags) -> i32 {
         // Under --json the program's own output owns stdout.
         crate::cli::report_hints(ctx, &name, &checked);
     }
+    if kind == FileKind::Cigar && checked.strength == Strength::Full {
+        let root = crate::experience::project_root(path);
+        let said = crate::experience::confirm_full(
+            &crate::experience::Dirs::from_env(),
+            &root,
+            crate::experience::interactive(),
+            &mut io::stdin().lock(),
+            &mut io::stderr(),
+        );
+        if said == crate::experience::Outcome::Declined {
+            return exit::USAGE;
+        }
+    }
     let stem = path
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
