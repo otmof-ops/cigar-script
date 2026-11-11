@@ -1,0 +1,8 @@
+strength medium
+record Rule {
+  match: Text,
+  use: Int
+}
+stick r = Rule { match: "a", use: 2 }
+exhale r.match
+exhale r.use

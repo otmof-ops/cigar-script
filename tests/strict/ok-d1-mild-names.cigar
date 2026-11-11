@@ -1,0 +1,6 @@
+stick match = 1
+stick use = 2
+pull record(x) {
+  snuff x
+}
+exhale match + use + record(3)

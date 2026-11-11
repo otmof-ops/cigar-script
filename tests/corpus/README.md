@@ -26,7 +26,7 @@ Modules resolve relative to the folder of `main.cigar`. A runner finds cases as
 - Outputs are exact: stdout only, one trailing newline, no effects, no network.
 - A `.err` is two lines: the code, then a substring of the message. Substrings are
   deliberately short (the name at fault, or the phrase the spec gives).
-- Run programs use no reserved word as a name (`move`, `use`, `into`, `measure`...).
+- Run programs use no reserved word as a variable name (`move`, `use`, `into`, `measure`...): after a `.`, as a key, or written `r#word` it is a name, and `run/reserved-words-as-names` does that.
 
 ## Where the spec left a choice
 

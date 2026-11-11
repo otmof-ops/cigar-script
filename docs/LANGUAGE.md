@@ -61,7 +61,8 @@ someone who doesn't know it exists (#4, decided). The checker's feature table is
 table below at build time; a row added here is a row the checker knows.
 
 `detect` is how the checker finds a use:
-- `word:W` is the word `W` anywhere in the file;
+- `word:W` is the word `W` where its syntax begins (see [Reserved words](#reserved-words)):
+  a `W` after a `.` or written as a map key is a name, never a use of the feature;
 - `annotation` is a type written on `stick`, `roll`, a `pull` parameter
   (`name: T`) or a `pull`'s result (`-> T`).
 
@@ -143,6 +144,8 @@ page; until then the message carries the whole explanation.
 | `E1102` | check | a feature the file's strength allows, which this version has not built yet: names the issue it waits on. Today: `foreign`, `unchecked`, and a `within` context other than `retry`, `parallel` and `timeout` |
 | `E1103` | check | a strength declaration that is not the first statement, or names no strength |
 | `E1104` | check | a name that starts `_cg_` or `__cg_`. As kind `internal`: the file lowered to CigScript cig refuses, which is a bug in `cigar` |
+| `E1105` | check | a reserved word where a name goes (`stick match = 1`), in a file whose strength reserves it; or `r#word` and `r_word` both written. The message names the word and offers `r#word` |
+| `W1234` | warning | a name that shadows a keyword the file's strength does not reserve yet: "`match` will be a keyword if this file goes to medium" |
 
 **Types, records and `match`** (medium)
 
@@ -704,25 +707,56 @@ the attribute, and an export is effectful unless it says `pure`.
 
 ## Reserved words
 
-Every word below is reserved in `.cigar` files at every strength, wherever
-it appears: as a name, a map key or a field. That is what makes turning the
-strength up additive.
+The words below are **contextual keywords** (#22 D1): a word is a keyword only
+where its feature's syntax begins, and a name everywhere else. That is what
+makes turning the strength up additive, and what lets a file read a field
+the data already has (`r.match` from parsed JSON, the `.layer` of a box).
 
-| word | belongs to | strength |
-|---|---|---|
-| `strength` | the declaration | all (`E1103` anywhere but the first statement) |
-| `coughs` | typed coughs | medium |
-| `record`, `enum`, `match` | records, enums, pattern matching | medium |
-| `use`, `pub` | modules, exports | medium |
-| `interface`, `impl` | interfaces, implementations | medium |
-| `into`, `measure` | `into` and `measure` on built-in types | medium |
-| `owned`, `borrow`, `move` | ownership | full |
-| `parallel`, `channel` | concurrency | full |
-| `within`, `layer` | context blocks, new layers | full |
-| `foreign`, `unchecked` | calls into Rust and C, unchecked blocks | full (not built) |
+| word | belongs to | strength | it is the keyword when |
+|---|---|---|---|
+| `strength` | the declaration | all | first statement of the file (`E1103` anywhere else as a name) |
+| `coughs` | typed coughs | medium | a type name follows |
+| `record`, `enum`, `interface`, `impl` | records, enums, interfaces, implementations | medium | a name follows (`record Rule {`) |
+| `match` | pattern matching | medium | an expression follows (`match x {`) |
+| `use`, `pub` | modules, exports | medium | a name (`use tools`) or a declaration (`pub pull`) follows |
+| `into`, `measure` | `into` and `measure` on built-in types | medium | `a into b`, `measure x`, or `for` follows (`into for T = ...`) |
+| `owned`, `borrow`, `move` | ownership | full | a name follows (`owned x`, `move x`) |
+| `parallel`, `channel` | concurrency | full | `parallel(...) for`, `channel<T>(` |
+| `within`, `layer` | context blocks, new layers | full | a name follows (`within retry(3) {`, `layer audit {`) |
+| `foreign`, `unchecked` | calls into Rust and C, unchecked blocks | full (not built) | a signature, or `{`, follows |
+
+Three places are never keywords:
+
+- **after `.` or `?.`**: `r.match`, `box.layer`, `x.use(1)`;
+- **as a key** of a map, a record literal or a record's fields: `{layer: 1}`,
+  `Rule { match: "go" }`;
+- **inside a string or a comment**, as everywhere.
+
+A word that is neither a keyword by its shape nor in those places is a name,
+and what that costs depends on the file's strength:
+
+- at a strength that reserves the word it is `E1105`: "`match` is a reserved
+  word in `.cigar` files; rename it, or write `r#match`";
+- below it, it is allowed with the warning `W1234`: "`match` will be a keyword
+  if this file goes to medium". A mild file can keep `stick match = 1`, and
+  turning the strength up tells it where to rename before it breaks.
+
+A shape that reads both ways (`measure(x)`: the keyword and an operand in
+parentheses, or a call of a name) is the keyword at a strength that reserves
+the word and a name below it.
+
+**Raw identifiers.** `r#word` is the name `word` even when `word` is reserved:
+`stick r#match = 1`, `r#match + 1`. It is for medium and full (a mild file
+reads `#` as a comment, as CigScript does, so `r#match` at mild is `E1101`).
+After a `.` or as a key it is the field or key `word` itself (`x.r#use` is
+`x.use`; `{r#layer: 1}` has the key `layer`). As a variable it is the name
+`r_word` underneath, which shows in messages that quote the variable, and
+`r#word` with `r_word` in one file is `E1105`.
 
 The table and the feature table agree: a word is reserved because a row
-in the feature table detects it. A `.cig` file reserves none of them.
+in the feature table detects it. A `.cig` file reserves none of them: a
+reserved word as a name in a `.cig` file is, at most, the hint that file
+gets for medium.
 
 ## The design questions
 

@@ -231,8 +231,13 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
     // Any E1103 the reader raised comes first (they are at the top of
     // the file by definition).
     let mut errors = decl.errors;
-    match gate::scan(&decl.blanked, effective) {
-        Ok(gate_errors) => errors.extend(gate_errors),
+    // What the gate warns of (W1234) goes with the file wherever it ends.
+    let mut gate_warnings = Vec::new();
+    match gate::scan_all(&decl.blanked, effective) {
+        Ok(found) => {
+            errors.extend(found.errors);
+            gate_warnings = placed(found.warnings, source);
+        }
         Err(d) => errors.push(d),
     }
     if !errors.is_empty() {
@@ -240,14 +245,16 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
             effective,
             decl.blanked,
             errors,
-            Vec::new(),
+            gate_warnings,
             Default::default(),
             None,
         );
     }
     if effective == Strength::Mild {
         // Mild is CigScript: the blanked source goes to cig as it is.
-        let (errors, warnings) = parse_and_check(&decl.blanked);
+        let (errors, mut warnings) = parse_and_check(&decl.blanked);
+        warnings.extend(gate_warnings);
+        warnings.sort_by_key(|d: &Diagnostic| (d.line.unwrap_or(0), d.col.unwrap_or(0)));
         return done(
             effective,
             decl.blanked,
@@ -364,7 +371,9 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
         }
     }
     let errors = placed(errors, source);
-    let warnings = placed(warnings, source);
+    let mut warnings = placed(warnings, source);
+    warnings.extend(gate_warnings);
+    warnings.sort_by_key(|d: &Diagnostic| (d.line.unwrap_or(0), d.col.unwrap_or(0)));
     let map = SourceMap {
         lowered,
         resolved: applied,

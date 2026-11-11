@@ -1,0 +1,5 @@
+strength medium
+# `layer` and `move` are full-strength words: names here, with a warning.
+stick layer = 1
+stick move = 2
+exhale layer + move

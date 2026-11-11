@@ -266,7 +266,7 @@ impl ty::Names for Names<'_> {
 /// Lower `src` (a `.cigar` file whose `strength` declaration is already
 /// blanked) at `opts.strength`.
 pub fn lower(src: &str, opts: &Options) -> Lowered {
-    let (work, toks, opt) = match mask(src) {
+    let (work, toks, opt, raw) = match mask_raw(src) {
         Ok(x) => x,
         Err(d) => {
             let mut e = Edits::default();
@@ -283,6 +283,14 @@ pub fn lower(src: &str, opts: &Options) -> Lowered {
             };
         }
     };
+    // A raw identifier is written to cig as the name `mask` read it as.
+    let raw_edits: Vec<(usize, usize, &str)> = raw
+        .iter()
+        .map(|&at| match work.as_bytes()[at + 1] {
+            b'_' => (at + 1, at + 2, "_"),
+            _ => (at, at + 2, "  "),
+        })
+        .collect();
     let mut lines = vec![0];
     for (i, b) in src.bytes().enumerate() {
         if b == b'\n' {
@@ -327,6 +335,9 @@ pub fn lower(src: &str, opts: &Options) -> Lowered {
         tries_done: BTreeSet::new(),
         user_attempt: false,
     };
+    for (a, b, text) in raw_edits {
+        l.e.replace(a, b, text);
+    }
     l.reserved_names();
     l.declarations();
     l.show = !l.prog.records.is_empty() || !l.prog.enums.is_empty();
@@ -338,13 +349,39 @@ pub fn lower(src: &str, opts: &Options) -> Lowered {
 /// cig's lexer has no token for a lone `?` (as in `Int?`): mask each one
 /// it reports with a space, remembering where it was. Strings and comments
 /// are cig's to judge, so a `?` inside one is never touched.
+///
+/// A raw identifier (`r#match`, #22 L9) is not cig's either: `#` starts a
+/// comment there. It is rewritten to the same length before cig reads it, so
+/// every position stays exact: a variable `r#match` becomes `r_match`, and
+/// the word after a `.` or in front of a key's `:` becomes the bare word
+/// (spaces where `r#` was), since a field or a key is never reserved.
 #[allow(clippy::result_large_err)]
 pub fn mask(src: &str) -> Result<(String, Vec<Token>, BTreeSet<usize>), Diagnostic> {
+    mask_raw(src).map(|(w, t, o, _)| (w, t, o))
+}
+
+/// What `mask_raw` reads: the masked text, its tokens, where each `?` was,
+/// and where each raw identifier (`r#word`) started in the source.
+pub type Masked = (String, Vec<Token>, BTreeSet<usize>, Vec<usize>);
+
+/// `mask`, and where each raw identifier (`r#word`) started in `src`.
+#[allow(clippy::result_large_err)]
+pub fn mask_raw(src: &str) -> Result<Masked, Diagnostic> {
     let mut work = src.to_string();
     let mut opt = BTreeSet::new();
+    let mut raw = Vec::new();
     for _ in 0..100_000 {
         match tokenize(&work) {
-            Ok(t) => return Ok((work, split_shifts(t), opt)),
+            Ok(t) => match raw_identifiers(&work, &t) {
+                Some((next, at)) => {
+                    raw.extend(at);
+                    work = next;
+                }
+                None => {
+                    raw.sort_unstable();
+                    return Ok((work, split_shifts(t), opt, raw));
+                }
+            },
             Err(d) => {
                 let at = d.span.map(|s| s.start);
                 match at {
@@ -358,6 +395,50 @@ pub fn mask(src: &str) -> Result<(String, Vec<Token>, BTreeSet<usize>), Diagnost
         }
     }
     Err(Diagnostic::new(DK::Syntax, "too many `?` to read"))
+}
+
+/// Rewrite the raw identifiers cig's lexer has just read as a name `r` and a
+/// comment. `None` when there are none.
+fn raw_identifiers(work: &str, tokens: &[Token]) -> Option<(String, Vec<usize>)> {
+    let bytes = work.as_bytes();
+    let start_of = |b: u8| b.is_ascii_alphabetic() || b == b'_';
+    let mut out: Option<Vec<u8>> = None;
+    let mut at = Vec::new();
+    for (i, t) in tokens.iter().enumerate() {
+        if !matches!(&t.kind, T::Ident(n) if n == "r") || t.span.end != t.span.start + 1 {
+            continue;
+        }
+        let hash = t.span.end;
+        if bytes.get(hash) != Some(&b'#') || !bytes.get(hash + 1).is_some_and(|b| start_of(*b)) {
+            continue;
+        }
+        let mut end = hash + 1;
+        while bytes
+            .get(end)
+            .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_')
+        {
+            end += 1;
+        }
+        let after_dot = i > 0 && matches!(tokens[i - 1].kind, T::Dot | T::SafeDot);
+        let rest = work[end..].trim_start_matches([' ', '\t']);
+        let key = rest.starts_with(':')
+            && i > 0
+            && matches!(tokens[i - 1].kind, T::LBrace | T::Comma | T::Newline);
+        let buf = out.get_or_insert_with(|| bytes.to_vec());
+        if after_dot || key {
+            buf[t.span.start] = b' ';
+            buf[hash] = b' ';
+        } else {
+            buf[hash] = b'_';
+        }
+        at.push(t.span.start);
+    }
+    out.map(|b| {
+        (
+            String::from_utf8(b).expect("only ASCII bytes were replaced"),
+            at,
+        )
+    })
 }
 
 /// `List<Map<Int>>` ends in `>>`, which cig reads as its pipe: in the
@@ -2113,7 +2194,14 @@ impl<'a> L<'a> {
                         j = self.typed_read(j, j + 3, e, true);
                         continue;
                     }
-                    if name == "match" {
+                    // After a `.` or as a key, `match` is a name (#22 D1).
+                    let a_name = matches!(self.k(j.wrapping_sub(1)), T::Dot | T::SafeDot)
+                        || (matches!(self.k(j + 1), T::Colon)
+                            && matches!(
+                                self.k(j.wrapping_sub(1)),
+                                T::LBrace | T::Comma | T::Newline
+                            ));
+                    if name == "match" && !a_name {
                         let sp = self.sp(j);
                         self.err_hint(
                             "E1212",
