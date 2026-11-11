@@ -1,7 +1,7 @@
 # Commands
 
 ```
-cigar check <path>... [--strength mild|medium|full]
+cigar check <path>... [--strength mild|medium|full] [--deny any|warnings]
 cigar run <file> [--dry-run] [--no-rollback] [--max-steps <n>] [--strength mild|medium|full] [-- <args>...]
 cigar --version
 cigar help [command]
@@ -69,6 +69,7 @@ use a name that starts `_cg_` or `__cg_`, which are the lowering's; that is
 | flag | does |
 |---|---|
 | `--strength <mild\|medium\|full>` | check each `.cigar` file as if it declared this strength, whatever it declares. Ignored for `.cig` files. Any other word is a usage error (exit `3`) |
+| `--deny <any\|warnings>` | make a warning an error: `any` is `W1230` (a parameter with no type) at medium, `warnings` is every warning. Repeat the flag for both. A finding keeps its code. Not applied to `.cig` files. Any other word is a usage error (exit `3`) |
 | `--json` | one JSON object per line on stdout; see [the JSON shape](#the-json-shape) |
 | `--plain` | no catchphrases: the same codes, hints and spans, without *Don't see any cigarettes.* Also set by `CIG_PLAIN` |
 | `--no-color` | never color. Also set by `NO_COLOR`. Without either, errors are colored only when stderr is a terminal |
@@ -245,6 +246,11 @@ step reads them the same way.
 | `E1104` | check, or internal | a name that starts `_cg_` or `__cg_`; or, as kind `internal`, a file that lowers to CigScript cig refuses (a bug in `cigar`) |
 | `E1105` | check | a reserved word where a name goes in a file whose strength reserves it; the message offers `r#word` |
 | `W1234` | warning | a name that shadows a keyword a higher strength reserves |
+| `W1230` | warning, error at full | a parameter with no type that the body does not settle; an error at full and under `--deny any` |
+| `W1231` | warning | code after a `snuff`, `cough`, `break`, `continue`, or a `match` or `if` whose every branch ends |
+| `W1232` | warning | a `stick`, `roll`, parameter or `use` that nothing reads; `_` silences it |
+| `W1233` | warning | the result of a pure method or a `-> T` function dropped; `_ = f()` says it is meant |
+| `E502`, `E1510` | check | a divisor, or a sized number, that the checker works out before the program runs (`10 / 0`, `stick c: u8 = b + 10`); they stop the run as well when the number is only known then |
 | `E1200` to `E1399` | check | medium's type, record, `match`, module and interface errors |
 | `E1401`, `E1402` | check | layers: two meanings for a type, or none |
 | `E1403` | check | `break` or `continue` that would leave a `within retry` block |

@@ -6,6 +6,7 @@
 //! `Any`, and `Any` never produces an error. It reports only what it can
 //! prove wrong (docs: SPEC section 4, codes E1201-E1218, E1311-E1313).
 
+pub mod lint;
 pub mod stdlib;
 
 use crate::types::{self, At, SizedInt, Ty};
@@ -460,6 +461,9 @@ struct Var {
     /// Written by the programmer (a binding in `Program::bindings`, a typed
     /// parameter): assignments are checked against it.
     annotated: bool,
+    /// What a `stick` folds to when the checker can see its whole value
+    /// (`stick n = 250`, `stick m = n + 10`): the number it always is.
+    konst: Option<i64>,
 }
 
 struct FnCtx {
@@ -624,15 +628,20 @@ impl<'a> Ck<'a> {
         hint: String,
     ) -> bool {
         // A number written out that a sized type cannot hold.
-        if let (Ty::Sized(sz), Some(v)) = (strip_opt(want), int_literal(e)) {
+        if let (Ty::Sized(sz), Some(v)) = (strip_opt(want), self.fold(e)) {
             let (lo, hi) = sz.range();
             if v < lo || v > hi {
-                self.err(
-                    "E1510",
-                    format!("`{v}` is outside `{}` ({lo} to {hi})", sz.name()),
-                    e.span,
-                    Some(hint),
-                );
+                let msg = if int_literal(e).is_some() {
+                    format!("`{v}` is outside `{}` ({lo} to {hi})", sz.name())
+                } else {
+                    // Worked out before the program runs: say how.
+                    format!(
+                        "`{}` is {v}, outside `{}` ({lo} to {hi})",
+                        self.text_of(e.span),
+                        sz.name()
+                    )
+                };
+                self.err("E1510", msg, e.span, Some(hint));
                 return false;
             }
         }
@@ -864,7 +873,83 @@ impl<'a> Ck<'a> {
                     ty,
                     mutable,
                     annotated,
+                    konst: None,
                 },
+            );
+        }
+    }
+
+    /// Remember that the `stick` just defined is always `v`.
+    fn set_const(&mut self, n: &str, v: i64) {
+        if let Some(var) = self.scopes.last_mut().and_then(|s| s.get_mut(n)) {
+            if !var.mutable {
+                var.konst = Some(v);
+            }
+        }
+    }
+
+    /// The whole number an expression always is, when the checker can see it
+    /// without running anything: written out, or a `stick` of such, through
+    /// `+ - * / %` (#22, L5 and L6). A quotient that is not whole is a float
+    /// and is not folded.
+    fn fold(&self, e: &Expr) -> Option<i64> {
+        match &e.kind {
+            ExprKind::Int(v) => Some(*v),
+            ExprKind::Unary {
+                op: UnOp::Neg,
+                expr,
+            } => self.fold(expr)?.checked_neg(),
+            ExprKind::Ident(n) => self
+                .find_var(n)
+                .filter(|v| !v.mutable)
+                .and_then(|v| v.konst),
+            ExprKind::Binary { op, lhs, rhs } => {
+                let (a, b) = (self.fold(lhs)?, self.fold(rhs)?);
+                match op {
+                    BinOp::Add => a.checked_add(b),
+                    BinOp::Sub => a.checked_sub(b),
+                    BinOp::Mul => a.checked_mul(b),
+                    BinOp::Div if b != 0 && a.checked_rem(b) == Some(0) => a.checked_div(b),
+                    BinOp::Rem if b != 0 => a.checked_rem(b),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Is this divisor certainly zero (`0`, `0.0`, or a `stick` of `0`)?
+    fn zero(&self, e: &Expr) -> bool {
+        match &e.kind {
+            ExprKind::Float(f) => *f == 0.0,
+            ExprKind::Unary {
+                op: UnOp::Neg,
+                expr,
+            } => matches!(&expr.kind, ExprKind::Float(f) if *f == 0.0) || self.fold(e) == Some(0),
+            _ => self.fold(e) == Some(0),
+        }
+    }
+
+    /// `x / 0` and `x % 0`, found before the program runs (E502).
+    fn check_divisor(&mut self, lhs: &Ty, divisor: &Expr, op: &str) {
+        let numeric = matches!(strip_opt(lhs), Ty::Int | Ty::Float | Ty::Sized(_));
+        if numeric && self.zero(divisor) {
+            let (what, text) = (
+                if op == "%" { "modulo" } else { "division" },
+                self.text_of(divisor.span),
+            );
+            let note = if matches!(divisor.kind, ExprKind::Int(_) | ExprKind::Float(_)) {
+                String::new()
+            } else {
+                format!("`{text}` is always 0 here; ")
+            };
+            self.err(
+                "E502",
+                format!("{what} by zero"),
+                divisor.span,
+                Some(format!(
+                    "{note}the program would stop here when it runs; check the divisor first"
+                )),
             );
         }
     }
@@ -1001,6 +1086,11 @@ impl<'a> Ck<'a> {
                 if let Some(b) = &bind {
                     self.validate_ty(b, At::default(), Some(*span), &[]);
                 }
+                // What the value always is, when it can be worked out here.
+                let folded = {
+                    let seen = self.unwrap_check(value).map(|(i, _)| i).unwrap_or(value);
+                    self.fold(seen)
+                };
                 let (ty, annotated) = if let Some((inner, d)) = self.unwrap_check(value) {
                     match bind.or(d) {
                         Some(dt) => {
@@ -1040,6 +1130,21 @@ impl<'a> Ck<'a> {
                     self.guarded = Some((value.span.start, value.span.end));
                     let t = self.infer(value);
                     self.guarded = None;
+                    if let (Ty::Sized(sz), Some(v)) = (&t, folded) {
+                        // Out of range, and the checker can see it (L5).
+                        let (lo, hi) = sz.range();
+                        if v < lo || v > hi {
+                            let shown = self.text_of(value.span);
+                            self.err(
+                                "E1510",
+                                format!("`{shown}` is {v}, outside `{}` ({lo} to {hi})", sz.name()),
+                                value.span,
+                                Some(format!(
+                                    "the numbers are known before the program runs; make `{name}` a wider type, or change the numbers"
+                                )),
+                            );
+                        }
+                    }
                     if let Ty::Sized(_) = &t {
                         // Sized arithmetic, range-checked where it is bound.
                         let text = format!("; {}", crate::lower::guard(name, &t, name));
@@ -1058,6 +1163,9 @@ impl<'a> Ck<'a> {
                     )
                 };
                 self.define(name, ty, *mutable, annotated);
+                if let (false, Some(v)) = (*mutable, folded) {
+                    self.set_const(name, v);
+                }
             }
             Stmt::Assign {
                 target,
@@ -1321,6 +1429,21 @@ impl<'a> Ck<'a> {
     }
 
     fn assign(&mut self, target: &AssignTarget, op: AssignOp, value: &Expr, span: Span) {
+        // `_ = f()`: the result is meant to be dropped (#22, L4). It is a
+        // `stick` of a name nothing can read.
+        if matches!(target, AssignTarget::Var(n) if n == "_")
+            && op == AssignOp::Set
+            && self.find_var("_").is_none()
+        {
+            self.infer(value);
+            self.locals += 1;
+            self.resolutions.push(Resolution::Rename {
+                start: span.start,
+                end: span.start + 1,
+                text: format!("stick __cg_u{}", self.locals),
+            });
+            return;
+        }
         let sized_target = match target {
             AssignTarget::Var(n) => self
                 .find_var(n)
@@ -1347,6 +1470,9 @@ impl<'a> Ck<'a> {
                         )),
                     );
                     return;
+                }
+                if op == AssignOp::Div {
+                    self.check_divisor(&var.declared, value, "/");
                 }
                 let new = if op == AssignOp::Set {
                     vt.clone()
@@ -1710,6 +1836,9 @@ impl<'a> Ck<'a> {
             _ => {
                 self.must_narrow(lhs, &l, "used in arithmetic", lhs.span);
                 self.must_narrow(rhs, &r, "used in arithmetic", rhs.span);
+                if matches!(op, BinOp::Div | BinOp::Rem) {
+                    self.check_divisor(&l, rhs, op.symbol());
+                }
                 arith(op, &l, &r)
             }
         }

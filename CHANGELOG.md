@@ -8,6 +8,22 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **The strictness gaps are found when the file is checked (#22 L1 to L6).**
+  At medium and full, `cigar check` now warns of a parameter of a top-level
+  `pull` that has no type the body settles (`W1230`, an error at full and
+  under `--deny any`), code that cannot run after `snuff`, `cough`, `break`,
+  `continue` or a `match` whose arms all end (`W1231`), a `stick`, `roll`,
+  parameter or `use` nothing reads (`W1232`, `_` silences it) and a dropped
+  result of a pure method or a `-> T` function (`W1233`). `_ = f()` drops a
+  result on purpose. `--deny warnings` makes every warning an error. The
+  checker also folds whole numbers through `stick`: a sized number out of
+  range is `E1510` and a divisor that is `0` is `E502`, both before the
+  program runs; what it cannot see is still checked when it runs. A `.cig`
+  file is never held to any of it. Tests: `any_parameters_warn_and_full_refuses_them`,
+  `unreachable_code_warns`, `unused_names_warn`, `dropped_results_warn`,
+  `constant_overflow_is_found_at_check_time`,
+  `constant_division_by_zero_is_found_at_check_time`,
+  `deny_makes_warnings_errors`, `a_cig_file_is_never_held_to_a_warning`.
 - **Shared writes in a parallel loop are refused, and the turns' values come
   back safely (#22 S8).** The turns of a `parallel(threads: N) for` loop will
   run side by side, so a turn writes only what it declares itself: a `roll`

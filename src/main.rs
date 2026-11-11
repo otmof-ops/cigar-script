@@ -7,6 +7,7 @@
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
+use cigarscript::check::Deny;
 use cigarscript::cli::{ctx_from, exit, run_check, Flags};
 use cigarscript::features::Strength;
 
@@ -82,6 +83,10 @@ struct CheckArgs {
     /// checked). Ignored for .cig files, which are always mild.
     #[arg(long, value_name = "mild|medium|full")]
     strength: Option<String>,
+    /// Make a warning an error: `any` (a parameter with no type, at
+    /// medium) or `warnings` (every warning). Not applied to .cig files.
+    #[arg(long, value_name = "any|warnings")]
+    deny: Vec<String>,
 }
 
 fn main() {
@@ -130,6 +135,7 @@ fn explain_cmd(top: &Cli, a: &ExplainArgs) -> i32 {
         json: top.json,
         plain: top.plain,
         no_color: top.no_color,
+        deny: Deny::default(),
     };
     let ctx = ctx_from(&flags);
     match a.layers.as_deref() {
@@ -151,6 +157,7 @@ fn run_cmd(top: &Cli, a: &RunArgs) -> i32 {
         json: top.json,
         plain: top.plain,
         no_color: top.no_color,
+        deny: Deny::default(),
     };
     let ctx = ctx_from(&flags);
     let strength = match a.strength.as_deref() {
@@ -185,8 +192,24 @@ fn check_cmd(top: &Cli, a: &CheckArgs) -> i32 {
         json: top.json,
         plain: top.plain,
         no_color: top.no_color,
+        deny: Deny::default(),
     };
     let ctx = ctx_from(&flags);
+    for d in &a.deny {
+        match d.as_str() {
+            "any" => flags.deny.any = true,
+            "warnings" => flags.deny.warnings = true,
+            other => {
+                let d = cigscript::diagnostics::usage(format!(
+                    "--deny is `{other}`, want `any` or `warnings`"
+                ))
+                .code("E800")
+                .with_hint("cigar check --deny any, or --deny warnings");
+                cigscript::cli::report(&ctx, &d, None, None);
+                return exit::USAGE;
+            }
+        }
+    }
     if let Some(s) = a.strength.as_deref() {
         match Strength::parse(s) {
             Some(st) => flags.strength = Some(st),

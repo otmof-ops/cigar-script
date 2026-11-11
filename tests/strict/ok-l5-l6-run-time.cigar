@@ -1,0 +1,8 @@
+strength full
+pull div(a: Int, b: Int) -> Int { snuff a / b }
+stick b: u8 = 200
+stick c: u8 = b + 55
+roll r: u8 = 250
+r += 1
+stick half = 10 / 4
+exhale div(10, 2), c, r, half

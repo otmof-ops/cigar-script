@@ -1,0 +1,27 @@
+strength full
+record P { x: Int }
+enum Sh { A, B(Int) }
+interface Named { pull name(self) -> Text }
+impl Named for P { pull name(self) -> Text { snuff "p" } }
+pull show(p: P, label: Text) -> Text {
+  stick n = p.name()
+  snuff "${label}: ${n}"
+}
+pull pick(s: Sh) -> Int {
+  match s {
+    A => { snuff 1 }
+    B(k) => { snuff 2 }
+  }
+}
+pull gen<T>(xs: List<T>, d: T) -> T {
+  snuff xs.first() ?? d
+}
+stick p = P { x: 1 }
+roll acc = 0
+for i in 1..4 { acc += i }
+stick sq = [1, 2].map(pack(v) => v * 2)
+stick ch = channel<Int>()
+_ = ch.send(1)
+exhale show(p, "a"), pick(Sh.A), gen([1], 0), acc, sq
+within retry(3) { exhale 1 }
+try { cough "x" } ashtray e { exhale e }

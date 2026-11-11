@@ -1,0 +1,6 @@
+strength medium
+pull f() -> Int {
+  stick unused = 5
+  snuff 1
+}
+exhale f()

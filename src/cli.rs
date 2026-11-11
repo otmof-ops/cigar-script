@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use cigscript::cli::Ctx;
 use cigscript::diagnostics::{usage, Diagnostic};
 
-use crate::check::{check_file_source, Checked, Kind as FileKind};
+use crate::check::{check_file_source_deny, Checked, Deny, Kind as FileKind};
 use crate::features::Strength;
 
 /// Exit codes, matching `cigcompile build`'s check path (otmof-ops/cig-compile).
@@ -31,6 +31,8 @@ pub struct Flags {
     pub json: bool,
     pub plain: bool,
     pub no_color: bool,
+    /// Which warnings are errors: `--deny any`, `--deny warnings`.
+    pub deny: Deny,
 }
 
 /// Build a cigscript `Ctx` from flags, the way cig-compile does.
@@ -70,7 +72,7 @@ pub fn run_check(ctx: &Ctx, flags: &Flags) -> i32 {
                     continue;
                 }
                 for file in files {
-                    match check_file(ctx, &file, flags.strength) {
+                    match check_file(ctx, &file, flags.strength, flags.deny) {
                         FileOutcome::Ok => {}
                         FileOutcome::Check => had_error = true,
                         FileOutcome::Usage => had_usage = true,
@@ -98,7 +100,7 @@ enum FileOutcome {
     Usage,
 }
 
-fn check_file(ctx: &Ctx, path: &Path, strength: Option<Strength>) -> FileOutcome {
+fn check_file(ctx: &Ctx, path: &Path, strength: Option<Strength>, deny: Deny) -> FileOutcome {
     let kind = match FileKind::from_path(path) {
         Some(k) => k,
         None => {
@@ -124,7 +126,7 @@ fn check_file(ctx: &Ctx, path: &Path, strength: Option<Strength>) -> FileOutcome
     } else {
         strength
     };
-    let checked: Checked = check_file_source(kind, &source, effective, Some(path));
+    let checked: Checked = check_file_source_deny(kind, &source, effective, Some(path), deny);
     let name = path.to_string_lossy().to_string();
     report_checked(ctx, &name, &checked);
     if checked.ok() {

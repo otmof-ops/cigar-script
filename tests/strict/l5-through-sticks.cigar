@@ -1,0 +1,5 @@
+strength full
+stick a: u8 = 100
+stick b = a * 2
+stick c: u8 = b + 100
+exhale c

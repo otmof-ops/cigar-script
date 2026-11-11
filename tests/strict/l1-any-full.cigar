@@ -1,0 +1,5 @@
+strength full
+pull f(x) {
+  snuff x + 1
+}
+exhale f(1)

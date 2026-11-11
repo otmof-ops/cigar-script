@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use cigarscript::check::{check_file_source, Kind};
+use cigarscript::check::{check_file_source, check_file_source_deny, Deny, Kind};
 
 fn cases(prefix: &str) -> Vec<PathBuf> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/strict");
@@ -40,6 +40,40 @@ fn run(prefix: &str) {
                 wrong.push(format!(
                     "{name}: should check, and gives {} {}",
                     d.code, d.message
+                ));
+            }
+            // What a strict file says nothing about (L1-L6) says nothing.
+            if prefix.starts_with('l') {
+                if let Some(w) = checked.warnings.first() {
+                    wrong.push(format!(
+                        "{name}: should be silent, and warns {} {}",
+                        w.code, w.message
+                    ));
+                }
+            }
+            continue;
+        }
+        // `NAME.warn`: it checks, and warns (code on line 1, a substring of
+        // the message on line 2).
+        if let Ok(w) = std::fs::read_to_string(case.with_extension("warn")) {
+            let mut lines = w.lines();
+            let (code, part) = (lines.next().unwrap_or(""), lines.next().unwrap_or(""));
+            if let Some(d) = checked.errors.first() {
+                wrong.push(format!(
+                    "{name}: should check, and gives {} {}",
+                    d.code, d.message
+                ));
+            } else if !checked.warnings.iter().any(|d| {
+                d.code == code
+                    && (d.message.contains(part) || d.hint.as_deref().unwrap_or("").contains(part))
+            }) {
+                let got: Vec<String> = checked
+                    .warnings
+                    .iter()
+                    .map(|d| format!("{} {}", d.code, d.message))
+                    .collect();
+                wrong.push(format!(
+                    "{name}: want warning {code} containing `{part}`, got {got:?}"
                 ));
             }
             continue;
@@ -201,4 +235,137 @@ fn an_error_inside_an_interpolation_is_said_at_its_string() {
     let d = checked.errors.first().expect("an E1501");
     assert_eq!(d.code, "E1501", "{}", d.message);
     assert_eq!((d.line, d.col), (Some(4), Some(8)), "{}", d.message);
+}
+
+#[test]
+fn any_parameters_warn_and_full_refuses_them() {
+    run("l1-");
+}
+
+#[test]
+fn unreachable_code_warns() {
+    run("l2-");
+}
+
+#[test]
+fn unused_names_warn() {
+    run("l3-");
+}
+
+#[test]
+fn dropped_results_warn() {
+    run("l4-");
+}
+
+#[test]
+fn constant_overflow_is_found_at_check_time() {
+    run("l5-");
+}
+
+#[test]
+fn constant_division_by_zero_is_found_at_check_time() {
+    run("l6-");
+}
+
+fn deny(
+    src: &str,
+    kind: Kind,
+    strength: Option<cigarscript::features::Strength>,
+    d: Deny,
+) -> cigarscript::check::Checked {
+    check_file_source_deny(kind, src, strength, None, d)
+}
+
+/// `--deny any` makes the untyped parameter an error at medium; `--deny
+/// warnings` makes every other warning one.
+#[test]
+fn deny_makes_warnings_errors() {
+    let any = "strength medium\npull f(x) {\n  snuff x + 1\n}\nexhale f(1)\n";
+    let none = Deny::default();
+    let c = deny(any, Kind::Cigar, None, none);
+    assert!(c.errors.is_empty() && c.warnings[0].code == "W1230");
+    let c = deny(
+        any,
+        Kind::Cigar,
+        None,
+        Deny {
+            any: true,
+            warnings: false,
+        },
+    );
+    assert_eq!(c.errors[0].code, "W1230", "{:?}", c.errors);
+    assert!(c.warnings.is_empty());
+
+    let dead = "strength medium\npull f() -> Int {\n  snuff 1\n  exhale 2\n}\nexhale f()\n";
+    let c = deny(
+        dead,
+        Kind::Cigar,
+        None,
+        Deny {
+            any: true,
+            warnings: false,
+        },
+    );
+    assert!(
+        c.errors.is_empty(),
+        "`any` is not `warnings`: {:?}",
+        c.errors
+    );
+    let c = deny(
+        dead,
+        Kind::Cigar,
+        None,
+        Deny {
+            any: false,
+            warnings: true,
+        },
+    );
+    assert_eq!(c.errors[0].code, "W1231");
+    assert!(c.errors[0]
+        .hint
+        .as_deref()
+        .unwrap()
+        .contains("--deny warnings"));
+}
+
+/// The superset rule (#1): a `.cig` file never gets one, denied or not.
+#[test]
+fn a_cig_file_is_never_held_to_a_warning() {
+    let src = "pull f(x) { snuff x + 1 }\npull g() { snuff 1\n exhale 2 }\nstick unused = 5\nexhale f(1), g()\n";
+    let all = Deny {
+        any: true,
+        warnings: true,
+    };
+    let c = deny(src, Kind::Cig, None, all);
+    assert!(c.errors.is_empty(), "{:?}", c.errors);
+    assert!(
+        c.warnings.iter().all(|w| !w.code.starts_with("W123")),
+        "{:?}",
+        c.warnings
+    );
+    assert!(c.hints.iter().all(|h| !h.code.starts_with("W123")));
+}
+
+/// Folding stops where a value is not known: a divisor read at run time,
+/// and a float quotient.
+#[test]
+fn only_what_the_checker_can_see_is_folded() {
+    let src = "strength full\npull div(a: Int, b: Int) -> Int { snuff a / b }\nroll z = 0\nexhale 5 / 2, 1.5 / 3.0, div(1, z)\n";
+    let c = check_file_source(Kind::Cigar, src, None, None);
+    assert!(c.errors.is_empty(), "{:?}", c.errors);
+}
+
+/// A parameter written on its own line is said at that line.
+#[test]
+fn a_parameter_is_said_where_it_is_written() {
+    let src =
+        "strength medium\npull f(\n  a: Int,\n  b\n) -> Int {\n  snuff a\n}\nexhale f(1, 2)\n";
+    let c = check_file_source(Kind::Cigar, src, None, None);
+    let lines: Vec<(String, Option<u32>)> = c
+        .warnings
+        .iter()
+        .map(|w| (w.code.to_string(), w.line))
+        .collect();
+    assert!(lines.contains(&("W1230".into(), Some(4))), "{lines:?}");
+    assert!(lines.contains(&("W1232".into(), Some(4))), "{lines:?}");
 }

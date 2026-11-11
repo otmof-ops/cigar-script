@@ -1,0 +1,10 @@
+strength medium
+use tools.lib
+stick later = lib.add1(1)
+pull f(a: Int, _b: Int) -> Int {
+  stick _note = 1
+  snuff a + later
+}
+roll n = 0
+n += 1
+exhale f(1, 2), n

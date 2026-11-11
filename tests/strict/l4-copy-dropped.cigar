@@ -1,0 +1,4 @@
+strength medium
+stick xs = [1, 2]
+xs.copy()
+exhale xs
