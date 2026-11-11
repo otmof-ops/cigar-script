@@ -1,0 +1,4 @@
+strength medium
+stick r#match = 1
+stick r_match = 2
+exhale r#match

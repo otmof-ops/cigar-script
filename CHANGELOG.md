@@ -8,6 +8,19 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **Contextual keywords and raw identifiers (#22 D1 and L9).** The words
+  CigarScript adds are keywords only where their syntax begins (`match x {`,
+  `record Name`, `use path`, `layer name`, `move x`, `parallel(...) for`...).
+  After a `.` and as a map or record key they are names, so a `.cigar` file
+  can read `r.match` from parsed JSON or the `.layer` of a box: cig-orchestrator's
+  `orchestrate.cig`, read as `.cigar`, no longer gets 63 refusals (45 `layer`, 18
+  `use`). As a variable name, a reserved word is `E1105`, "`match` is a reserved
+  word in `.cigar` files; rename it, or write `r#match`", and `r#match` works at
+  medium and full. Below the strength that reserves it, a name that shadows a
+  keyword is allowed with the new warning `W1234`. `E1101` now fires on the
+  syntax (`match x {`), not on a variable called `match`. `strength` after a
+  `.` or as a key is a name too. `docs/LANGUAGE.md`'s "Reserved words" has the
+  rules; `tests/strict/` and `tests/corpus` have the cases.
 - **`Result<T, E>` and `?` (#2).** `Result` is built in, with the variants
   `Ok(value)` and `Err(error)` written bare, `match`ed exhaustively and
   checked like any generic enum. `e?` on a `Result` in a `pull` that returns a

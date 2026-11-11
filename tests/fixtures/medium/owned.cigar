@@ -1,2 +1,4 @@
 strength medium
-stick x = owned
+pull f(owned x) {
+  snuff x
+}

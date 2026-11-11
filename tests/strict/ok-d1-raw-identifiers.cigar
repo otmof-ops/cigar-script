@@ -1,0 +1,4 @@
+strength medium
+stick r#match = 5
+stick r#record = {r#use: 1, r#layer: 2}
+exhale r#match + r#record.r#use + r#record.layer

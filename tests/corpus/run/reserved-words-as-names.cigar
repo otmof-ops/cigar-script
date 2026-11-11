@@ -1,0 +1,18 @@
+strength full
+
+# Words the language reserves are plain names after a dot and as keys, and
+# `r#` writes one as a variable.
+record Rule {
+  match: Text,
+  use: Int
+}
+
+stick data = {layer: 1, move: 2, into: 3, measure: 4}
+stick rule = Rule { match: "go", use: 5 }
+stick r#match = 10
+stick r#use = {r#layer: 6}
+
+exhale data.layer + data.move + data.into + data.measure
+exhale rule.match, rule.use
+exhale r#match + r#use.layer
+exhale r#use?.r#layer

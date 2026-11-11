@@ -96,9 +96,11 @@ fn scan(source: &str, tokens: &[Token]) -> Declaration {
     // Any later use of `strength` is reserved: either as another
     // declaration (which can only be the first statement) or as an
     // ordinary name. Both are E1103.
+    // After a `.` or as a map key it is a name, never the declaration (#22 D1).
+    let names = crate::gate::name_only(tokens);
     for (n, t) in tokens.iter().enumerate() {
         if let TokenKind::Ident(name) = &t.kind {
-            if name == "strength" {
+            if name == "strength" && !names[n] {
                 let is_declaration = decl_span.is_some_and(|s| t.span.start == s.start);
                 if is_declaration {
                     continue;
@@ -110,7 +112,7 @@ fn scan(source: &str, tokens: &[Token]) -> Declaration {
                 let msg = if at_statement_start {
                     "`strength` declarations must be the first statement of the file".to_string()
                 } else {
-                    "`strength` is reserved in .cigar files; use another name".to_string()
+                    crate::gate::reserved_message("strength")
                 };
                 errors.push(e1103(msg, t.span));
             }

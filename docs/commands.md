@@ -91,7 +91,7 @@ cigar check . src tools
 | strength | always mild | the one it declares; mild with none |
 | `strength` line | not allowed: `E203`, `cig check`'s own | allowed as the first statement |
 | medium and full features | not a feature: CigScript reads the file as it always did | `E1101` above the strength, `E1102` if not built |
-| reserved words (`record`, `match`, `move`...) | ordinary names | reserved at every strength |
+| reserved words (`record`, `match`, `move`...) | ordinary names | keywords only where their syntax begins; after `.` and as map keys they are names; as a variable name `E1105` at the strength that reserves them, `W1234` below it |
 | `--strength` | ignored | applied |
 
 Any other extension is a usage error: `cigar check a.txt` says `a.txt: not a
@@ -243,6 +243,8 @@ step reads them the same way.
 | `E1102` | check | a feature at or below the file's strength that is not built yet in this version |
 | `E1103` | check | a `strength` declaration that is not the first statement, or names no strength |
 | `E1104` | check, or internal | a name that starts `_cg_` or `__cg_`; or, as kind `internal`, a file that lowers to CigScript cig refuses (a bug in `cigar`) |
+| `E1105` | check | a reserved word where a name goes in a file whose strength reserves it; the message offers `r#word` |
+| `W1234` | warning | a name that shadows a keyword a higher strength reserves |
 | `E1200` to `E1399` | check | medium's type, record, `match`, module and interface errors |
 | `E1401`, `E1402` | check | layers: two meanings for a type, or none |
 | `E1403` | check | `break` or `continue` that would leave a `within retry` block |

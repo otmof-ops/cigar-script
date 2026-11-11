@@ -1,0 +1,4 @@
+stick x = 1
+match x {
+  _ => exhale 1
+}

@@ -1,0 +1,2 @@
+E1105
+`use` is a reserved word in `.cigar` files; rename it, or write `r#use`
