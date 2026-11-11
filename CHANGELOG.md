@@ -8,6 +8,16 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **A crash in cigar joins the family's one queue (cig-installer#10).** A panic is written
+  into cig's ashtray as a report from `cigar-script`, handed over the way `cigo` does it (`cig
+  crash submit --origin cigar-script --repo otmof-ops/cigar-script`), or, with no `cig` on the
+  machine, written in the same schema (built with cig's own crash code, so the redaction is cig's:
+  every path a shape, the command line only the words cigar knows). `ciginstaller crash list`
+  shows it and `ciginstaller crash send` files it here. Nothing is sent by the crash itself, and
+  `reports = never` (the installer's setting, `CIG_REPORTS`, `CIGI_REPORTS`, cig's own config, or a
+  machine lock the installer reports) saves nothing. `src/crash.rs` has the tests: a deliberate
+  panic in a child of the test binary leaves one report with `origin` `cigar-script`, and every way
+  of saying `never` leaves none.
 - **A number out of range inside a list or map is found when the file is
   checked, and a boundary failure names where (#22 L7 and L8).**
   `stick xs: List<u8> = [1, 2, 300]` is `E1510` at the `300` at check time,
