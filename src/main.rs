@@ -4,6 +4,8 @@
 //! (or a folder's `.cig` and `.cigar` files at the top level) the way `cig
 //! check` does; `cigar run` checks a file and runs it.
 
+mod crash;
+
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -98,7 +100,28 @@ fn main() {
     std::process::exit(run());
 }
 
+/// The words a command line may say in a crash report: the parser's own subcommands and flags.
+fn cli_words() -> Vec<String> {
+    use clap::CommandFactory;
+    fn walk(c: &clap::Command, out: &mut Vec<String>) {
+        out.push(c.get_name().to_string());
+        for a in c.get_arguments() {
+            out.extend(a.get_long().map(|l| format!("--{l}")));
+            out.extend(a.get_short().map(|s| format!("-{s}")));
+        }
+        for s in c.get_subcommands() {
+            walk(s, out);
+        }
+    }
+    let mut out = Vec::new();
+    walk(&Cli::command(), &mut out);
+    out
+}
+
 fn run() -> i32 {
+    // A crash joins the family's one queue (cig-installer#10). A program `cigar run` built took
+    // the branch above and has cig's own hook.
+    crash::install(cli_words());
     let cli = match Cli::try_parse() {
         Ok(c) => c,
         Err(e) => {

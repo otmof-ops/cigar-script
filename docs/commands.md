@@ -222,6 +222,25 @@ errors are printed and the exit is `2`. A `.cig` file, a mild file, a bad
 position and a place with no layer exit `3` (`E800`), the last listing where
 the file's layers are. [The language](LANGUAGE.md) has the rules.
 
+## When `cigar` itself crashes
+
+A bug in `cigar` (a panic, not an error code) is kept for you, not sent. It joins the family's
+one queue, cig's ashtray, as a report from `cigar-script`: with `cig` on this machine `cigar`
+hands it over (`cig crash submit --origin cigar-script`), the way `cigo` does; without one it
+writes the same report into `$CIGSCRIPT_HOME/ashtray` (`~/.cigscript/ashtray`). Nothing leaves
+the machine. Every path in it is a shape, and the command line keeps only the words `cigar`
+knows. A program `cigar run` built reports as `cig` does, because it is `cig`'s runtime.
+
+```text
+ciginstaller crash list          # every tool's reports, together
+ciginstaller crash show <id>     # exactly what sending it would carry
+ciginstaller crash send <id>     # files it in otmof-ops/cigar-script
+```
+
+`reports = never` (`ciginstaller config set reports never`, `CIG_REPORTS=never`, or a setting
+your organization locks) means nothing is saved at all: `cigar` says so in one line and stops as
+it would have.
+
 ## Exit codes
 
 | code | `cigar check` | `cigar run` |
