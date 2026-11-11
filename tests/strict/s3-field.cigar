@@ -1,0 +1,4 @@
+strength medium
+record P { name: Text }
+pull f(p: P?) -> Text { snuff p.name }
+exhale f(null)

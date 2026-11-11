@@ -1,0 +1,5 @@
+strength medium
+pull f(n: Int) -> Int {
+  if n > 0 { snuff 1 }
+}
+stick r: Int = f(-1)

@@ -1,0 +1,3 @@
+strength medium
+pull add(xs: ListView<Int>) { xs.push(1) }
+add([1])

@@ -1,0 +1,4 @@
+strength medium
+pull apply(f: (Float) -> Int) -> Int { snuff f(1.5) }
+pull dbl(n: Int) -> Int { snuff n * 2 }
+exhale apply(dbl)

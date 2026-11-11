@@ -1,0 +1,14 @@
+strength full
+
+roll total = 0
+within timeout(2s) {
+  for n in [1, 2, 3] {
+    total += n
+  }
+}
+exhale total
+within retry(2) {
+  within timeout(5s) {
+    exhale "inside both"
+  }
+}

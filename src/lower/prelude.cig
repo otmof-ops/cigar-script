@@ -315,6 +315,14 @@ pull _cg_into_list(v, target) {
   target.push(v)
 }
 
+# `rows into workers`: a channel's `send`.
+pull _cg_into_channel(v, target) {
+  if target.closed() {
+    cough {code: "E1520", message: "E1520 send on a closed channel"}
+  }
+  target.send(v)
+}
+
 pull _cg_into_path(v, target) {
   if type_of(v) == "string" {
     fs.write_text(target, v)

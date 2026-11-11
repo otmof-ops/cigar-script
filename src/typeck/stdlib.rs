@@ -314,7 +314,7 @@ fn log(name: &str) -> Option<Sig> {
 pub fn method(recv: &Ty, name: &str) -> Option<Sig> {
     match recv {
         Ty::Text | Ty::Path => text_method(name),
-        Ty::List(_) => list_method(name),
+        Ty::List(_) | Ty::ListView(_) => list_method(name),
         Ty::Map(_) => map_method(name),
         _ => None,
     }

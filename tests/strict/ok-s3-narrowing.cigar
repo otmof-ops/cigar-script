@@ -1,0 +1,29 @@
+strength medium
+pull a(x: Text?) -> Int {
+  if x != null { snuff x.len() }
+  snuff 0
+}
+pull b(x: Text?) -> Int {
+  if x == null { snuff 0 }
+  snuff x.len()
+}
+pull c(x: Text?) -> Text { snuff x ?? "d" }
+pull d(x: Text?) -> Int? { snuff x?.len() }
+pull e(x: Int?) -> Int {
+  if x != null and x > 1 { snuff x + 1 }
+  snuff 0
+}
+pull g(x: Text?) -> Int {
+  roll n = 0
+  while x != null {
+    n += x.len()
+    break
+  }
+  snuff n
+}
+pull h(x: Text?) -> Int {
+  roll y: Text? = x
+  y = "set"
+  snuff y.len()
+}
+exhale a("ab"), b(null), c(null), d("a"), e(2), g("ab"), h(null)

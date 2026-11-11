@@ -1,11 +1,11 @@
 # Full: control over how the work is done
 
 > **Most of full is built and runs; four parts are not.** Ownership,
-> `parallel` loops, channels, `within retry` and `within parallel`, sized
-> numbers, `Bytes` and `Channel<T>` types, and `layer` declarations all work.
-> `foreign`, `unchecked` blocks, `within` contexts other than `retry` and
-> `parallel`, and custom journaling adapters are not built, and a file that
-> uses one of the first three stops at `E1102` naming the issue. The syntax
+> `parallel` loops, channels, `within retry`, `within parallel` and
+> `within timeout`, sized numbers, `Bytes` and `Channel<T>` types, and `layer`
+> declarations all work. `foreign`, `unchecked` blocks, user-declared
+> `within` contexts, and custom journaling adapters are not built, and a file
+> that uses one of the first three stops at `E1102` naming the issue. The syntax
 > is **provisional**: it follows the answers in
 > [the language](../LANGUAGE.md#the-design-questions) to design questions #3,
 > #4 and #5, which are still open.
@@ -194,7 +194,7 @@ nothing was changed
 
 ### `within`
 
-A `within` block sets a context, and the code inside adapts to it. Two
+A `within` block sets a context, and the code inside adapts to it. Three
 contexts are built.
 
 `within retry(n)` runs the block, and when it coughs runs it again, up to
@@ -202,6 +202,12 @@ contexts are built.
 `within retry(n, backoff: 2s)` waits the backoff between tries.
 `within parallel(...)` runs its block, with the same guarantee as a
 `parallel` loop: in order, on one thread, today.
+`within timeout(2s)` gives the block two seconds. The deadline is checked at
+the top of every `for` and `while` pass in the block, and once more when the
+block ends; past it, the block coughs `E1404`, so its burns roll back with the
+run, or a `within retry` around it tries again. A single call that never
+returns is not interrupted. The limit is a duration (`500ms`, `2s`, `1m`) or
+a number of milliseconds.
 
 ```cigar
 strength full
@@ -223,26 +229,29 @@ ok after 2
 2
 ```
 
+Nesting stacks them, and the order matters: `retry` around `timeout` gives
+each try its own deadline, `timeout` around `retry` gives all the tries one.
+
 Any other context is not built, and says so:
 
 <!-- expect: E1102 -->
 ```cigar
 strength full
 
-within timeout(5) {
+within eventually(5) {
   exhale 1
 }
 ```
 
 ```sh
-$ cigar check timeout.cigar
+$ cigar check eventually.cigar
 Don't see any cigarettes.
-error[E1102 check]: `within timeout` is full-strength CigarScript, not built yet in this version (otmof-ops/cigar-script#13)
-  --> timeout.cigar:3:8
+error[E1102 check]: `within eventually` is not a context this version has: a user-declared context is full-strength CigarScript, not built yet (otmof-ops/cigar-script#13)
+  --> eventually.cigar:3:8
   |
-3 | within timeout(5) {
-  |        ^^^^^^^
-  = hint: `within retry(n)` and `within parallel(...)` are built
+3 | within eventually(5) {
+  |        ^^^^^^^^^^
+  = hint: `within retry(n)`, `within parallel(...)` and `within timeout(d)` are built
   = explain: cig explain E1102
 ```
 
@@ -349,8 +358,10 @@ Four rules keep it readable:
 - **Every layer reduces to CigScript.** However rich an expression gets, it
   is lowered to plain CigScript before it runs, which is what keeps it
   trustworthy. `cigar run` shows your own line on a run-time error.
-- **The tools can always explain it.** `cig explain --layers` is to peel an
-  expression back layer by layer. It is **not built** ([#13](https://github.com/otmof-ops/cigar-script/issues/13)).
+- **The tools can always explain it.** `cigar explain --layers file:line:col`
+  peels the `into`, `measure` or `within` at that place back layer by layer:
+  which meaning was chosen, for which type, and the CigScript it becomes.
+  See [`cigar explain`](../commands.md#cigar-explain).
 
 ## What is not built
 
@@ -361,7 +372,7 @@ the first three gets `E1102`, which names the issue:
 |---|---|---|
 | `foreign "c" { ... }`, calls into Rust and C | `E1102` | [#5](https://github.com/otmof-ops/cigar-script/issues/5): the kernel loading a library, and how the burn rule applies |
 | `unchecked { ... }`, sized-number checks off | `E1102` | [#12](https://github.com/otmof-ops/cigar-script/issues/12) |
-| `within` with a context other than `retry` and `parallel` | `E1102` | [#13](https://github.com/otmof-ops/cigar-script/issues/13) |
+| `within` with a user-declared context | `E1102` | [#13](https://github.com/otmof-ops/cigar-script/issues/13) |
 | a custom journaling adapter for a `burn` | no syntax yet | [#12](https://github.com/otmof-ops/cigar-script/issues/12) |
 
 Scripts that read each other's results by context (`stats.total`) are

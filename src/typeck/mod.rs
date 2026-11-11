@@ -35,6 +35,42 @@ pub struct Output {
     pub errors: Vec<Diagnostic>,
     pub warnings: Vec<Diagnostic>,
     pub resolutions: Vec<Resolution>,
+    /// Which layer each `into` and `measure` chose, for `cigar explain --layers`.
+    pub layers: Vec<LayerNote>,
+}
+
+/// What a layer expression chose: where it is in the file as written, which
+/// layer, for which type, and how it reduces.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LayerNote {
+    /// The expression, in the file as written (byte offsets).
+    pub start: usize,
+    pub end: usize,
+    /// `into`, `measure`, or a declared layer's name.
+    pub layer: String,
+    /// The type the choice was made by, as written (`Path`, `List<Int>`).
+    pub ty: String,
+    /// The text of what the type came from (`"report.csv"`).
+    pub subject: String,
+    /// The text of the value an `into` puts (`rows`); the subject for `measure`.
+    pub value: String,
+    /// The type of that value.
+    pub value_ty: String,
+    pub choice: Choice,
+    /// Was the expression inside a `burn` block?
+    pub in_burn: bool,
+}
+
+/// Where the meaning came from.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Choice {
+    /// A built-in layer: the CigScript function it becomes, and whether it
+    /// touches the world.
+    Builtin { function: String, effect: bool },
+    /// A meaning the file (or a module) declared: `measure for Path = f`.
+    Declared { function: String },
+    /// The checker could not see the type; the run chooses, on that line.
+    Runtime,
 }
 
 /// One rewrite of the lowered text, at lowered offsets.
@@ -74,16 +110,38 @@ pub fn check_all(
     prog: &types::Program,
     original: &dyn Fn(usize) -> usize,
 ) -> Output {
+    check_all_in(ast, prog, original, "")
+}
+
+/// `check_all`, given the file as written so a message can quote the
+/// expression it is about (`"report.csv"` is a Path).
+pub fn check_all_in(
+    ast: &Program,
+    prog: &types::Program,
+    original: &dyn Fn(usize) -> usize,
+    source: &str,
+) -> Output {
     let prog = normalize(prog);
     let mut ck = Ck::new(&prog, original);
+    ck.source = source;
     ck.validate_decls();
     ck.check_impls();
     ck.scopes.push(HashMap::new());
+    // A function declared anywhere in the file may be called before the point
+    // where it is written (cig hoists `pull`s): what it assigns that is not
+    // its own is known up front.
+    for s in &ast.body {
+        if let Stmt::Pull(f) = s {
+            let names = free_assigned(f);
+            ck.closure_assigned.extend(names);
+        }
+    }
     ck.stmts(&ast.body);
     Output {
         errors: ck.diags,
         warnings: ck.warnings,
         resolutions: ck.resolutions,
+        layers: ck.layers,
     }
 }
 
@@ -94,6 +152,7 @@ fn norm_ty(t: &Ty, p: &types::Program) -> Ty {
     let go = |t: &Ty| norm_ty(t, p);
     match t {
         Ty::List(a) => Ty::List(Box::new(go(a))),
+        Ty::ListView(a) => Ty::ListView(Box::new(go(a))),
         Ty::Map(a) => Ty::Map(Box::new(go(a))),
         Ty::Opt(a) => Ty::Opt(Box::new(go(a))),
         Ty::Channel(a) => Ty::Channel(Box::new(go(a))),
@@ -154,12 +213,65 @@ fn normalize(p: &types::Program) -> types::Program {
 }
 
 fn assignable(from: &Ty, to: &Ty) -> bool {
+    fits(from, to, false)
+}
+
+/// Does a value in a mutable container's type argument fit? A mutable
+/// container is invariant: `List<Int>` is not a `List<Any>`, because the
+/// `List<Any>` could be written to with a text. `Any` where a type is wanted
+/// is the one gradual step that stays (checked when the program runs).
+fn invariant(from: &Ty, to: &Ty) -> bool {
     use Ty::*;
     match (from, to) {
+        (Any, _) | (Never, _) | (Bytes, _) | (_, Bytes) => true,
+        (_, Any) => false,
+        (Opt(a), Opt(b)) => invariant(a, b),
+        (List(a), List(b)) | (Map(a), Map(b)) | (Channel(a), Channel(b)) => invariant(a, b),
+        (ListView(a), ListView(b)) => invariant(a, b),
+        (Fn(pa, ra), Fn(pb, rb)) => {
+            pa.len() == pb.len()
+                && pa.iter().zip(pb).all(|(a, b)| invariant(b, a))
+                && invariant(ra, rb)
+        }
+        (Record(a, aa), Record(b, ab)) | (Enum(a, aa), Enum(b, ab)) => {
+            a == b
+                && (aa.is_empty()
+                    || ab.is_empty()
+                    || (aa.len() == ab.len() && aa.iter().zip(ab).all(|(x, y)| invariant(x, y))))
+        }
+        (Text | Path, Text | Path) => true,
+        _ => from == to,
+    }
+}
+
+/// A function's parameter: the type the caller will hand it (`to`) has to
+/// fit what the function was written for (`from`), and `Any` is not a
+/// stand-in for a type here, because the function would be given a value
+/// it was never written for.
+fn param_fits(handed: &Ty, written: &Ty, cov: bool) -> bool {
+    match (handed, written) {
+        (Ty::Any, Ty::Any) => true,
+        (Ty::Any, _) => false,
+        _ => fits(handed, written, cov),
+    }
+}
+
+/// `fits(from, to, cov)`; `cov` is true for a value nothing else holds (a
+/// list written out, a copy), which may be seen as a list of a wider type.
+fn fits(from: &Ty, to: &Ty, cov: bool) -> bool {
+    use Ty::*;
+    let args = |a: &Ty, b: &Ty| {
+        if cov {
+            fits(a, b, true)
+        } else {
+            invariant(a, b)
+        }
+    };
+    match (from, to) {
         (Any, _) | (_, Any) | (Never, _) | (Bytes, _) | (_, Bytes) => true,
-        (Opt(a), Opt(b)) => assignable(a, b),
+        (Opt(a), Opt(b)) => fits(a, b, cov),
         (Null, Opt(_)) | (Null, Null) => true,
-        (f, Opt(b)) => assignable(f, b),
+        (f, Opt(b)) => fits(f, b, cov),
         (Opt(_), _) => false,
         (Param(a), Param(b)) => a == b,
         (Param(_), _) | (_, Param(_)) => false,
@@ -167,18 +279,48 @@ fn assignable(from: &Ty, to: &Ty) -> bool {
         (Float, Float | Sized(_)) => true,
         (Text | Path, Text | Path) => true,
         (Bool, Bool) => true,
-        (List(a), List(b)) | (Map(a), Map(b)) | (Channel(a), Channel(b)) => assignable(a, b),
+        (List(a) | ListView(a), ListView(b)) => fits(a, b, cov),
+        (List(a), List(b)) | (Map(a), Map(b)) | (Channel(a), Channel(b)) => args(a, b),
         (Fn(pa, ra), Fn(pb, rb)) => {
             pa.len() == pb.len()
-                && pa.iter().zip(pb).all(|(a, b)| assignable(b, a))
-                && assignable(ra, rb)
+                && pa.iter().zip(pb).all(|(a, b)| param_fits(b, a, cov))
+                && fits(ra, rb, cov)
         }
         (Record(a, aa), Record(b, ab)) | (Enum(a, aa), Enum(b, ab)) => {
             a == b
                 && (aa.is_empty()
                     || ab.is_empty()
-                    || (aa.len() == ab.len() && aa.iter().zip(ab).all(|(x, y)| assignable(x, y))))
+                    || (aa.len() == ab.len() && aa.iter().zip(ab).all(|(x, y)| args(x, y))))
         }
+        _ => false,
+    }
+}
+
+/// A value nothing else holds: a list or map written out, or what a method
+/// that makes a new list gives back (`a.copy()`).
+fn is_fresh(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::List(_) | ExprKind::Map(_) => true,
+        ExprKind::Binary {
+            op: BinOp::Range, ..
+        } => true,
+        ExprKind::Method {
+            name, safe: false, ..
+        } => matches!(
+            name.as_str(),
+            "copy"
+                | "map"
+                | "filter"
+                | "slice"
+                | "unique"
+                | "flatten"
+                | "zip"
+                | "enumerate"
+                | "chunks"
+                | "keys"
+                | "values"
+                | "entries"
+        ),
         _ => false,
     }
 }
@@ -196,8 +338,8 @@ fn join(a: &Ty, b: &Ty) -> Ty {
         (Ty::Null, Ty::Any) | (Ty::Any, Ty::Null) => Ty::Any,
         (Ty::Null, t) | (t, Ty::Null) => Ty::Opt(Box::new(t.clone())),
         (Ty::Any, _) | (_, Ty::Any) => Ty::Any,
-        _ if assignable(a, b) => b.clone(),
-        _ if assignable(b, a) => a.clone(),
+        _ if fits(a, b, true) => b.clone(),
+        _ if fits(b, a, true) => a.clone(),
         _ => Ty::Any,
     }
 }
@@ -215,6 +357,8 @@ fn unify(pat: &Ty, act: &Ty, gens: &[String], b: &mut HashMap<String, Ty>) {
         (Ty::Opt(_), Ty::Null) => {}
         (Ty::Opt(p), a) => unify(p, a, gens, b),
         (Ty::List(p), Ty::List(a))
+        | (Ty::ListView(p), Ty::List(a))
+        | (Ty::ListView(p), Ty::ListView(a))
         | (Ty::Map(p), Ty::Map(a))
         | (Ty::Channel(p), Ty::Channel(a)) => unify(p, a, gens, b),
         (Ty::Fn(pp, pr), Ty::Fn(ap, ar)) => {
@@ -238,6 +382,7 @@ fn subst(t: &Ty, gens: &[String], b: &HashMap<String, Ty>) -> Ty {
     match t {
         Ty::Param(n) if gens.contains(n) => b.get(n).cloned().unwrap_or(Ty::Any),
         Ty::List(a) => Ty::List(Box::new(go(a))),
+        Ty::ListView(a) => Ty::ListView(Box::new(go(a))),
         Ty::Map(a) => Ty::Map(Box::new(go(a))),
         Ty::Opt(a) => match go(a) {
             Ty::Opt(i) => Ty::Opt(i),
@@ -330,6 +475,10 @@ struct Ck<'a> {
     diags: Vec<Diagnostic>,
     warnings: Vec<Diagnostic>,
     resolutions: Vec<Resolution>,
+    /// The file as written, when the caller gave it.
+    source: &'a str,
+    /// Every layer choice, for `cigar explain --layers`.
+    layers: Vec<LayerNote>,
     /// How many `burn` blocks enclose the statement being checked.
     burn_depth: usize,
     /// The value of a `stick` or `roll` whose arithmetic a statement guard
@@ -345,6 +494,9 @@ struct Ck<'a> {
     fns: HashMap<String, types::FnSig>,
     impl_self: HashMap<String, Ty>,
     ctx: Vec<FnCtx>,
+    /// Names a closure written so far assigns to: a call may run it, so a
+    /// null check on one does not outlast a call.
+    closure_assigned: HashSet<String>,
     seen: HashSet<(&'static str, usize, usize)>,
 }
 
@@ -374,6 +526,8 @@ impl<'a> Ck<'a> {
             diags: vec![],
             warnings: vec![],
             resolutions: vec![],
+            source: "",
+            layers: vec![],
             burn_depth: 0,
             guarded: None,
             stmt_end: None,
@@ -383,6 +537,7 @@ impl<'a> Ck<'a> {
             fns,
             impl_self,
             ctx: vec![],
+            closure_assigned: HashSet::new(),
             seen: HashSet::new(),
         }
     }
@@ -481,7 +636,7 @@ impl<'a> Ck<'a> {
                 return false;
             }
         }
-        if assignable(found, want) {
+        if fits(found, want, is_fresh(e)) {
             return true;
         }
         // A list or map written out: point at the element that does not fit.
@@ -510,6 +665,24 @@ impl<'a> Ck<'a> {
             (code, format!("expected `{want}`, found `{found}`"))
         };
         let mut hint = hint;
+        if let (Ty::List(a), Ty::List(b)) | (Ty::Map(a), Ty::Map(b)) =
+            (strip_opt(found), strip_opt(want))
+        {
+            if !matches!(*a, Ty::Any) && fits(&a, &b, true) {
+                let (fs, ws) = (strip_opt(found), strip_opt(want));
+                hint.push_str(&format!(
+                    "; `{fs}` doesn't fit `{ws}`: a {} you can write to has to be exactly its type, \
+                     or what is written through the wider name could break the narrower one; \
+                     use `.copy()` to make a `{ws}`{}",
+                    if matches!(fs, Ty::Map(_)) { "map" } else { "list" },
+                    if matches!(fs, Ty::List(_)) {
+                        ", or take a `ListView<T>` where the function only reads"
+                    } else {
+                        ""
+                    }
+                ));
+            }
+        }
         if let Ty::Opt(inner) = found {
             if assignable(inner, want) {
                 hint.push_str("; the value may be null, so check it with `!= null` first");
@@ -524,7 +697,7 @@ impl<'a> Ck<'a> {
     fn validate_ty(&mut self, t: &Ty, at: At, span: Option<Span>, generics: &[String]) {
         let prog = self.prog;
         match t {
-            Ty::List(a) | Ty::Map(a) | Ty::Opt(a) | Ty::Channel(a) => {
+            Ty::List(a) | Ty::ListView(a) | Ty::Map(a) | Ty::Opt(a) | Ty::Channel(a) => {
                 self.validate_ty(a, at, span, generics)
             }
             Ty::Fn(ps, r) => {
@@ -991,7 +1164,7 @@ impl<'a> Ck<'a> {
                 self.reset_narrowing(&assigned(&body.stmts));
                 let it = self.infer(iter);
                 let el = match strip_opt(&it) {
-                    Ty::List(t) => *t,
+                    Ty::List(t) | Ty::ListView(t) => *t,
                     Ty::Map(_) => Ty::Text,
                     Ty::Text | Ty::Path => Ty::Text,
                     _ => Ty::Any,
@@ -1095,8 +1268,56 @@ impl<'a> Ck<'a> {
         let burns = std::mem::take(&mut self.burn_depth);
         self.stmts(&f.body.stmts);
         self.burn_depth = burns;
+        if let Some((rt, shown_fn)) = self
+            .ctx
+            .last()
+            .and_then(|c| c.ret.clone().map(|r| (r, c.name.clone())))
+        {
+            self.every_path_returns(&f.body, &rt, &shown_fn);
+        }
         self.ctx.pop();
         self.scopes.pop();
+    }
+
+    /// A function with a result that is not `T?` or `Null` has to `snuff`
+    /// (or `cough`) on every path (E1217, at the closing brace).
+    fn every_path_returns(&mut self, body: &Block, ret: &Ty, name: &str) {
+        if matches!(ret, Ty::Any | Ty::Null | Ty::Opt(_) | Ty::Never) {
+            return;
+        }
+        if ends(&body.stmts) {
+            return;
+        }
+        let end = body.span.end;
+        let close = Span::new(end.saturating_sub(1), end, body.span.line, body.span.col);
+        let note = match body.stmts.last() {
+            Some(Stmt::If {
+                otherwise: None,
+                span,
+                ..
+            }) => format!(
+                "the `if` on line {} has no `else`, so a path falls out of `{name}` without a `snuff`",
+                span.line
+            ),
+            Some(Stmt::If { span, .. }) => format!(
+                "a branch of the `if` on line {} ends without a `snuff`",
+                span.line
+            ),
+            Some(Stmt::While { span, .. } | Stmt::For { span, .. }) => format!(
+                "the loop on line {} can end without a `snuff`",
+                span.line
+            ),
+            Some(_) => "the last statement does not `snuff` or `cough`".to_string(),
+            None => "the body is empty".to_string(),
+        };
+        self.err(
+            "E1217",
+            format!("`{name}` is declared `-> {ret}` and a path ends without giving one"),
+            close,
+            Some(format!(
+                "{note}; end every path with `snuff` a `{ret}`, or `cough`"
+            )),
+        );
     }
 
     fn assign(&mut self, target: &AssignTarget, op: AssignOp, value: &Expr, span: Span) {
@@ -1159,7 +1380,16 @@ impl<'a> Ck<'a> {
                             text,
                         });
                     }
-                    self.set_all(n, |v| v.ty = v.declared.clone());
+                    // a value that is certainly not null narrows a `T?`
+                    let sure = op == AssignOp::Set
+                        && !matches!(vt, Ty::Opt(_) | Ty::Null | Ty::Any)
+                        && matches!(&d, Ty::Opt(i) if assignable(&vt, i));
+                    self.set_all(n, |v| {
+                        v.ty = match (&v.declared, sure) {
+                            (Ty::Opt(i), true) => (**i).clone(),
+                            _ => v.declared.clone(),
+                        }
+                    });
                 } else {
                     let w = join(&var.declared, &new);
                     self.set_all(n, move |v| {
@@ -1169,11 +1399,21 @@ impl<'a> Ck<'a> {
                 }
             }
             AssignTarget::Index { object, index } => {
-                self.infer(object);
+                let ot = self.infer(object);
                 self.infer(index);
+                self.must_narrow(object, &ot, "indexed", span);
+                if let Ty::ListView(_) = strip_opt(&ot) {
+                    self.err(
+                        "E1215",
+                        format!("`{}` is read-only: an element cannot be assigned through it", strip_opt(&ot)),
+                        span,
+                        Some("a `ListView<T>` is for reading; ask for a `List<T>` to write, or `.copy()` it first".into()),
+                    );
+                }
             }
             AssignTarget::Member { object, name } => {
                 let ot = self.infer(object);
+                self.must_narrow(object, &ot, "written through", span);
                 if let Ty::Record(..) = strip_opt(&ot) {
                     if let Some(ft) =
                         self.field_ty(&strip_opt(&ot), name, object, value.span, false)
@@ -1286,6 +1526,9 @@ impl<'a> Ck<'a> {
             }
             ExprKind::Unary { op, expr } => {
                 let t = self.infer(expr);
+                if *op == UnOp::Neg {
+                    self.must_narrow(expr, &t, "negated", e.span);
+                }
                 match op {
                     UnOp::Not => Ty::Bool,
                     UnOp::Neg => match t {
@@ -1332,15 +1575,26 @@ impl<'a> Ck<'a> {
                 }
                 t
             }
-            ExprKind::Call { callee, args } => self.call(callee, args, e.span),
+            ExprKind::Call { callee, args } => {
+                let t = self.call(callee, args, e.span);
+                self.after_call();
+                t
+            }
             ExprKind::Method {
                 receiver,
                 name,
                 args,
                 safe,
-            } => self.method(receiver, name, args, *safe, e.span),
+            } => {
+                let t = self.method(receiver, name, args, *safe, e.span);
+                self.after_call();
+                t
+            }
             ExprKind::Member { object, name, safe } => {
                 let ot = self.infer(object);
+                if !*safe {
+                    self.must_narrow(object, &ot, "its field is read", e.span);
+                }
                 let inner = strip_opt(&ot);
                 let t = match &inner {
                     Ty::Record(..) => self
@@ -1359,8 +1613,9 @@ impl<'a> Ck<'a> {
             ExprKind::Index { object, index } => {
                 let ot = self.infer(object);
                 self.infer(index);
+                self.must_narrow(object, &ot, "indexed", e.span);
                 match strip_opt(&ot) {
-                    Ty::List(t) | Ty::Map(t) => *t,
+                    Ty::List(t) | Ty::ListView(t) | Ty::Map(t) => *t,
                     Ty::Text | Ty::Path => Ty::Text,
                     _ => Ty::Any,
                 }
@@ -1379,6 +1634,8 @@ impl<'a> Ck<'a> {
                 let ret = match body {
                     LambdaBody::Expr(x) => self.infer(x),
                     LambdaBody::Block(b) => {
+                        let names = assigned(&b.stmts);
+                        self.closure_assigned.extend(names);
                         self.ctx.push(FnCtx {
                             name: "pack".into(),
                             ret: None,
@@ -1440,7 +1697,44 @@ impl<'a> Ck<'a> {
                 Ty::Any => Ty::Any,
                 other => other,
             },
-            _ => arith(op, &l, &r),
+            _ => {
+                self.must_narrow(lhs, &l, "used in arithmetic", lhs.span);
+                self.must_narrow(rhs, &r, "used in arithmetic", rhs.span);
+                arith(op, &l, &r)
+            }
+        }
+    }
+
+    /// A `T?` used as a `T` without a check that it is not null (E1209):
+    /// `x != null` first, `x ?? d`, or `x?.f`.
+    fn must_narrow(&mut self, obj: &Expr, t: &Ty, what: &str, span: Span) {
+        let Ty::Opt(inner) = t else { return };
+        if in_safe_chain(obj) {
+            return;
+        }
+        let name = match &obj.kind {
+            ExprKind::Ident(n) => format!("`{n}`"),
+            _ => "this value".to_string(),
+        };
+        let hint = match &obj.kind {
+            ExprKind::Ident(n) => format!(
+                "check it first (`if {n} != null {{ ... }}`), give it a default (`{n} ?? d`), or use `{n}?.`"
+            ),
+            _ => "check it for null first, give it a default with `??`, or use `?.`".to_string(),
+        };
+        self.err(
+            "E1209",
+            format!("{name} is `{inner}?` and may be null, but it is {what} as a `{inner}`"),
+            span,
+            Some(hint),
+        );
+    }
+
+    /// A call may run a closure that assigns a name a null check narrowed.
+    fn after_call(&mut self) {
+        if !self.closure_assigned.is_empty() {
+            let names = self.closure_assigned.clone();
+            self.reset_narrowing(&names);
         }
     }
 
@@ -1681,6 +1975,40 @@ impl<'a> Ck<'a> {
         }
     }
 
+    /// The file's text for a span in the lowered text; empty if the caller
+    /// gave no source.
+    fn text_of(&self, sp: Span) -> String {
+        let (a, b) = ((self.original)(sp.start), (self.original)(sp.end));
+        self.source
+            .get(a..b.max(a))
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    }
+
+    /// Remember what a layer expression chose.
+    fn note_layer(&mut self, layer: &str, span: Span, args: &[Expr], tys: &[Ty], choice: Choice) {
+        let into = layer == "into";
+        let at = usize::from(into);
+        let (Some(subject), Some(value)) = (args.get(at), args.first()) else {
+            return;
+        };
+        let start = (self.original)(span.start);
+        let end = (self.original)(span.end).max(start);
+        let ty = |i: usize| tys.get(i).map(|t| strip_opt(t).to_string());
+        self.layers.push(LayerNote {
+            start,
+            end,
+            layer: layer.to_string(),
+            ty: ty(at).unwrap_or_default(),
+            subject: self.text_of(subject.span),
+            value: self.text_of(value.span),
+            value_ty: ty(0).unwrap_or_default(),
+            choice,
+            in_burn: self.burn_depth > 0,
+        });
+    }
+
     /// `measure x` (`_cg_layer_measure(x)`) and `a into b`
     /// (`_cg_layer_into(a, b)`): the layer is picked by the type of `x` or
     /// `b`, here, and the call renamed to it. A type the checker cannot see
@@ -1692,6 +2020,7 @@ impl<'a> Ck<'a> {
             return Ty::Any;
         };
         if matches!(t, Ty::Any | Ty::Param(_) | Ty::Never) {
+            self.note_layer(layer, span, args, &tys, Choice::Runtime);
             self.untyped_layer(layer, callee, span);
             return Ty::Any;
         }
@@ -1721,6 +2050,8 @@ impl<'a> Ck<'a> {
             }
             ([one], None) => {
                 let f = types::impl_fn_name(layer, &one.for_ty, layer);
+                let function = one.function.trim().to_string();
+                self.note_layer(layer, span, args, &tys, Choice::Declared { function });
                 self.resolutions.push(Resolution::Rename {
                     start: callee.span.start,
                     end: callee.span.end,
@@ -1734,14 +2065,26 @@ impl<'a> Ck<'a> {
             }
             ([], Some((f, ret, effect))) => {
                 if layer == "into" {
-                    if let (Ty::List(el), Some(v)) = (&t, tys.first()) {
+                    if let (Ty::List(el) | Ty::Channel(el), Some(v)) = (&t, tys.first()) {
                         let hint = format!("expected `{el}` here, because the target is `{t}`");
                         self.expect(&args[0], v, el, "E1201", hint);
                     }
                 }
+                let choice = Choice::Builtin {
+                    function: f.to_string(),
+                    effect,
+                };
+                self.note_layer(layer, span, args, &tys, choice);
                 if effect && self.burn_depth == 0 {
+                    // Context never hides an effect: say which layer made
+                    // this one, and why that layer was chosen.
+                    let what = args
+                        .get(1)
+                        .map(|a| self.text_of(a.span))
+                        .filter(|x| !x.is_empty())
+                        .unwrap_or_else(|| "the target".to_string());
                     let msg = format!(
-                        "`{layer}` a path writes the file, so it must be inside a burn block"
+                        "`{layer}` means *write file* here, because `{what}` is a Path, so it must be inside a burn block"
                     );
                     let hint =
                         "wrap it: burn { ... }, or call this function from inside one".to_string();
@@ -2052,6 +2395,9 @@ impl<'a> Ck<'a> {
             }
         }
         let rt = self.infer(receiver);
+        if !safe {
+            self.must_narrow(receiver, &rt, &format!("`.{name}` is called on it"), span);
+        }
         let recv = strip_opt(&rt);
         let result = if matches!(recv, Ty::Any | Ty::Param(_) | Ty::Fn(..)) {
             // An interface's method on a value the checker cannot see: picked
@@ -2092,10 +2438,23 @@ impl<'a> Ck<'a> {
             Ty::Any
         } else if let Ty::Channel(el) = &recv {
             self.channel_method(receiver, name, args, (**el).clone(), safe, span)
+        } else if matches!(&recv, Ty::ListView(_))
+            && matches!(name, "push" | "pop" | "insert" | "remove")
+        {
+            for a in args {
+                self.infer(a);
+            }
+            self.err(
+                "E1215",
+                format!("`{recv}` is read-only: `.{name}` would write through it"),
+                span,
+                Some("a `ListView<T>` is for reading; ask for a `List<T>` to write, or `.copy()` it first".into()),
+            );
+            Ty::Any
         } else if let Some(s) = stdlib::method(&recv, name) {
             let mut binds = HashMap::new();
             match &recv {
-                Ty::List(t) => {
+                Ty::List(t) | Ty::ListView(t) => {
                     binds.insert("T".to_string(), (**t).clone());
                 }
                 Ty::Map(t) => {
@@ -2183,6 +2542,132 @@ impl<'a> Ck<'a> {
 
 /// Does a value of type `found` need a check when the program runs to be
 /// sure it fits `want`?
+/// Does this statement list always end in a `snuff` or a `cough` (or a call
+/// that never returns)?
+fn ends(ss: &[Stmt]) -> bool {
+    ss.iter().any(stmt_ends) || match_ends(ss)
+}
+
+/// Does the condition start with `not <done flag>`: an arm of a lowered `match`?
+fn is_match_arm(s: &Stmt) -> bool {
+    fn leftmost(e: &Expr) -> &Expr {
+        match &e.kind {
+            ExprKind::Binary {
+                op: BinOp::And,
+                lhs,
+                ..
+            } => leftmost(lhs),
+            _ => e,
+        }
+    }
+    match s {
+        Stmt::If {
+            branches,
+            otherwise: None,
+            ..
+        } if branches.len() == 1 => matches!(
+            &leftmost(&branches[0].0).kind,
+            ExprKind::Unary { op: UnOp::Not, expr }
+                if matches!(&expr.kind, ExprKind::Ident(n) if n.starts_with("__cg_d"))
+        ),
+        _ => false,
+    }
+}
+
+/// A lowered `match` is a run of `if not done and ... { }` arms with no
+/// `else`; the checker already refuses one that is not exhaustive (E1211), so
+/// when every arm ends the match does too. A guarded arm ends in an inner
+/// `if (guard) { ... }`, which an unguarded arm after it covers.
+fn match_ends(ss: &[Stmt]) -> bool {
+    let arms: Vec<&Stmt> = ss.iter().filter(|s| is_match_arm(s)).collect();
+    !arms.is_empty()
+        && arms.iter().all(|s| match s {
+            Stmt::If { branches, .. } => {
+                let b = &branches[0].1.stmts;
+                ends(b)
+                    || matches!(b.last(), Some(Stmt::If { branches, otherwise: None, .. })
+                        if branches.iter().all(|(_, x)| ends(&x.stmts)))
+            }
+            _ => false,
+        })
+}
+
+fn stmt_ends(s: &Stmt) -> bool {
+    match s {
+        Stmt::Snuff { .. } | Stmt::Cough { .. } => true,
+        Stmt::If {
+            branches,
+            otherwise,
+            ..
+        } => {
+            otherwise.as_ref().is_some_and(|b| ends(&b.stmts))
+                && branches.iter().all(|(_, b)| ends(&b.stmts))
+        }
+        // `while true { ... }` with no `break` never falls out.
+        Stmt::While { cond, body, .. } => {
+            matches!(cond.kind, ExprKind::Bool(true)) && !has_break(&body.stmts)
+        }
+        Stmt::Try {
+            body,
+            handler,
+            finally,
+            ..
+        } => {
+            finally.as_ref().is_some_and(|b| ends(&b.stmts))
+                || (ends(&body.stmts) && handler.as_ref().is_none_or(|h| ends(&h.stmts)))
+        }
+        Stmt::Burn { body, unburn, .. } => {
+            ends(&body.stmts) && unburn.as_ref().is_none_or(|u| ends(&u.stmts))
+        }
+        Stmt::Expr(e) => never_returns(e),
+        _ => false,
+    }
+}
+
+fn never_returns(e: &Expr) -> bool {
+    matches!(&e.kind, ExprKind::Call { callee, .. }
+        if matches!(&callee.kind, ExprKind::Ident(n) if n == "exit"))
+}
+
+/// A `break` that leaves this loop (not one inside a loop nested in it).
+fn has_break(ss: &[Stmt]) -> bool {
+    ss.iter().any(|s| match s {
+        Stmt::Break(_) => true,
+        Stmt::If {
+            branches,
+            otherwise,
+            ..
+        } => {
+            branches.iter().any(|(_, b)| has_break(&b.stmts))
+                || otherwise.as_ref().is_some_and(|b| has_break(&b.stmts))
+        }
+        Stmt::Try {
+            body,
+            handler,
+            finally,
+            ..
+        } => {
+            has_break(&body.stmts)
+                || handler.as_ref().is_some_and(|b| has_break(&b.stmts))
+                || finally.as_ref().is_some_and(|b| has_break(&b.stmts))
+        }
+        Stmt::Burn { body, unburn, .. } => {
+            has_break(&body.stmts) || unburn.as_ref().is_some_and(|b| has_break(&b.stmts))
+        }
+        _ => false,
+    })
+}
+
+/// `x?.f` and `x?.f()` stop at a null, and so does what is chained on them.
+fn in_safe_chain(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::Member { object, safe, .. } => *safe || in_safe_chain(object),
+        ExprKind::Method { receiver, safe, .. } => *safe || in_safe_chain(receiver),
+        ExprKind::Index { object, .. } => in_safe_chain(object),
+        _ => false,
+    }
+}
+
 fn needs_check(found: &Ty, want: &Ty) -> bool {
     crate::lower::ty::checks(want)
         && (matches!(found, Ty::Any) || (matches!(strip_opt(want), Ty::Sized(_)) && found != want))
@@ -2268,6 +2753,7 @@ fn builtin_layer(layer: &str, t: &Ty) -> Option<(&'static str, Ty, bool)> {
         ("measure", Ty::List(_) | Ty::Map(_) | Ty::Text) => Some(("len", Ty::Int, false)),
         ("measure", Ty::Path) => Some(("fs.size", Ty::Int, false)),
         ("into", Ty::List(_)) => Some(("_cg_into_list", Ty::Null, false)),
+        ("into", Ty::Channel(_)) => Some(("_cg_into_channel", Ty::Null, false)),
         ("into", Ty::Path | Ty::Text) => Some(("_cg_into_path", Ty::Null, true)),
         _ => None,
     }
@@ -2338,6 +2824,20 @@ fn arith(op: BinOp, l: &Ty, r: &Ty) -> Ty {
 }
 
 /// Names assigned anywhere in these statements (to drop narrowing on loop entry).
+/// What a function assigns that is not its own parameter or local.
+fn free_assigned(f: &FnDecl) -> HashSet<String> {
+    let mut names = assigned(&f.body.stmts);
+    for p in &f.params {
+        names.remove(p);
+    }
+    for s in &f.body.stmts {
+        if let Stmt::Declare { name, .. } = s {
+            names.remove(name);
+        }
+    }
+    names
+}
+
 fn assigned(ss: &[Stmt]) -> HashSet<String> {
     fn walk(ss: &[Stmt], out: &mut HashSet<String>) {
         for s in ss {

@@ -1,0 +1,5 @@
+strength medium
+pull f(xs: List<Int>) -> Int {
+  for x in xs { snuff x }
+}
+exhale f([1])

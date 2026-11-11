@@ -1,0 +1,9 @@
+strength full
+
+stick workers = channel<Int>()
+for n in [1, 2] {
+  n into workers
+}
+exhale workers.receive()
+exhale workers.receive()
+exhale workers.receive()

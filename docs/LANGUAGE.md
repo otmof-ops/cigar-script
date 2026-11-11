@@ -140,7 +140,7 @@ page; until then the message carries the whole explanation.
 | code | kind | when |
 |---|---|---|
 | `E1101` | check | a feature above the file's strength: names the feature, the strength that allows it, and the line to add |
-| `E1102` | check | a feature the file's strength allows, which this version has not built yet: names the issue it waits on. Today: `foreign`, `unchecked`, and a `within` context other than `retry` and `parallel` |
+| `E1102` | check | a feature the file's strength allows, which this version has not built yet: names the issue it waits on. Today: `foreign`, `unchecked`, and a `within` context other than `retry`, `parallel` and `timeout` |
 | `E1103` | check | a strength declaration that is not the first statement, or names no strength |
 | `E1104` | check | a name that starts `_cg_` or `__cg_`. As kind `internal`: the file lowered to CigScript cig refuses, which is a bug in `cigar` |
 
@@ -186,7 +186,9 @@ page; until then the message carries the whole explanation.
 | `E1401` | a layer with two meanings for one type: names both |
 | `E1402` | a layer with no meaning for the type: says what to declare. Also a layer declaration written wrongly, and a run-time cough when the type was not known until then |
 | `E1403` | `break` or `continue` inside `within retry` that would leave the block (the block runs inside a loop of its own) |
-| `E303` | `into` a path outside a `burn`: an error at the top level and a warning inside a function. It is cig's own code, the one `fs.write_text` gets |
+| `E1404` | cough, at run time: a `within timeout` block ran past its deadline |
+| `E1405` | `within timeout` written without a limit |
+| `E303` | `into` a path outside a `burn`: an error at the top level and a warning inside a function. It is cig's own code, the one `fs.write_text` gets. The message says which layer made it an effect and why: "`into` means *write file* here, because `"report.csv"` is a Path" |
 
 **Full**
 
@@ -244,7 +246,7 @@ declaration     = pull-decl | record-decl | enum-decl | interface-decl
 ```ebnf
 type            = base | type , "?" | fn-type | named ;
 base            = "Any" | "Null" | "Bool" | "Int" | "Float" | "Text" | "Path"
-                | "List" , [ "<" , type , ">" ]
+                | "List" , [ "<" , type , ">" ] | "ListView" , "<" , type , ">"
                 | "Map"  , [ "<" , [ "Text" , "," ] , type , ">" ] ;
 fn-type         = "(" , [ type , { "," , type } ] , ")" , "->" , type ;
 named           = name , [ "<" , type , { "," , type } , ">" ] ;
@@ -343,9 +345,22 @@ layer-decl      = "layer" , name ;            (* full *)
 chosen. A meaning for `measure` and a layer is called `f(value)`; for
 `into` it is called `f(target, value)`. Built in: `measure` for `List`,
 `Map` (length), `Text` (characters) and `Path` (`fs.size`); `into` for `List`
-(append) and `Path` (`fs.write_text` of the value: text as is, anything else
-as JSON). Two meanings is `E1401`, none is `E1402`, and an effectful one
+(append), `Channel` (`send`) and `Path` (`fs.write_text` of the value: text
+as is, anything else as JSON). Two meanings is `E1401`, none is `E1402`, and an effectful one
 (`into` a path) needs a burn.
+
+**`cigar explain --layers file:line:col`** peels the `into`, `measure` or
+`within` at a place (a place as an error shows it: line and column from 1,
+columns in characters) back to the core, one level per line: `full` as
+written, `medium` the chosen meaning as a call, `mild` the CigScript it
+becomes, `core` the operation the burn rule watches. It reads what the
+checker chose when it checked the file, so it never disagrees with a run. It
+names the layer, the type it was chosen by and where the meaning came from
+(built in, declared, or chosen at run time), and for a place inside `within`
+blocks it lists them, outermost first. `--json` prints one object. A file
+that does not check gets its errors instead; a `.cig` file or a mild file has
+no layers, and a place with none is a usage error (`E800`) that lists where
+the file's layers are.
 
 ### Ownership, concurrency and `within` (full; #12, #13)
 
@@ -355,8 +370,24 @@ parallel-for    = "parallel" , "(" , "threads" , ":" , expr , ")" , "for" , name
 channel-expr    = "channel" , "<" , type , ">" , "(" , ")" ;
 within-stmt     = "within" , context , block ;
 context         = "retry" , "(" , expr , [ "," , "backoff" , ":" , expr ] , ")"
-                | "parallel" , "(" , "threads" , ":" , expr , ")" ;
+                | "parallel" , "(" , "threads" , ":" , expr , ")"
+                | "timeout" , "(" , ( duration | expr ) , ")" ;
 ```
+
+**`within timeout(d)`** (#13; the design document names it and does not say
+what it means, so this is the rule). `d` is a duration literal (`500ms`, `2s`,
+`1m`) or an `Int` expression of milliseconds. The deadline is `d` after the
+block starts. It is checked at the top of every `for` and `while` pass
+written in the block (at any depth, not inside a function the block calls),
+and once more when the block ends. Past it the block coughs `E1404`
+(`within timeout(2s) ran out of time`): the burns in the block roll back with
+the run, or a `within retry` around it tries again. The check is cooperative: one
+call that never returns (a `net` call, a long `fs` walk) is not interrupted,
+and the cough comes when control gets back to the block. It reads the clock
+(`time.now_ms`) and writes nothing, so it has no effect on the world.
+Nesting order is significant: `retry` around `timeout` gives every try its own
+deadline, `timeout` around `retry` gives all the tries one. A context with no
+limit, `within timeout() { ... }`, is `E1405`.
 
 A channel has the methods `send(x)`, `receive()` (a `T?`: `null` when empty)
 and `close()`.
@@ -411,9 +442,33 @@ there: it does not lower or type-check a file that failed this one.
 
 - **Assignability.** `Any` fits and is fitted by every type. `Null` fits `T?`,
   and `T` fits `T?`. `Int` fits `Float`. `Path` and `Text` fit each other.
-  `List<A>` fits `List<B>` and `Map<A>` fits `Map<B>` when `A` fits `B`.
-  Records and enums fit by name and type arguments, functions by parameters
-  and result. A type parameter fits only itself and `Any`.
+  Records and enums fit by name and type arguments. A type parameter fits
+  only itself and `Any`.
+- **Mutable containers are invariant.** A `List<A>` fits only a `List<B>` of
+  the same element type, and a `Map<A>` only a `Map<B>` (so does a
+  `Channel<A>`): `List<Int>` is not a `List<Any>`, because a write through the
+  `List<Any>` could put a text in the `List<Int>`. That is `E1201`, with a
+  note that says so. The way through is `a.copy()` (a new list may be any
+  wider type), a list written out where it is wanted, or a **`ListView<T>`**:
+  a list that can be read and never written, covariant, so a `List<Int>` fits
+  a `ListView<Any>`. `push`, `pop`, `insert`, `remove` and `v[i] = x` on a
+  `ListView` are `E1215`, and a `ListView` does not fit a `List`. A value of
+  type `List<Any>` still fits a `List<Int>` place; it is checked there when
+  the program runs.
+- **Functions are contravariant in their parameters.** `(A) -> R` fits
+  `(B) -> S` when `B` fits `A` and `R` fits `S`. `(Int) -> Int` is not a
+  `(Any) -> Int` (it would be handed a text), and `Any` is not a stand-in
+  for a type in a parameter; `(Any) -> Int` fits `(Int) -> Int`.
+- **A `T?` is not a `T`.** A method call, field, index or arithmetic on a
+  `T?` is `E1209` unless the checker has narrowed it on that path:
+  `if x != null { ... }`, `if x == null { snuff ... }` and the rest of the
+  block, `x != null and ...`, `while x != null`, `x ?? d`, `x?.f`, or an
+  assignment of a value that is not null. Narrowing ends at an assignment that
+  may be null and at any call that could run a function assigning the name.
+- **Every path returns.** A function whose result is not `T?`, `Null` or `Any`
+  must `snuff` (or `cough`, or end in a loop that never ends) on every path.
+  A path that falls off the end is `E1217` at the closing `}`, with a note on
+  the branch that lacks one.
 - **Inference.** `stick x = e` takes `e`'s type, and so does `roll x = e` (a
   `roll` first set to `null` is `Any`). An unannotated parameter is `Any`,
   and an unannotated result is `Any` to callers: **signatures are the
@@ -608,11 +663,12 @@ decided: a change is a new ADR that supersedes the old one.
 ## Not built yet
 
 - `foreign` and `#[cigar::export]` (#5: the rules are decided, the
-  implementation is not built), `unchecked` blocks (#12), and `within` contexts other than
-  `retry` and `parallel` (#13): each is `E1102`.
+  implementation is not built), `unchecked` blocks (#12), and user-declared
+  `within` contexts (#13): each is `E1102`.
 - Custom journaling adapters for a `burn` (#12) and scripts reading each
   other's results by context (#14): no syntax yet.
-- `cig explain --layers` (#13), the experience warning (#12, #13), compiling
+- `cig explain --layers` forwarding to `cigar explain --layers` (cig-script's
+  side of #13), the experience warning (#12, #13), compiling
   a `.cigar` file, carton (#15) and the language server (#16).
 - The semantics of each construct by reduction to CigScript's core are
   written here as each construct is built; the lowering is the working

@@ -1,0 +1,6 @@
+strength medium
+stick a: List<Int> = [1]
+stick b: List<Any> = a
+b.push("x")
+stick n: Int = a[1]
+exhale n + 1

@@ -52,7 +52,8 @@ positional enum field is shown as its value (`Shape.circle(2.0)`).
 8. **`E1304`, `E1212`, `E1214`** had no stated cause in the spec: no file. Settled:
    `E1304` is a name a module does not have, `E1212` a `match` that cannot be read, and
    `E1214` a field or variant named twice.
-9. **`E1102`** files are extras (`foreign`, a context other than `retry`/`parallel`).
+9. **`E1102`** files are extras (`foreign`, a context other than `retry`, `parallel` and `timeout`).
+    `within timeout(d)` is settled in docs/LANGUAGE.md (#13): `E1404` at run time, `E1405` for no limit.
 10. **A literal `Int` into a sized type** (`stick x: u8 = 200`) is assumed statically fine;
     `Int` to `u8` is range-checked at run time. `Int` into `Float` printing is avoided.
 11. **`into`** on a List is tested with scalars only. Settled: `rows into seen` appends

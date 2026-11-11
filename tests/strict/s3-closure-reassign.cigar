@@ -1,0 +1,7 @@
+strength medium
+roll x: Text? = "a"
+pull clear() { x = null }
+if x != null {
+  clear()
+  exhale x.len()
+}

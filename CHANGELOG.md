@@ -8,6 +8,15 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **Held to Rust's standard, first four (#22 S1-S4).** `tests/strict/` has each
+  program from the issue with its error, run by `tests/strict.rs`.
+  A `T?` used as a `T` (method, field, index, arithmetic) is `E1209` until it
+  is narrowed; a function with a result type must `snuff` on every path
+  (`E1217` at the closing `}`); `List`, `Map` and `Channel` are invariant, with
+  a read-only covariant `ListView<T>` for the case that needs it (`E1201` says
+  why and points at `.copy()`; writing through a view is `E1215`); function
+  parameters are contravariant, and `Any` no longer stands in for a type in a
+  parameter. `docs/LANGUAGE.md` stops documenting covariance.
 - **A latent error in a `.cig` file is a hint (#1).** `cigar check` and `cigar run`
   check a `.cig` file again as medium and say each error that finds, which
   CigScript only hits when the line runs, as `hint[E1216 check]: this would be
@@ -29,6 +38,24 @@ project follows semantic versioning.
   reference counting and a tracing collector on three programs
   (`bench/memory-options`), beside today's runtime (the `memory` groups of
   `bench/bench.toml`).
+- **`cigar explain --layers file:line:col` (#13).** It peels the `into`,
+  `measure` or `within` at a place back to CigScript's core: which layer was
+  chosen, for which type, where the meaning came from, the enclosing `within`
+  blocks outermost first, and one line per level (full, medium, mild, core).
+  `--json` prints one object. It reads the choices the checker made, so it
+  cannot disagree with a run.
+- **`into` a channel** sends the value (`rows into workers`), checked against
+  the channel's element type like `into` a list.
+- **`within timeout(d)` (#13).** The design named it and did not say what it
+  means; the rule is written in the language reference first: a deadline taken
+  when the block starts, checked at the top of every `for` and `while` pass
+  in the block and once at its end, and past it a cough, `E1404`, so the
+  burns roll back or a `within retry` around it tries again. No limit is
+  `E1405`. A context that is not built is still `E1102`.
+- **The hidden-effect note.** `rows into "report.csv"` outside a `burn` now
+  says why: "`into` means *write file* here, because `"report.csv"` is a Path".
+- Tests for the design document's examples 1, 2 and 4 (compile, run, and the
+  `--layers` reduction checked); example 3 waits on #14.
 - **License: FSL-1.1-ALv2 from the next release.** The code moves from Apache-2.0 to
   the Functional Source License 1.1 with an Apache-2.0 future license: free to
   use, study, change and share, not to sell or to offer in a competing

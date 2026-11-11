@@ -1,0 +1,4 @@
+strength medium
+pull apply(f: (Any) -> Int) -> Int { snuff f("hello") }
+pull dbl(n: Int) -> Int { snuff n * 2 }
+exhale apply(dbl)
