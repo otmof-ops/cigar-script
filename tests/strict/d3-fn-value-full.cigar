@@ -1,0 +1,12 @@
+strength full
+
+pull take(owned xs: List<Int>) -> Int {
+  snuff xs.len()
+}
+
+pull apply(g: (List<Int>) -> Int, v: List<Int>) -> Int {
+  snuff g(v)
+}
+
+stick xs: List<Int> = [1, 2]
+exhale apply(take, xs)

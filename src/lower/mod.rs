@@ -8,6 +8,8 @@
 //! The result is ordinary CigScript, which cig parses, checks and runs.
 
 mod bounds;
+mod impls;
+pub use impls::SELF;
 pub mod edits;
 pub mod ty;
 
@@ -126,6 +128,7 @@ pub struct Module {
 /// What an exported name is.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Export {
+    Interface,
     Record,
     Enum,
     Function(FnSig),
@@ -226,6 +229,9 @@ struct L<'a> {
     private_types: BTreeMap<String, String>,
     /// Type parameters in scope (of the enclosing generic function).
     tparams: Vec<String>,
+    /// The type parameters of the `impl` (or the default method's `Self`)
+    /// whose methods are being lowered (#38).
+    impl_generics: Vec<(String, Vec<String>)>,
     public_next: bool,
     record_names: BTreeSet<String>,
     enum_names: BTreeSet<String>,
@@ -328,6 +334,7 @@ pub fn lower(src: &str, opts: &Options) -> Lowered {
         bound_modules: BTreeSet::new(),
         private_types: BTreeMap::new(),
         tparams: Vec::new(),
+        impl_generics: Vec::new(),
         public_next: false,
         record_names: BTreeSet::new(),
         enum_names: BTreeSet::new(),
@@ -1047,20 +1054,31 @@ impl<'a> L<'a> {
         }
         let close = self.matching(j);
         let mut methods = Vec::new();
+        let mut defaults = Vec::new();
         let mut k = j + 1;
+        // `Self` names the implementing type in a signature (#38).
+        let saved = self.tparams.clone();
+        self.tparams.push(impls::SELF.to_string());
         while k < close {
             if matches!(self.k(k), T::Pull) {
                 if let Some((sig, next)) = self.read_sig(k, false) {
-                    methods.push(sig);
                     k = next;
+                    // A body: the method's default.
+                    if matches!(self.k(k), T::LBrace) {
+                        defaults.push(sig.name.clone());
+                        k = self.matching(k) + 1;
+                    }
+                    methods.push(sig);
                     continue;
                 }
             }
             k += 1;
         }
+        self.tparams = saved;
         Some(InterfaceDecl {
             name,
             methods,
+            defaults,
             public,
             at: self.at_of(s, close),
         })
@@ -1210,12 +1228,10 @@ impl<'a> L<'a> {
             match w.as_str() {
                 "record" if next_is_name => return self.record_stmt(i, end),
                 "enum" if next_is_name => return self.enum_stmt(i, end),
-                "interface" if next_is_name => {
-                    let close = self.matching(i + 2);
-                    self.e.blank(self.src, self.sp(i).start, self.sp(close).end);
-                    return close + 1;
+                "interface" if next_is_name => return self.interface_stmt(i),
+                "impl" if next_is_name || matches!(self.k(i + 1), T::Lt) => {
+                    return self.impl_stmt(i, end)
                 }
-                "impl" if next_is_name => return self.impl_stmt(i, end),
                 "use" if next_is_name => return self.use_stmt(i, end),
                 "layer" if next_is_name && self.strength == Strength::Full => {
                     let e = self.stmt_end(i, end);
@@ -1654,6 +1670,10 @@ impl<'a> L<'a> {
         // The name a message shows: `size`, not the lowered impl name.
         let shown = sig.name.clone();
         if let Some((iface, t)) = impl_of {
+            // The impl's type parameters are the method's too.
+            let mut gens = self.impl_generics.clone();
+            gens.append(&mut sig.generics);
+            sig.generics = gens;
             let lowered = impl_fn_name(iface, t, &sig.name);
             let sp = self.sp(p + 1);
             self.e.replace(sp.start, sp.end, lowered.clone());
@@ -1802,8 +1822,10 @@ impl<'a> L<'a> {
     /// `impl Interface for Type { pull ... }`: the methods stay where they
     /// are, renamed; the header and the closing brace go.
     fn impl_stmt(&mut self, i: usize, end: usize) -> usize {
-        let iface = self.ident(i + 1).unwrap_or_default();
-        if !matches!(self.k(i + 2), T::For) {
+        // `impl<T: Show> Show for List<T> where ...` (#38): see `impls.rs`.
+        let (mut gens, n) = self.impl_params(i);
+        let iface = self.ident(n).unwrap_or_default();
+        if !matches!(self.k(n + 1), T::For) {
             let sp = self.sp(i);
             self.err(
                 "E1311",
@@ -1813,12 +1835,19 @@ impl<'a> L<'a> {
             );
             return self.stmt_end(i, end);
         }
-        let Some((t, j)) = self.parse_ty(i + 3) else {
+        let saved_tparams = self.tparams.clone();
+        self.tparams.extend(gens.iter().map(|g| g.0.clone()));
+        let parsed = self.parse_ty(n + 2);
+        let Some((t, j)) = parsed else {
+            self.tparams = saved_tparams;
             return self.stmt_end(i, end);
         };
+        let j = self.where_clause(j, false, &mut gens);
         if !matches!(self.k(j), T::LBrace) {
+            self.tparams = saved_tparams;
             return self.stmt_end(i, end);
         }
+        let saved_gens = std::mem::replace(&mut self.impl_generics, gens.clone());
         let close = self.matching(j);
         self.e.blank(self.src, self.sp(i).start, self.sp(j).end);
         self.e
@@ -1841,7 +1870,10 @@ impl<'a> L<'a> {
             }
             k += 1;
         }
+        self.impl_generics = saved_gens;
+        self.tparams = saved_tparams;
         self.prog.impls.push(ImplDecl {
+            generics: gens,
             interface: iface,
             for_ty: t,
             methods,
@@ -3517,7 +3549,7 @@ impl<'a> L<'a> {
             for n in &names {
                 match m.exports.iter().find(|(x, _)| x == n).map(|x| &x.1) {
                     // A type: its constructor is global, nothing to bind.
-                    Some(Export::Record | Export::Enum) => {}
+                    Some(Export::Interface | Export::Record | Export::Enum) => {}
                     Some(Export::Function(sig)) => {
                         self.prog.module_fns.insert(n.clone(), sig.clone());
                         let off = text.len() + 2;
@@ -3677,6 +3709,20 @@ impl<'a> L<'a> {
                 format!("`cigar check {}` shows where", m.path.display()),
             );
         }
+        // A module's `pub` interfaces can be bounds and `impl`s here (for a
+        // type this file declares: the orphan rule, #38).
+        for (n, i) in &m.program.interfaces {
+            if i.public {
+                self.prog.foreign.insert(n.clone());
+                self.prog
+                    .interfaces
+                    .entry(n.clone())
+                    .or_insert_with(|| i.clone());
+            }
+        }
+        for n in m.program.records.keys().chain(m.program.enums.keys()) {
+            self.prog.foreign.insert(n.clone());
+        }
         // A module's `pub` records and enums are types here; the others stay
         // its own (their values can still reach this file, untyped).
         for (n, r) in &m.program.records {
@@ -3711,6 +3757,7 @@ impl<'a> L<'a> {
     // ----- finish --------------------------------------------------------------------
 
     fn finish(mut self) -> Lowered {
+        self.fill_defaults();
         if let Some((a, b)) = self.e.overlap() {
             let mut d = Diagnostic::new(
                 DK::Internal,
@@ -3831,6 +3878,10 @@ impl<'a> L<'a> {
     fn dispatchers(&self) -> String {
         let mut out = String::new();
         for (iname, iface) in &self.prog.interfaces {
+            // A module's interface has its dispatcher in the module.
+            if self.prog.foreign.contains(iname) {
+                continue;
+            }
             for m in &iface.methods {
                 let params: Vec<String> = m
                     .params
@@ -3852,7 +3903,7 @@ impl<'a> L<'a> {
                     })
                 {
                     let f = impl_fn_name(iname, &imp.for_ty, &m.name);
-                    let test = type_test(&imp.for_ty, "self");
+                    let test = impls::impl_test(&imp.for_ty, "self");
                     body.push_str(&format!("  if {test} {{ snuff {f}(self{args}) }}\n"));
                 }
                 let plain = params.join(", ");
@@ -3893,7 +3944,7 @@ pub fn dispatch_lines(prog: &Program, iface: &str, method: &str, args: &str) -> 
         .filter(|i| i.interface == iface && i.methods.iter().any(|x| x.name == method))
     {
         let f = impl_fn_name(iface, &imp.for_ty, method);
-        let test = type_test(&imp.for_ty, "self");
+        let test = impls::impl_test(&imp.for_ty, "self");
         body.push_str(&format!("if {test} {{ snuff {f}(self{args}) }}; "));
     }
     body
@@ -3932,6 +3983,12 @@ pub fn module_names(src: &str, program: &Program) -> (Vec<(String, Export)>, Vec
         declared.push(n.clone());
         if e.public {
             exports.push((n.clone(), Export::Enum));
+        }
+    }
+    for (n, i) in &program.interfaces {
+        declared.push(n.clone());
+        if i.public {
+            exports.push((n.clone(), Export::Interface));
         }
     }
     for s in program.fns.values() {

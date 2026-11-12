@@ -122,3 +122,16 @@ docs/LANGUAGE.md ("Types, values and checks"):
 | `check/e1313-method-not-in-bound` | a method on a `T` that its bound does not declare |
 | `check/e1202-bound-not-an-interface` | a bound that names no interface |
 | `run/generic-bounded` | the bound's methods on a `T`, a bounded call inside a `where` function, and dispatch by value |
+
+## Generic implementations and default methods (#38)
+
+| file | what it holds |
+|---|---|
+| `check/e1231-overlap` | `impl Show for List<Int>` and `impl<T> Show for List<T>` |
+| `check/e1231-same-type-twice` | one `impl` written twice |
+| `check/e1231-orphan-built-in` | a module's interface implemented for `Int` |
+| `check/e1231-orphan-module-record` | a module's interface implemented for the module's record |
+| `check/e1230-blanket-bound` | `impl<T: Show> Show for List<T>` on a list of a record without `Show` |
+| `run/generic-impl-blanket` | a blanket `impl` for `List<Point>` and `List<List<Point>>` |
+| `run/default-method` | a default method used, overridden, and called through a bounded `T` |
+| `run/dispatch-by-element-type` | `List<Int>` and `List<Text>` impls picked by the elements of an `Any` |

@@ -1,0 +1,2 @@
+E1502
+`take` takes a parameter `owned`, so it cannot be used as a function value

@@ -7,6 +7,7 @@
 //! prove wrong (docs: SPEC section 4, codes E1201-E1218, E1311-E1313).
 
 mod bounds;
+mod impls;
 pub mod lint;
 pub mod stdlib;
 
@@ -144,6 +145,7 @@ pub fn check_all_strength(
     ck.validate_decls();
     ck.validate_bounds();
     ck.check_impls();
+    ck.check_coherence();
     ck.scopes.push(HashMap::new());
     // A function declared anywhere in the file may be called before the point
     // where it is written (cig hoists `pull`s): what it assigns that is not
@@ -541,6 +543,9 @@ struct Ck<'a> {
     /// The type parameters of the functions being checked and their bounds
     /// (#38), innermost last.
     bounds: Vec<HashMap<String, Vec<String>>>,
+    /// How deep `impl` selection is in checking the bounds of generic
+    /// `impl`s (an `impl<T: Show> Show for T` would ask itself forever).
+    selecting: std::cell::Cell<usize>,
     scopes: Vec<HashMap<String, Var>>,
     fns: HashMap<String, types::FnSig>,
     impl_self: HashMap<String, Ty>,
@@ -587,6 +592,7 @@ impl<'a> Ck<'a> {
             last_args: Vec::new(),
             last_binds: HashMap::new(),
             bounds: Vec::new(),
+            selecting: std::cell::Cell::new(0),
             scopes: vec![],
             fns,
             impl_self,
@@ -910,8 +916,16 @@ impl<'a> Ck<'a> {
                     );
                     continue;
                 };
+                // `Self` in the interface's signature is the impl's type.
+                let selfs = vec![crate::lower::SELF.to_string()];
+                let sb: HashMap<String, Ty> = [(selfs[0].clone(), im.for_ty.clone())]
+                    .into_iter()
+                    .collect();
                 let ty_ok = |a: &Option<Ty>, b: &Option<Ty>| match (a, b) {
-                    (Some(a), Some(b)) => assignable(a, b) && assignable(b, a),
+                    (Some(a), Some(b)) => {
+                        let a = subst(a, &selfs, &sb);
+                        assignable(&a, b) && assignable(b, &a)
+                    }
                     _ => true,
                 };
                 let same = want.params.len() == have.params.len()
@@ -2926,12 +2940,43 @@ impl<'a> Ck<'a> {
                 }
                 Ty::Any
             } else {
-                let found = candidates.iter().find_map(|(i, m)| {
-                    prog.impls
+                let mut missing = None;
+                let found =
+                    candidates
                         .iter()
-                        .find(|im| im.interface == i.name && same_ty(&im.for_ty, &recv))
-                        .map(|im| (i, m, im))
-                });
+                        .find_map(|(i, m)| match self.select(&i.name, &recv) {
+                            Ok((im, _)) => Some((i, m, im)),
+                            Err(miss) => {
+                                if missing.is_none() {
+                                    missing = miss;
+                                }
+                                None
+                            }
+                        });
+                if found.is_none() {
+                    if let Some(u) = missing {
+                        let impls::Unmet {
+                            im,
+                            param: g,
+                            bound: b,
+                            ty: t,
+                        } = *u;
+                        // A generic `impl` fits, and its bound does not hold.
+                        for a in args {
+                            self.infer(a);
+                        }
+                        self.err(
+                            "E1230",
+                            format!(
+                                "`{t}` doesn't implement `{b}`, which `impl {} for {}` needs for `{g}`",
+                                im.interface, im.for_ty
+                            ),
+                            span,
+                            Some(format!("write `impl {b} for {t} {{ ... }}` (or `derive({b})` once `derive` is built)")),
+                        );
+                        return Ty::Any;
+                    }
+                }
                 match found {
                     Some((i, m, im)) => {
                         self.resolutions.push(Resolution::Method {
@@ -2942,13 +2987,17 @@ impl<'a> Ck<'a> {
                             has_args: !args.is_empty(),
                             safe,
                         });
+                        // `Self` in the interface's signature is the receiver's type.
+                        let selfs = vec![crate::lower::SELF.to_string()];
+                        let sb: HashMap<String, Ty> =
+                            [(selfs[0].clone(), recv.clone())].into_iter().collect();
                         let params: Vec<Ty> = m
                             .params
                             .iter()
                             .filter(|p| p.name != "self")
-                            .map(|p| p.ty.clone().unwrap_or(Ty::Any))
+                            .map(|p| subst(&p.ty.clone().unwrap_or(Ty::Any), &selfs, &sb))
                             .collect();
-                        let ret = m.ret.clone().unwrap_or(Ty::Any);
+                        let ret = subst(&m.ret.clone().unwrap_or(Ty::Any), &selfs, &sb);
                         self.apply(
                             name,
                             &[],

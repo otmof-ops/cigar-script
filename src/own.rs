@@ -77,6 +77,10 @@ fn walk(
     let mut params: HashMap<String, Vec<Option<Ty>>> = HashMap::new();
     for s in prog.fns.values() {
         modes.insert(s.name.clone(), s.params.iter().map(|p| p.mode).collect());
+        params.insert(
+            s.name.clone(),
+            s.params.iter().map(|p| p.ty.clone()).collect(),
+        );
     }
     // A module's functions, as this file calls them: `plan.take` and, for a
     // name brought in with braces, `take`.
@@ -96,6 +100,7 @@ fn walk(
         medium,
         lent_ok: HashSet::new(),
         params,
+        called: 0,
         modes,
         rets,
         original,
@@ -125,8 +130,11 @@ struct Own<'a> {
     /// At medium, the `move x` written as the argument of an `owned`
     /// parameter: the one place a medium file may write `move`.
     lent_ok: HashSet<usize>,
-    /// The declared parameter types of each module function, by name.
+    /// The declared parameter types of each function, by name.
     params: HashMap<String, Vec<Option<Ty>>>,
+    /// Set while the callee of a call is walked: a name there is called,
+    /// not made into a function value.
+    called: usize,
     modes: HashMap<String, Vec<Mode>>,
     /// The declared result of each function, by name.
     rets: HashMap<String, Option<Ty>>,
@@ -341,6 +349,11 @@ fn block_names(ss: &[Stmt], out: &mut Vec<String>) {
 const MUTATORS: &[&str] = &["push", "pop", "insert", "remove", "set", "delete", "clear"];
 
 /// The variable at the root of `a`, `a.b`, `a[i]` or `a.b[i].c`.
+/// `_cg_new_R(...)`: a record literal, as the lowering writes it.
+fn is_record_literal(callee: &Expr) -> bool {
+    matches!(&callee.kind, ExprKind::Ident(f) if f.starts_with("_cg_new_"))
+}
+
 fn path_root(e: &Expr) -> Option<&String> {
     match &e.kind {
         ExprKind::Ident(n) => Some(n),
@@ -815,6 +828,16 @@ impl Own<'_> {
             Stmt::Declare {
                 name, value, span, ..
             } => {
+                // `stick take = plan.take`: what `use tools.plan.{take}`
+                // binds, not a function value the file makes.
+                let bound_by_use = matches!(&value.kind, ExprKind::Member { object, name: m, .. }
+                    if m == name
+                        && matches!(&object.kind, ExprKind::Ident(l)
+                            if self.prog.module_fns.contains_key(&format!("{l}.{m}")))
+                        && self.prog.module_fns.contains_key(name));
+                if bound_by_use {
+                    return true;
+                }
                 self.expr(value, moved);
                 let owned_by_name = !name.starts_with("__cg_");
                 if name.starts_with("__cg_v") {
@@ -1220,29 +1243,134 @@ impl Own<'_> {
         if !owned || written_move {
             return;
         }
-        let ExprKind::Ident(n) = &a.kind else {
-            // A value made at the call (a literal, a call, `.copy()`) has no
-            // other holder: it is the callee's.
-            return;
-        };
-        let declared = self
-            .params
+        let heavy_param = self.declared_heavy(key, i);
+        self.not_a_place(a, shown, heavy_param, false);
+    }
+
+    /// Is parameter `i` of `key` declared as a non-copy type?
+    fn declared_heavy(&self, key: &str, i: usize) -> bool {
+        self.params
             .get(key)
             .and_then(|ps| ps.get(i))
-            .cloned()
-            .flatten();
-        if !(self.heavy.contains(n) || declared.as_ref().is_some_and(is_heavy_ty)) {
-            // A copy type (a scalar, `Text`) is copied: nothing to give.
+            .and_then(|t| t.as_ref())
+            .is_some_and(is_heavy_ty)
+    }
+
+    /// An argument given to an `owned` parameter of `shown` must be the
+    /// callee's alone (#22 D3). `.copy()` and a value made at the call are;
+    /// a name or a part of one (`r.items`, `xs[0]`) holding a non-copy value
+    /// is still the caller's: `E1502`. Inside a list, map or record written
+    /// at the call, a non-copy name is the caller's too. `heavy` says the
+    /// parameter's declared type is non-copy; `inside` that `a` sits in such
+    /// a literal, whose element types this pass does not see.
+    fn not_a_place(&mut self, a: &Expr, shown: &str, heavy: bool, inside: bool) {
+        match &a.kind {
+            ExprKind::Method { name, .. } if name == "copy" => {}
+            ExprKind::Ident(n) => {
+                if !(self.heavy.contains(n) || heavy) {
+                    // A copy type (a scalar, `Text`) is copied: nothing to give.
+                    return;
+                }
+                let (msg, hint) = if inside {
+                    (
+                        format!("`{n}` is put in a value given to `{shown}`, which takes it `owned`, and the caller still holds `{n}`"),
+                        format!("put a copy in it (`{n}.copy()`)"),
+                    )
+                } else {
+                    (
+                        format!("`{n}` is lent to `{shown}`, a full function that takes it `owned`: a medium file gives a value away only by saying so"),
+                        format!("write `move {n}` to give it away (it is gone after the call), or `{n}.copy()` to give a copy and keep `{n}`"),
+                    )
+                };
+                self.err("E1502", msg, a.span, hint);
+            }
+            ExprKind::Member { .. } | ExprKind::Index { .. } if heavy && !inside => {
+                if let Some(root) = path_root(a).cloned() {
+                    self.part_given(&root, shown, a.span);
+                }
+            }
+            ExprKind::List(items) => {
+                for x in items {
+                    self.not_a_place(x, shown, false, true);
+                }
+            }
+            ExprKind::Map(entries) => {
+                for (_, v) in entries {
+                    self.not_a_place(v, shown, false, true);
+                }
+            }
+            ExprKind::Call { callee, args } if is_record_literal(callee) => {
+                for x in args {
+                    self.not_a_place(x, shown, false, true);
+                }
+            }
+            // `plan.Holder { ... }`: a module's record literal.
+            ExprKind::Method { name, args, .. } if name.starts_with("_cg_new_") => {
+                for x in args {
+                    self.not_a_place(x, shown, false, true);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// At full, a field or an element given to an `owned` parameter of
+    /// `key` without `move` of the whole or `.copy()`: the same as medium.
+    fn part_at_full(&mut self, a: &Expr, key: &str, i: usize) {
+        if !matches!(a.kind, ExprKind::Member { .. } | ExprKind::Index { .. })
+            || self.prog.moves.contains(&a.span.start)
+            || !self.declared_heavy(key, i)
+        {
             return;
         }
+        if let Some(root) = path_root(a).cloned() {
+            let shown = key.rsplit('.').next().unwrap_or(key).to_string();
+            self.part_given(&root, &shown, a.span);
+        }
+    }
+
+    /// A part of `root` (a field, an element) given to an `owned` parameter:
+    /// `root` still holds it, and a part cannot be moved out of its holder.
+    fn part_given(&mut self, root: &str, shown: &str, at: Span) {
         self.err(
             "E1502",
             format!(
-                "`{n}` is lent to `{shown}`, a full function that takes it `owned`: a medium file gives a value away only by saying so"
+                "a part of `{root}` is given to `{shown}`, which takes it `owned`, and `{root}` still holds it"
             ),
-            a.span,
+            at,
+            "give a copy: end the path with `.copy()`; a part cannot be moved out of what holds it"
+                .to_string(),
+        );
+    }
+
+    /// `key` (`take`, or `plan.take`) written as a value, not called. A
+    /// function type carries no parameter modes, so a call through the value
+    /// would give away an argument with nothing to say so: a function with
+    /// an `owned` parameter is called by name only (#22 D3).
+    fn owned_fn_value(&mut self, key: &str, at: Span) {
+        if key.starts_with("_cg") || key.contains("._cg") {
+            return;
+        }
+        let Some(modes) = self.modes.get(key) else {
+            return;
+        };
+        let Some(i) = modes.iter().position(|m| *m == Mode::Owned) else {
+            return;
+        };
+        let shown = key.rsplit('.').next().unwrap_or(key);
+        let mut args: Vec<String> = (0..modes.len()).map(|k| format!("a{k}")).collect();
+        args[i] = format!("a{i}.copy()");
+        let params: Vec<String> = (0..modes.len()).map(|k| format!("a{k}")).collect();
+        self.err(
+            "E1502",
             format!(
-                "write `move {n}` to give it away (it is gone after the call), or `{n}.copy()` to give a copy and keep `{n}`"
+                "`{shown}` takes a parameter `owned`, so it cannot be used as a function value: a call through the value would give its argument away unseen"
+            ),
+            at,
+            format!(
+                "call `{shown}` by name where the value is given (`{key}(move x)` or `{key}(x.copy())`), or pass a function that does: `pack({}) => {key}({})`",
+                params.join(", "),
+                args.join(", ")
             ),
         );
     }
@@ -1261,6 +1389,12 @@ impl Own<'_> {
     fn expr(&mut self, e: &Expr, moved: &mut Moved) {
         match &e.kind {
             ExprKind::Ident(n) => {
+                // A local function, or one a `use m.{take}` brought in.
+                if self.called == 0
+                    && (!self.vars.contains(n) || self.prog.module_fns.contains_key(n))
+                {
+                    self.owned_fn_value(n, e.span);
+                }
                 if let Some(g) = moved.get(n).cloned() {
                     self.used_after(n, &g, e.span);
                 }
@@ -1318,7 +1452,11 @@ impl Own<'_> {
                 self.expr(rhs, moved);
             }
             ExprKind::Call { callee, args } => {
+                // A function called by name is not a function value.
+                let by_name = matches!(callee.kind, ExprKind::Ident(_));
+                self.called += usize::from(by_name);
                 self.expr(callee, moved);
+                self.called -= usize::from(by_name);
                 let modes = match &callee.kind {
                     ExprKind::Ident(f) => self.modes.get(f).cloned(),
                     _ => None,
@@ -1336,6 +1474,7 @@ impl Own<'_> {
                     self.expr(a, moved);
                     if owned {
                         self.give(a, &format!("to `{f}`, which takes it `owned`"), moved);
+                        self.part_at_full(a, &f, i);
                     }
                 }
             }
@@ -1367,10 +1506,20 @@ impl Own<'_> {
                     }
                     if modes.as_ref().and_then(|m| m.get(i)) == Some(&Mode::Owned) {
                         self.give(a, &format!("to `{name}`, which takes it `owned`"), moved);
+                        self.part_at_full(a, &key, i);
                     }
                 }
             }
-            ExprKind::Member { object, .. } => self.expr(object, moved),
+            ExprKind::Member { object, name, .. } => {
+                // `plan.take` as a value: `plan` is the module's binding.
+                if let ExprKind::Ident(l) = &object.kind {
+                    let key = format!("{l}.{name}");
+                    if self.prog.module_fns.contains_key(&key) {
+                        self.owned_fn_value(&key, e.span);
+                    }
+                }
+                self.expr(object, moved)
+            }
             ExprKind::Index { object, index } => {
                 self.expr(object, moved);
                 self.expr(index, moved);

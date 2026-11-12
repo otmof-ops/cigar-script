@@ -1,0 +1,34 @@
+strength medium
+
+interface Show {
+  pull show(self) -> Text
+  pull twice(self) -> Text {
+    snuff self.show() + ", " + self.show()
+  }
+}
+
+record Point { x: Int }
+
+impl Show for Point {
+  pull show(self) -> Text {
+    snuff "p${self.x}"
+  }
+}
+
+impl Show for Int {
+  pull show(self) -> Text {
+    snuff "#${self}"
+  }
+  pull twice(self) -> Text {
+    snuff "two of " + self.show()
+  }
+}
+
+pull both<T: Show>(x: T) -> Text {
+  snuff x.twice()
+}
+
+exhale Point { x: 1 }.twice()
+exhale 7.twice()
+exhale both(Point { x: 2 })
+exhale both(8)

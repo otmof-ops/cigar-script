@@ -196,7 +196,8 @@ page; until then the message carries the whole explanation.
 | `E1217` | a `snuff` whose value is not the function's declared result |
 | `E1218` | a `cough` of a record the function's `coughs` list does not hold |
 | `E1219` | a `?` that cannot send its error anywhere: outside a function, inside a `pack`, in a function whose result is not a `Result`, on a value that is not a `Result`, or with an error that does not fit the function's. Also coughed at run time when an untyped value reaches `?` and is not a `Result` |
-| `E1230` | a type argument doesn't implement a bound: the type a call gives a bounded type parameter has no `impl` of one of its interfaces ("`Point` doesn't implement `Ord`, which `max` needs for `T`"); the hint names the bound and the `impl` to write |
+| `E1230` | a type argument doesn't implement a bound: the type a call gives a bounded type parameter has no `impl` of one of its interfaces ("`Point` doesn't implement `Ord`, which `max` needs for `T`"); the hint names the bound and the `impl` to write. Also a generic `impl` whose pattern fits a type its own bound does not hold for |
+| `E1231` | `impl`s that break coherence: two `impl`s of one interface whose types can be the same type (named both, with the first one's line), or an `impl` of a module's interface for a type this file does not declare (an orphan) |
 | `E1210` | **at run time**: a value entering a typed place does not fit it (`E1210 double: n should be Int and is Text "x"`). For a list or map the message names the path to the first part that does not fit: `E1210 xs should be List<u8> and is List: xs[2] is 300, outside u8 (0 to 255)`, `m.users[0].age is Text "old", not u8`. The path starts at the name the value was given (`xs`, `m`, `Pixel.shades`), or at `value` for a place with no name of its own (a result, `json.parse<T>`) |
 
 **Modules and interfaces** (medium)
@@ -209,7 +210,7 @@ page; until then the message carries the whole explanation.
 | `E1304` | a name a module does not have |
 | `E1311` | an `impl` that leaves out a method its interface declares, or an `impl` written wrongly |
 | `E1312` | an `impl` method whose signature is not the interface's |
-| `E1313` | a method called on a type that has no `impl` giving it that method |
+| `E1313` | a method called on a type that has no `impl` giving it that method; on a bounded type parameter, a method none of its bounds declares |
 
 **Layers** (medium and full)
 
@@ -227,7 +228,7 @@ page; until then the message carries the whole explanation.
 | code | when |
 |---|---|
 | `E1501` | a name used after it was given to an `owned` parameter, to `move`, to a binding or a container, or into a `move pack`: names the line it went |
-| `E1502` | a `borrow` parameter returned, stored (`push`, `insert`, `set`) or given away; at medium, a non-copy name given to a full function's `owned` parameter without `move` or `.copy()` (the value is lent, see [calls from medium into full](#stick-copy-types-and-calls-from-medium-into-full)) |
+| `E1502` | a `borrow` parameter returned, stored (`push`, `insert`, `set`) or given away; at medium, a non-copy name given to a full function's `owned` parameter without `move` or `.copy()`, or put in a literal given to one; at medium and full, a field or element of a held value given to `owned`, and a function with an `owned` parameter used as a function value (the value is lent, see [calls from medium into full](#stick-copy-types-and-calls-from-medium-into-full)) |
 | `E1503` | a name given away on some paths and used after they join (names the branch); a name given away while a function value that borrows it is used later |
 | `E1510` | a number outside its sized type: at check time for a number the checker can work out (written out, including inside a list or map written out, at any depth: `stick a: u8 = 300`, `stick xs: List<u8> = [1, 2, 300]`; or a `stick` of numbers through `+ - * / %`: `stick c: u8 = b + 10` with `stick b: u8 = 250`), **at run time** for one that is computed (`E1510 c is 300, outside u8 (0 to 255)`) |
 | `E1520` | **at run time**: a send on a closed channel |
@@ -348,14 +349,69 @@ not count as covering its pattern.
 ### Interfaces and implementations (medium; #10)
 
 ```ebnf
-interface-decl  = "interface" , name , [ type-params ] , "{" , { method-sig } , "}" ;
-method-sig      = "pull" , name , "(" , [ "self" , { "," , param } ] , ")" , [ "->" , type ] ;
-impl-decl       = "impl" , name , "for" , type , "{" , { pull-decl } , "}" ;
+interface-decl  = [ "pub" ] , "interface" , name , "{" , { method-sig } , "}" ;
+method-sig      = "pull" , name , "(" , [ "self" , { "," , param } ] , ")" , [ "->" , type ] ,
+                  [ block ] ;                       (* a block is the default, #38 *)
+impl-decl       = "impl" , [ type-params ] , name , "for" , type , [ where-clause ] ,
+                  "{" , { pull-decl } , "}" ;
 ```
 
 A call `x.m(...)` uses the `impl` the type of `x` selects **when the checker
 knows the type**, and a run-time choice by the value's record or enum name
-or CigScript type when `x` is `Any`.
+or CigScript type when `x` is `Any`. In a signature of an interface, `Self`
+is the implementing type.
+
+- **Generic implementations** (#38). `impl<T: Show> Show for List<T> { ... }`
+  is a pattern: a `List<Point>` has `Show` through it when `Point` has `Show`,
+  and a `List<List<Point>>` through it twice. A type the pattern fits whose
+  bound does not hold is `E1230`. Inside the methods, a `T` has the methods
+  of its bounds. When the type is known the call goes straight to the
+  pattern's method; when it is `Any`, the run-time choice reads a list's or
+  map's elements too, so `impl Show for List<Int>` and
+  `impl Show for List<Text>` are told apart by what the list holds.
+- **Coherence** (`E1231`). Two `impl`s of one interface whose types can be
+  the same type overlap (`List<Int>` and `List<T>`, or one `impl` written
+  twice), and there is no specialization: one has to go. An `impl` belongs
+  in the module that declares the interface or the one that declares the
+  type: implementing a module's interface (`pub interface`, brought in by
+  `use`) for a built-in type or for another module's record is an orphan.
+- **Default methods** (#38). A method written with a body in the interface is
+  its default: an `impl` that leaves it out gets it, one that writes it
+  overrides it. In the default, `self` is a `Self` bounded by the interface,
+  so it calls the interface's other methods, as the implementing type has
+  them.
+
+```cigar
+strength medium
+
+interface Show {
+  pull show(self) -> Text
+  pull twice(self) -> Text {
+    snuff self.show() + ", " + self.show()
+  }
+}
+
+record Point { x: Int }
+
+impl Show for Point {
+  pull show(self) -> Text {
+    snuff "p${self.x}"
+  }
+}
+
+impl<T: Show> Show for List<T> {
+  pull show(self) -> Text {
+    roll parts: List<Text> = []
+    for x in self {
+      parts.push(x.show())
+    }
+    snuff parts.join(" ")
+  }
+}
+
+stick ps: List<Point> = [Point { x: 1 }, Point { x: 2 }]
+exhale ps.twice()
+```
 
 ### Modules (medium; #10)
 
@@ -776,12 +832,28 @@ it `use`s (`plan.take(xs)`, or `take(xs)` after `use tools.plan.{take}`).
   full); `xs.copy()` gives a copy and keeps `xs`. A bare name of a non-copy
   value there is `E1502`, with a hint naming both. A value made at the call
   (a literal, another call's result) and a copy type need neither.
+- **Only what the caller can give.** A part of a value the caller holds, a
+  field or an element at any depth (`plan.take(r.items)`, `plan.take(xs[0])`),
+  given to an `owned` parameter is `E1502` at medium and at full: the caller
+  still reaches it through `r` or `xs`, and a part cannot be moved out of what
+  holds it, so the way is `.copy()`. A non-copy name put inside a list, map
+  or record written at the call (`plan.nest([xs])`) is `E1502` at medium (put
+  a copy in it); at full, putting a name in a literal is already a move.
+- **Called by name only.** A function type carries no parameter modes, so a
+  function with an `owned` parameter cannot be a function value: binding it
+  (`stick f = plan.take`), passing it (`apply(plan.take, xs)`) or writing it
+  anywhere but as the callee of a call is `E1502`, at medium and at full. A
+  function value that calls it by name says what it gives:
+  `pack(v) => plan.take(v.copy())`. A function whose parameters are `borrow`
+  or plain is a value like any other.
 - `move` is a full word: in a medium file it is written only as the argument
   of an `owned` parameter. Anywhere else it is `E1101`.
-- A mild file that `use`s a full module is not checked at the call: mild is
-  CigScript, and the value is shared. A field or element (`plan.take(r.items)`)
-  is not refused, since `move` takes a name. Going the other way, a value
-  crossing from full into medium is copied or wrapped by the run time
+- **Not covered, and why.** A mild file that `use`s a full module is not
+  checked at the call: mild is CigScript, and the value is shared. A field or
+  element written *inside* a literal given to `owned` (`plan.nest([r.items])`)
+  is not judged at medium, because the ownership check does not see element
+  types and would otherwise refuse copy-type fields too. Going the other way,
+  a value crossing from full into medium is copied or wrapped by the run time
   ([Memory](#memory)).
 
 ```cigar tools/plan.cigar

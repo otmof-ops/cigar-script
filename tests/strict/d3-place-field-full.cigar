@@ -1,0 +1,10 @@
+strength full
+
+record Holder { items: List<Int> }
+
+pull take(owned xs: List<Int>) -> Int {
+  snuff xs.len()
+}
+
+stick h = Holder { items: [1, 2] }
+exhale take(h.items)

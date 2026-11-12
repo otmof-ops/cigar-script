@@ -8,6 +8,32 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **Generic implementations and default methods (#38, sections 1.2 and
+  1.3).** `impl<T: Show> Show for List<T>` (with a `where` clause if wanted)
+  gives every list of a `Show` type the interface, statically and, for an
+  `Any`, by the list's elements at run time. Two `impl`s that can cover one
+  type, and an `impl` of a module's interface for a type the file does not
+  declare, are the new `E1231`. A generic `impl` whose bound does not hold is
+  `E1230`. A method written with a body in an interface is a default an
+  `impl` may override; `Self` names the implementing type in an interface's
+  signatures. `pub interface` is exported by a module. Tests:
+  `blanket_impl_selects`, `orphan_and_overlap_refused`,
+  `default_method_overridable` (`tests/strict.rs`), `tests/corpus/check/e1231-*`,
+  `e1230-blanket-bound`, `tests/corpus/run/generic-impl-blanket`,
+  `default-method`, `dispatch-by-element-type`.
+- **An `owned` parameter takes only what can be given (#22, D3).** A field or
+  an element of a value the caller holds (`plan.take(r.items)`,
+  `plan.take(xs[0])`) given to an `owned` parameter is `E1502`, at medium and
+  at full (full accepted it before, and the caller kept reaching what the
+  callee now owned); the hint names `.copy()`. At medium, a non-copy name put
+  in a list, map or record written at the call is `E1502` too. Test:
+  `an_owned_parameter_takes_only_what_can_be_given`.
+- **A function with an `owned` parameter is called by name only (#22, D3).**
+  Function types carry no parameter modes, so a call through a function value
+  neither moved at full nor was checked at medium. Writing such a function as
+  a value (`stick f = plan.take`, `apply(take, xs)`) is now `E1502`, with a
+  hint to wrap it: `pack(v) => take(v.copy())`. Test:
+  `an_owned_function_is_not_a_function_value`.
 - **Bounds on type parameters (#38, constraints).** `pull max<T: Ord>(...)`
   and `where T: Ord + Show` after the result. Inside the function a `T` has
   its bounds' methods, checked with their signatures (`E1313` for one they

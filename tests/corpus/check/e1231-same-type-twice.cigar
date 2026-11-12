@@ -1,0 +1,17 @@
+strength medium
+
+interface Show {
+  pull show(self) -> Text
+}
+
+impl Show for Int {
+  pull show(self) -> Text {
+    snuff "one"
+  }
+}
+
+impl Show for Int {
+  pull show(self) -> Text {
+    snuff "two"
+  }
+}

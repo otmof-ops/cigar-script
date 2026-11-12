@@ -243,6 +243,9 @@ pub enum Mode {
 pub struct InterfaceDecl {
     pub name: String,
     pub methods: Vec<FnSig>,
+    /// The methods written with a body (#38, default methods): an `impl`
+    /// that leaves one out gets the interface's.
+    pub defaults: Vec<String>,
     pub public: bool,
     pub at: At,
 }
@@ -251,6 +254,9 @@ pub struct InterfaceDecl {
 /// function named by [`impl_fn_name`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct ImplDecl {
+    /// `impl<T: Show> Show for List<T>` (#38): the impl's type parameters
+    /// and their bounds.
+    pub generics: Vec<(String, Vec<String>)>,
     pub interface: String,
     pub for_ty: Ty,
     pub methods: Vec<FnSig>,
@@ -293,6 +299,10 @@ pub struct Program {
     /// The functions modules export, as this file reaches them: `plan.f`
     /// for `use tools.plan`, and `f` for `use tools.plan.{f}`.
     pub module_fns: BTreeMap<String, FnSig>,
+    /// The interfaces, records and enums a module declares and this file
+    /// uses: what the orphan rule (#38, `E1231`) does not let it `impl`
+    /// together.
+    pub foreign: std::collections::BTreeSet<String>,
 }
 
 /// The built-in `enum Result<T, E> { Ok(value: T), Err(error: E) }` (#2),

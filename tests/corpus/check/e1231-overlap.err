@@ -1,0 +1,2 @@
+E1231
+`impl Show for List<T>` overlaps `impl Show for List<Int>`

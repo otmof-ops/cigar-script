@@ -140,6 +140,25 @@ fn a_medium_caller_lends_to_a_full_function() {
     run("d3-");
 }
 
+/// D3 (ii): an `owned` parameter takes only what the caller can give: a
+/// field or an element of a value the caller holds (`h.items`, `xss[0]`),
+/// or a name put inside a list, map or record written at the call, is
+/// still the caller's (`E1502`, at medium and at full); `.copy()` and
+/// values made at the call are fine.
+#[test]
+fn an_owned_parameter_takes_only_what_can_be_given() {
+    run("d3-place-");
+}
+
+/// D3 (ii): a function type carries no parameter modes, so a function
+/// with an `owned` parameter is called by name only: as a function value
+/// (bound to a name, passed as an argument, at medium and at full) it is
+/// `E1502`. A `pack` that calls it by name is the way through.
+#[test]
+fn an_owned_function_is_not_a_function_value() {
+    run("d3-fn-value-");
+}
+
 /// D3 (ii): the refusal of a bare name names both ways out.
 #[test]
 fn an_owned_parameter_from_medium_needs_move_or_copy() {
@@ -505,4 +524,124 @@ fn bounded_generic_uses_the_bound() {
         hint.contains("`T: Ord`") && hint.contains("impl Ord for Blob"),
         "{hint}"
     );
+}
+
+/// A corpus file's path.
+fn corpus(rel: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/corpus")
+        .join(rel)
+}
+
+/// `cigar run` on a file from its folder, with a scratch state: its stdout.
+fn run_file(file: &Path) -> String {
+    let dir = tempfile::tempdir().unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_cigar"))
+        .arg("--plain")
+        .arg("run")
+        .arg(file.file_name().unwrap())
+        .current_dir(file.parent().unwrap())
+        .env("XDG_CACHE_HOME", dir.path().join("cache"))
+        .env("CIGSCRIPT_HOME", dir.path().join("cig"))
+        .env("NO_COLOR", "1")
+        .output()
+        .expect("cigar runs");
+    assert!(
+        out.status.success(),
+        "{} fails: {}",
+        file.display(),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).to_string()
+}
+
+/// The first error a file gives: (code, message).
+fn first_error(file: &Path) -> Option<(String, String)> {
+    let src = std::fs::read_to_string(file).unwrap();
+    let checked = check_file_source(Kind::Cigar, &src, None, Some(file));
+    checked
+        .errors
+        .first()
+        .map(|d| (d.code.to_string(), d.message.clone()))
+}
+
+/// #38, section 1.2: `impl<T: Show> Show for List<T>` prints a
+/// `List<Point>`, and a `List<List<Point>>` through itself; a list of a
+/// record with no `impl Show` is `E1230`; and two `impl`s for lists of
+/// different element types are picked by the elements when the value's
+/// type is only known at run time.
+#[test]
+fn blanket_impl_selects() {
+    let f = corpus("run/generic-impl-blanket.cigar");
+    assert_eq!(first_error(&f), None);
+    assert_eq!(
+        run_file(&f),
+        "[(1, 2); (3, 4)]\n[[(1, 2); (3, 4)]; [(0, 0)]]\n"
+    );
+    let (code, msg) = first_error(&corpus("check/e1230-blanket-bound.cigar")).expect("refused");
+    assert_eq!(code, "E1230");
+    assert!(
+        msg.contains("which `impl Show for List<T>` needs for `T`"),
+        "{msg}"
+    );
+    let f = corpus("run/dispatch-by-element-type.cigar");
+    assert_eq!(first_error(&f), None);
+    assert_eq!(run_file(&f), "texts\nints\ntexts\n");
+}
+
+/// #38, section 1.2: `E1231` both ways. Two `impl`s that can cover the same
+/// type overlap (no specialization); an `impl` of a module's interface for
+/// a type this file does not declare is an orphan.
+#[test]
+fn orphan_and_overlap_refused() {
+    for (rel, part) in [
+        (
+            "check/e1231-overlap.cigar",
+            "overlaps `impl Show for List<Int>`",
+        ),
+        (
+            "check/e1231-same-type-twice.cigar",
+            "overlaps `impl Show for Int`",
+        ),
+        (
+            "check/e1231-orphan-built-in/main.cigar",
+            "belongs in the module that declares `Show`",
+        ),
+        (
+            "check/e1231-orphan-module-record/main.cigar",
+            "neither `Show` nor `Dot`",
+        ),
+    ] {
+        let (code, msg) = first_error(&corpus(rel)).unwrap_or_else(|| panic!("{rel} checks"));
+        assert_eq!(code, "E1231", "{rel}: {msg}");
+        assert!(msg.contains(part), "{rel}: {msg}");
+    }
+    // An `impl` of a module's interface for a record this file declares is
+    // not an orphan.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("tools")).unwrap();
+    std::fs::copy(
+        corpus("check/e1231-orphan-built-in/tools/shapes.cigar"),
+        dir.path().join("tools/shapes.cigar"),
+    )
+    .unwrap();
+    let main = dir.path().join("main.cigar");
+    std::fs::write(
+        &main,
+        "strength medium\nuse tools.shapes\nrecord Mine { n: Int }\nimpl Show for Mine {\n  pull show(self) -> Text {\n    snuff \"mine ${self.n}\"\n  }\n}\npull say<T: Show>(x: T) -> Text {\n  snuff x.show()\n}\nexhale say(Mine { n: 3 })\n",
+    )
+    .unwrap();
+    assert_eq!(first_error(&main), None);
+    assert_eq!(run_file(&main), "mine 3\n");
+}
+
+/// #38, section 1.3: a method with a body in an interface is its default;
+/// an `impl` that leaves it out gets it (and `self.show()` in it is the
+/// implementing type's), one that writes it overrides it, through a known
+/// type and through a bounded `T` alike.
+#[test]
+fn default_method_overridable() {
+    let f = corpus("run/default-method.cigar");
+    assert_eq!(first_error(&f), None);
+    assert_eq!(run_file(&f), "p1, p1\ntwo of #7\np2, p2\ntwo of #8\n");
 }

@@ -1,0 +1,5 @@
+strength medium
+use boundary.plan
+
+stick xs = [1, 2]
+exhale plan.keep(plan.Holder { items: xs })

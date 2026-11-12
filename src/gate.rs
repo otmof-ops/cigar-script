@@ -203,8 +203,10 @@ fn keyword_shape(tokens: &[Token], i: usize, word: &str, lenient: bool) -> bool 
     );
     match word {
         // Two names side by side are never CigScript: the word is the keyword.
-        "record" | "enum" | "interface" | "impl" | "use" | "layer" | "within" | "coughs"
-        | "owned" | "borrow" => next_ident,
+        "record" | "enum" | "interface" | "use" | "layer" | "within" | "coughs" | "owned"
+        | "borrow" => next_ident,
+        // `impl Show for T`, or `impl<T: Show> Show for List<T>` (#38).
+        "impl" => next_ident || matches!(next, Some(TokenKind::Lt)),
         // `move x` gives `x` away; `move pack ...` is a function value that
         // owns what it captures (#22 S6).
         "move" => next_ident || matches!(next, Some(TokenKind::Pack)),

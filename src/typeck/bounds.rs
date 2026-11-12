@@ -15,7 +15,7 @@
 //! The bounds are erased: a method on a `T` dispatches by the value when the
 //! program runs, as a method on `Any` does.
 
-use super::{same_ty, Ck};
+use super::Ck;
 use crate::types::{self, Ty};
 use cigscript::syntax::ast::Expr;
 use cigscript::syntax::span::Span;
@@ -73,16 +73,13 @@ impl Ck<'_> {
     }
 
     /// Does `t` have an `impl` of the interface `b`?
-    fn implements(&self, t: &Ty, b: &str) -> bool {
+    pub(super) fn implements(&self, t: &Ty, b: &str) -> bool {
         match t {
             Ty::Param(q) => self
                 .bounds_of(q)
                 .is_some_and(|bs| bs.iter().any(|x| x == b)),
-            _ => self
-                .prog
-                .impls
-                .iter()
-                .any(|im| im.interface == b && same_ty(&im.for_ty, t)),
+            // A generic `impl` fits when its own bounds hold (#38).
+            _ => self.select(b, t).is_ok(),
         }
     }
 

@@ -1,0 +1,2 @@
+E1230
+`Blob` doesn't implement `Show`, which `impl Show for List<T>` needs for `T`
