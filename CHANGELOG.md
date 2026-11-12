@@ -6,6 +6,33 @@
 All notable changes to CigarScript. The format follows Keep a Changelog; the
 project follows semantic versioning.
 
+## Unreleased
+
+- **cig 1.21.0.** The `cigscript` dependency moved from tag `v1.20.0` to
+  `v1.21.0` (cig-installer carton 0.2.0, row 11). The pin carries CigScript's
+  faster tree-walker (#146), whose AST now records where the checker last
+  found each name and where a map key was last found, so every pattern on
+  `AssignTarget::Var`, `AssignTarget::Member` and `ExprKind::Member` gained
+  a field. Thirteen pattern sites in `src/own.rs`, `src/typeck/mod.rs` and
+  `src/typeck/lint.rs` were adjusted; no construction sites changed, because
+  the lowering writes cig source and cig's own parser builds the AST.
+- **`stick` is deeply immutable (#22, D2, rule (a)).** At
+  strength medium and above, writing through a `stick`-bound path is
+  `E1215`: a field write (`p.x = 2`), an element write (`xs[0] = 1`), and
+  any in-place method (`.push`, `.pop`, `.insert`, `.remove`, `.set`,
+  `.delete`, `.clear`) on a list or map reached from a `stick` root. The
+  method list matches cig's own `own.rs::MUTATORS` and the entries in
+  CigScript's `stdlib/methods.rs` that call `borrow_mut`. Mild is
+  CigScript's as-is rule and keeps the acceptance it had; a `.cig` file
+  never gets a new error, and the find comes back as a hint when the file
+  is read as medium. New tests:
+  `stick_is_deeply_immutable`, `a_mild_file_may_mutate_through_a_stick`,
+  `a_cig_file_with_a_stick_mutation_is_not_refused` (`tests/strict.rs`),
+  `tests/strict/d2-*.cigar` + `ok-d2-*.cigar`. The superset test
+  (`tests/superset.rs::turning_up_is_additive`) now carries `E1215` as a
+  new error category medium and full add, the same way it already carried
+  ownership errors and `W1230` for full.
+
 ## 0.1.0 — 2026-11-12
 
 The first release: three strengths of CigarScript (mild, medium and

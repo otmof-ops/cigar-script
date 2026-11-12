@@ -191,7 +191,7 @@ page; until then the message carries the whole explanation.
 | `E1212` | a `match` or an arm `cigar` cannot read: a pattern it does not know, an arm with no `=>`, a `match` nested as an arm's result, or a `match` that is neither a statement nor bound by `stick`, `roll`, an assignment or `snuff` |
 | `E1213` | a block as the arm of a `match` used as a value |
 | `E1214` | a record that names a field twice, an enum that names a variant twice, or a record, enum or interface name declared twice |
-| `E1215` | an assignment to a `stick` |
+| `E1215` | an assignment to a `stick`, a write through a `stick`-bound path (its field, element, or a mutating method), or an attempt to write a `ListView<T>` |
 | `E1216` | a call with the wrong number of arguments |
 | `E1217` | a `snuff` whose value is not the function's declared result |
 | `E1218` | a `cough` of a record the function's `coughs` list does not hold |
@@ -564,6 +564,16 @@ type system are written; each rule has programs in `tests/corpus` and
   `ListView` are `E1215`, and a `ListView` does not fit a `List`. A value of
   type `List<Any>` still fits a `List<Int>` place; it is checked there when
   the program runs.
+- **`stick` is deeply immutable (#22, D2).** A `stick` binding does not
+  change, and neither does anything reached through its name: no field write
+  (`p.x = 2`), no element write (`xs[0] = 1`), and no mutating method
+  (`.push`, `.pop`, `.insert`, `.remove`, `.set`, `.delete`, `.clear`) on a
+  list or map reached from a `stick` root. All of those are `E1215`, with a
+  hint to declare it `roll`, or to `.copy()` it into a fresh `roll`. The rule
+  applies at medium and full; a mild `.cigar` file keeps CigScript's own
+  acceptance, where a `stick` is a non-reassigning binding only. A `.cig`
+  file is never held to this rule: reading it as medium turns the find
+  into a hint, as the superset rule requires.
 - **Functions are contravariant in their parameters.** `(A) -> R` fits
   `(B) -> S` when `B` fits `A` and `R` fits `S`. `(Int) -> Int` is not a
   `(Any) -> Int` (it would be handed a text), and `Any` is not a stand-in

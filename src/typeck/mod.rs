@@ -9,6 +9,7 @@
 pub mod lint;
 pub mod stdlib;
 
+use crate::features::Strength;
 use crate::types::{self, At, SizedInt, Ty};
 use cigscript::diagnostics::{Diagnostic, Kind};
 use cigscript::syntax::ast::*;
@@ -122,9 +123,23 @@ pub fn check_all_in(
     original: &dyn Fn(usize) -> usize,
     source: &str,
 ) -> Output {
+    check_all_strength(ast, prog, original, source, None)
+}
+
+/// `check_all_in` with the strength the file is being held to, so rules
+/// that vary between `.cig` and `.cigar` and across strengths (#22, D2: a
+/// `stick`'s immutability is deep at medium and above) can be applied.
+pub fn check_all_strength(
+    ast: &Program,
+    prog: &types::Program,
+    original: &dyn Fn(usize) -> usize,
+    source: &str,
+    strength: Option<Strength>,
+) -> Output {
     let prog = normalize(prog);
     let mut ck = Ck::new(&prog, original);
     ck.source = source;
+    ck.strength = strength;
     ck.validate_decls();
     ck.check_impls();
     ck.scopes.push(HashMap::new());
@@ -216,6 +231,28 @@ fn normalize(p: &types::Program) -> types::Program {
 fn assignable(from: &Ty, to: &Ty) -> bool {
     fits(from, to, false)
 }
+
+/// The variable at the root of `a`, `a.b`, `a[i]` or `a.b[i].c`. The name
+/// is what the programmer wrote, so a `stick`'s deep-immutability rule
+/// (#22, D2) can find whether the whole path starts at a `stick` or a
+/// `roll`.
+fn path_root_name(e: &Expr) -> Option<&str> {
+    match &e.kind {
+        ExprKind::Ident(n) => Some(n.as_str()),
+        ExprKind::Member { object, .. } | ExprKind::Index { object, .. } => path_root_name(object),
+        _ => None,
+    }
+}
+
+/// Methods on `List` and `Map` that write their receiver in place. Used
+/// by the D2 rule (#22): calling one on a `stick`-bound container is as
+/// much a mutation as `x.field =` or `x[i] =`. The names match the cig
+/// convention: `own.rs::MUTATORS` lists the same methods for the S8
+/// parallel-body rule, and `cig-script/src/stdlib/methods.rs` is the
+/// source: these are the entries that call `borrow_mut`. `sort`,
+/// `sort_by` and `reverse` are pure in cig (they clone and return a new
+/// list), so they are not here.
+const STICK_MUTATORS: &[&str] = &["push", "pop", "insert", "remove", "set", "clear", "delete"];
 
 /// Does a value in a mutable container's type argument fit? A mutable
 /// container is invariant: `List<Int>` is not a `List<Any>`, because the
@@ -481,6 +518,9 @@ struct Ck<'a> {
     resolutions: Vec<Resolution>,
     /// The file as written, when the caller gave it.
     source: &'a str,
+    /// The strength this file is held to (None = unknown, apply the base
+    /// rules). D2 (`stick` deeply immutable) applies at medium and above.
+    strength: Option<Strength>,
     /// Every layer choice, for `cigar explain --layers`.
     layers: Vec<LayerNote>,
     /// How many `burn` blocks enclose the statement being checked.
@@ -531,6 +571,7 @@ impl<'a> Ck<'a> {
             warnings: vec![],
             resolutions: vec![],
             source: "",
+            strength: None,
             layers: vec![],
             burn_depth: 0,
             guarded: None,
@@ -965,6 +1006,44 @@ impl<'a> Ck<'a> {
             } => matches!(&expr.kind, ExprKind::Float(f) if *f == 0.0) || self.fold(e) == Some(0),
             _ => self.fold(e) == Some(0),
         }
+    }
+
+    /// The root of a path (`a`, `a.b`, `a[i]`, `a.b[i].c`), when it
+    /// resolves to a `stick`. A `roll`, a parameter, a loop variable or a
+    /// name the checker does not know returns `None`: the rule is strict
+    /// but never false.
+    fn stick_root(&self, e: &Expr) -> Option<String> {
+        let root = path_root_name(e)?;
+        let var = self.find_var(root)?;
+        if var.mutable {
+            return None;
+        }
+        Some(root.to_string())
+    }
+
+    /// At medium and above, a `stick` is deeply immutable through that
+    /// name (#22, D2, rule (a)): no field write, no index write, and
+    /// none of the methods in `STICK_MUTATORS` through the path rooted
+    /// at it. At mild the rule is CigScript's, which accepts them.
+    fn d2_applies(&self) -> bool {
+        matches!(self.strength, Some(Strength::Medium) | Some(Strength::Full))
+    }
+
+    /// Emit E1215 for a write through a `stick`-bound path (#22, D2).
+    /// `what_writes` is a short phrase that names the write, in the shape
+    /// of the sentence "a `stick` and its {what_writes} cannot be
+    /// assigned through it" or similar. The hint names `roll`.
+    fn stick_mutation(&mut self, root: &str, what_writes: &str, span: Span) {
+        self.err(
+            "E1215",
+            format!(
+                "`{root}` is a `stick` and its {what_writes} cannot be assigned through it"
+            ),
+            span,
+            Some(format!(
+                "declare it with `roll {root} = ...` if it has to change; a `stick` is deeply immutable at medium and above"
+            )),
+        );
     }
 
     /// `x / 0` and `x % 0`, found before the program runs (E502).
@@ -1468,7 +1547,7 @@ impl<'a> Ck<'a> {
     fn assign(&mut self, target: &AssignTarget, op: AssignOp, value: &Expr, span: Span) {
         // `_ = f()`: the result is meant to be dropped (#22, L4). It is a
         // `stick` of a name nothing can read.
-        if matches!(target, AssignTarget::Var(n) if n == "_")
+        if matches!(target, AssignTarget::Var(n, _) if n == "_")
             && op == AssignOp::Set
             && self.find_var("_").is_none()
         {
@@ -1482,7 +1561,7 @@ impl<'a> Ck<'a> {
             return;
         }
         let sized_target = match target {
-            AssignTarget::Var(n) => self
+            AssignTarget::Var(n, _) => self
                 .find_var(n)
                 .is_some_and(|v| matches!(v.declared, Ty::Sized(_))),
             _ => false,
@@ -1493,7 +1572,7 @@ impl<'a> Ck<'a> {
         let vt = self.infer(value);
         self.guarded = None;
         match target {
-            AssignTarget::Var(n) => {
+            AssignTarget::Var(n, _) => {
                 let Some(var) = self.find_var(n).cloned() else {
                     return;
                 };
@@ -1572,9 +1651,13 @@ impl<'a> Ck<'a> {
                         span,
                         Some("a `ListView<T>` is for reading; ask for a `List<T>` to write, or `.copy()` it first".into()),
                     );
+                } else if self.d2_applies() {
+                    if let Some(root) = self.stick_root(object) {
+                        self.stick_mutation(&root, "elements", span);
+                    }
                 }
             }
-            AssignTarget::Member { object, name } => {
+            AssignTarget::Member { object, name, .. } => {
                 let ot = self.infer(object);
                 self.must_narrow(object, &ot, "written through", span);
                 if let Ty::Record(..) = strip_opt(&ot) {
@@ -1585,6 +1668,11 @@ impl<'a> Ck<'a> {
                             "expected `{ft}` here, because of the declared type of field `{name}`"
                         );
                         self.expect(value, &vt, &ft, "E1201", hint);
+                    }
+                }
+                if self.d2_applies() {
+                    if let Some(root) = self.stick_root(object) {
+                        self.stick_mutation(&root, "fields", span);
                     }
                 }
             }
@@ -1753,7 +1841,9 @@ impl<'a> Ck<'a> {
                 self.after_call();
                 t
             }
-            ExprKind::Member { object, name, safe } => {
+            ExprKind::Member {
+                object, name, safe, ..
+            } => {
                 let ot = self.infer(object);
                 if !*safe {
                     self.must_narrow(object, &ot, "its field is read", e.span);
@@ -2754,6 +2844,29 @@ impl<'a> Ck<'a> {
             );
             Ty::Any
         } else if let Some(s) = stdlib::method(&recv, name) {
+            // D2 (#22, rule (a)): a mutating method through
+            // a `stick`-bound path is a write through a name that cannot
+            // be written to. Refused at medium and above. The ListView
+            // arm above runs first for read-only lists, so this one only
+            // fires for a writable receiver whose root is a `stick`.
+            if self.d2_applies()
+                && STICK_MUTATORS.contains(&name)
+                && matches!(strip_opt(&recv), Ty::List(_) | Ty::Map(_))
+            {
+                if let Some(root) = self.stick_root(receiver) {
+                    self.err(
+                        "E1215",
+                        format!("`{root}` is a `stick` and `.{name}` would write through it"),
+                        span,
+                        Some(format!(
+                            "declare it with `roll {root} = ...` if it has to change, or call `.copy()` for a fresh list"
+                        )),
+                    );
+                    // Fall through: still check the argument types so a
+                    // caller fixing the stick-vs-roll sees the real
+                    // signature, not a second error about the receiver.
+                }
+            }
             let mut binds = HashMap::new();
             match &recv {
                 Ty::List(t) | Ty::ListView(t) => {
@@ -3145,7 +3258,7 @@ fn assigned(ss: &[Stmt]) -> HashSet<String> {
         for s in ss {
             match s {
                 Stmt::Assign {
-                    target: AssignTarget::Var(n),
+                    target: AssignTarget::Var(n, _),
                     ..
                 } => {
                     out.insert(n.clone());

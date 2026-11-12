@@ -225,7 +225,7 @@ fn block_names(ss: &[Stmt], out: &mut Vec<String>) {
             Stmt::Declare { value, .. } => names(value, out),
             Stmt::Assign { target, value, .. } => {
                 match target {
-                    AssignTarget::Var(_) => {}
+                    AssignTarget::Var(..) => {}
                     AssignTarget::Index { object, index } => {
                         names(object, out);
                         names(index, out);
@@ -456,16 +456,16 @@ impl Own<'_> {
             } => {
                 self.turn_expr(value, inner, alias);
                 let root = match target {
-                    AssignTarget::Var(n) if inner.contains(n) && !alias.contains_key(n) => {
+                    AssignTarget::Var(n, _) if inner.contains(n) && !alias.contains_key(n) => {
                         // The turn's own name, pointed somewhere else.
                         self.point(n, value, inner, alias);
                         None
                     }
-                    AssignTarget::Var(n) if inner.contains(n) => {
+                    AssignTarget::Var(n, _) if inner.contains(n) => {
                         self.point(n, value, inner, alias);
                         None
                     }
-                    AssignTarget::Var(n) => Some(n),
+                    AssignTarget::Var(n, _) => Some(n),
                     AssignTarget::Index { object, index } => {
                         self.turn_expr(index, inner, alias);
                         self.turn_expr(object, inner, alias);
@@ -796,7 +796,7 @@ impl Own<'_> {
             } => {
                 self.expr(value, moved);
                 match target {
-                    AssignTarget::Var(n) => {
+                    AssignTarget::Var(n, _) => {
                         if *op == AssignOp::Set {
                             if matches!(value.kind, ExprKind::Ident(_)) {
                                 self.keep(value, moved);

@@ -1,6 +1,6 @@
 strength full
 roll grid = [[0], [1]]
 parallel(threads: 2) for i in 1..3 {
-  stick row = grid[0]
+  roll row = grid[0]
   row.push(i)
 }

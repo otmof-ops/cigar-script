@@ -382,7 +382,7 @@ step reads them the same way.
 | `W1232` | warning | a `stick`, `roll`, parameter or `use` that nothing reads; `_` silences it |
 | `W1233` | warning | the result of a pure method or a `-> T` function dropped; `_ = f()` says it is meant |
 | `E502`, `E1510` | check | a divisor, or a sized number, that the checker works out before the program runs (`10 / 0`, `stick c: u8 = b + 10`, `[1, 2, 300]` into `List<u8>`); they stop the run as well when the number is only known then |
-| `E1200` to `E1399` | check | medium's type, record, `match`, module and interface errors |
+| `E1200` to `E1399` | check | medium's type, record, `match`, module and interface errors. `E1215` covers an assignment to a `stick`, a write through a `stick`-bound path (field, element or a mutating method), and a write to a `ListView<T>` |
 | `E1401`, `E1402` | check | layers: two meanings for a type, or none |
 | `E1403` | check | `break` or `continue` that would leave a `within retry` block |
 | `E1404` | cough, at run time | a `within timeout` block ran past its deadline |

@@ -1,0 +1,5 @@
+strength medium
+stick xs = [1, 2]
+roll ys = xs.copy()
+ys.push(3)
+exhale xs.len(), ys.len()

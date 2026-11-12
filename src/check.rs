@@ -351,7 +351,7 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
     // 3. Types and ownership.
     let original = |p: usize| lowered.original(p);
     let out = crate::phases::phase("typeck", || {
-        typeck::check_all_in(&ast, &lowered.program, &original, source)
+        typeck::check_all_strength(&ast, &lowered.program, &original, source, Some(effective))
     });
     let mut errors = out.errors;
     let mut warnings = out.warnings;

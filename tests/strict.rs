@@ -126,6 +126,34 @@ fn reserved_words_are_names_after_dot_and_as_keys() {
     run("d1-");
 }
 
+#[test]
+fn stick_is_deeply_immutable() {
+    run("d2-");
+}
+
+/// D2 (#22, rule (a)): a `.cigar` file at mild is CigScript, and
+/// writing through a `stick` stays accepted there. Read as medium it is
+/// an error, but a mild file's checker never hits that rule. (Records
+/// are a medium feature, so a map is used here.)
+#[test]
+fn a_mild_file_may_mutate_through_a_stick() {
+    let src = "stick m = {k: 1}\nm.k = 2\nstick xs = [1]\nxs.push(2)\nexhale m.k, xs.len()\n";
+    let c = check_file_source(Kind::Cigar, src, None, None);
+    assert!(c.errors.is_empty(), "{:?}", c.errors);
+}
+
+/// A `.cig` file is never held to D2. A write through a stick-bound map
+/// earns a hint when the file is read as medium (the superset rule); no
+/// error, no warning on the mild side.
+#[test]
+fn a_cig_file_with_a_stick_mutation_is_not_refused() {
+    let src = "stick m = {k: 1}\nm.k = 2\nexhale m.k\n";
+    let c = check_file_source(Kind::Cig, src, None, None);
+    assert!(c.errors.is_empty(), "{:?}", c.errors);
+    assert!(c.warnings.is_empty(), "{:?}", c.warnings);
+    assert!(c.hints.iter().any(|h| h.code == "E1215"), "{:?}", c.hints);
+}
+
 fn warning_codes(src: &str) -> Vec<(String, String)> {
     let c = check_file_source(Kind::Cigar, src, None, None);
     assert!(c.errors.is_empty(), "{:?}", c.errors);
