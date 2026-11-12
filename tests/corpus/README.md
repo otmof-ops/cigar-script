@@ -110,3 +110,15 @@ docs/LANGUAGE.md ("Types, values and checks"):
 18. **`attempt(call)` of a plain-text cough** gives `Err` of cig's cough map; the
     corpus reads `e.message`, never prints the map (it carries a line number).
 19. **`?` and `?.`**: `f()?.x` is safe navigation. The corpus writes `(f()?).x`.
+
+## Bounds on type parameters (#38, constraints)
+
+| file | what it holds |
+|---|---|
+| `check/e1230-bound-not-implemented` | `max<T: Ord>` given a record with no `impl Ord` |
+| `check/e1230-where-clause` | the same through `where T: Show` |
+| `check/e1230-second-bound` | `T: Ord + Show`, with only the `impl Ord` written |
+| `check/e1230-caller-type-parameter` | an unbounded `U` passed on to a `T: Ord` |
+| `check/e1313-method-not-in-bound` | a method on a `T` that its bound does not declare |
+| `check/e1202-bound-not-an-interface` | a bound that names no interface |
+| `run/generic-bounded` | the bound's methods on a `T`, a bounded call inside a `where` function, and dispatch by value |

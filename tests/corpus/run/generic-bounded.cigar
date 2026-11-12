@@ -1,0 +1,44 @@
+strength medium
+
+interface Ord {
+  pull rank(self) -> Int
+}
+
+interface Show {
+  pull show(self) -> Text
+}
+
+record Point { x: Int, y: Int }
+
+impl Ord for Point {
+  pull rank(self) -> Int {
+    snuff self.x + self.y
+  }
+}
+
+impl Show for Point {
+  pull show(self) -> Text {
+    snuff "(${self.x}, ${self.y})"
+  }
+}
+
+pull max<T: Ord>(xs: List<T>) -> T? {
+  roll best: T? = null
+  for x in xs {
+    if best == null or x.rank() > best.rank() {
+      best = x
+    }
+  }
+  snuff best
+}
+
+pull top<T>(xs: List<T>) -> Text where T: Ord + Show {
+  stick m = max(xs)
+  if m == null {
+    snuff "none"
+  }
+  snuff m.show()
+}
+
+exhale top([Point { x: 1, y: 2 }, Point { x: 5, y: 1 }, Point { x: 2, y: 2 }])
+exhale top([])

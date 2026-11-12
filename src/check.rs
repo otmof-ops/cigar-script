@@ -374,6 +374,11 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
         errors.extend(crate::phases::phase("own", || {
             own::check(&ast, &lowered.program, &original)
         }));
+    } else if effective == Strength::Medium && own::crosses(&lowered.program) {
+        // A medium file's calls into full functions (#22 D3).
+        errors.extend(crate::phases::phase("own", || {
+            own::boundary(&ast, &lowered.program, &original)
+        }));
     }
 
     // 4. What the types decided.

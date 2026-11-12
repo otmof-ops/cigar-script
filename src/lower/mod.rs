@@ -7,6 +7,7 @@
 //! prelude are `pull`s appended after the last line (cig hoists `pull`).
 //! The result is ordinary CigScript, which cig parses, checks and runs.
 
+mod bounds;
 pub mod edits;
 pub mod ty;
 
@@ -843,16 +844,8 @@ impl<'a> L<'a> {
             j += 1;
             let mut bounds = Vec::new();
             if matches!(self.k(j), T::Colon) {
-                j += 1;
-                while let Some(b) = self.ident(j) {
-                    bounds.push(b);
-                    j += 1;
-                    if matches!(self.k(j), T::Plus) {
-                        j += 1;
-                    } else {
-                        break;
-                    }
-                }
+                // `T: A + B` (#38): see `bounds.rs`.
+                (bounds, j) = self.bound_list(j + 1);
             }
             out.push((n, bounds));
             if matches!(self.k(j), T::Comma) {
@@ -886,6 +879,7 @@ impl<'a> L<'a> {
     fn read_record(&mut self, s: usize, public: bool) -> Option<RecordDecl> {
         let name = self.ident(s + 1)?;
         let (gens, mut j) = self.generic_params(s + 2);
+        self.no_bounds_on("record", &gens, s + 1);
         if !matches!(self.k(j), T::LBrace) {
             let sp = self.sp(j);
             self.err(
@@ -954,6 +948,7 @@ impl<'a> L<'a> {
     fn read_enum(&mut self, s: usize, public: bool) -> Option<EnumDecl> {
         let name = self.ident(s + 1)?;
         let (gens, mut j) = self.generic_params(s + 2);
+        self.no_bounds_on("enum", &gens, s + 1);
         if !matches!(self.k(j), T::LBrace) {
             let sp = self.sp(j);
             self.err(
@@ -1076,7 +1071,7 @@ impl<'a> L<'a> {
     /// When `edit` is set, its annotations are blanked.
     fn read_sig(&mut self, p: usize, edit: bool) -> Option<(FnSig, usize)> {
         let name = self.ident(p + 1)?;
-        let (gens, mut j) = self.generic_params(p + 2);
+        let (mut gens, mut j) = self.generic_params(p + 2);
         if edit && j > p + 2 {
             self.e
                 .blank(self.src, self.sp(p + 2).start, self.sp(j - 1).end);
@@ -1167,6 +1162,7 @@ impl<'a> L<'a> {
                 self.e.blank(self.src, self.sp(kw).start, last);
             }
         }
+        j = self.where_clause(j, edit, &mut gens);
         self.tparams = saved;
         let sig = FnSig {
             name,
@@ -2287,10 +2283,13 @@ impl<'a> L<'a> {
                     }
                     if name == "move"
                         && (self.ident(j + 1).is_some() || matches!(self.k(j + 1), T::Pack))
-                        && self.strength == Strength::Full
+                        && (self.strength == Strength::Full
+                            || (self.strength == Strength::Medium && self.ident(j + 1).is_some()))
                     {
                         // `move x` gives `x` away; `move pack ...` is a
-                        // function value that owns what it captures.
+                        // function value that owns what it captures. At
+                        // medium the gate has let through only `f(move x)`,
+                        // a value given to a full function (#22 D3).
                         let sp = self.sp(j);
                         self.e.blank(self.src, sp.start, sp.end);
                         self.move_keys.push(self.sp(j + 1).start);

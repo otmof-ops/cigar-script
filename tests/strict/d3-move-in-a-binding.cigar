@@ -1,0 +1,5 @@
+strength medium
+
+stick xs = [1, 2]
+stick ys = move xs
+exhale ys

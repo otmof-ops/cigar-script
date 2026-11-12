@@ -1,0 +1,19 @@
+strength medium
+
+interface Ord {
+  pull rank(self) -> Int
+}
+
+record Point { x: Int, y: Int }
+
+pull max<T: Ord>(xs: List<T>) -> T? {
+  roll best: T? = null
+  for x in xs {
+    if best == null or x.rank() > best.rank() {
+      best = x
+    }
+  }
+  snuff best
+}
+
+exhale max([Point { x: 1, y: 2 }])

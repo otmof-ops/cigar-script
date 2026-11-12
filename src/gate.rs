@@ -283,6 +283,12 @@ fn collect_word(
             continue;
         }
         if keyword_shape(tokens, i, word, lenient) {
+            if word == "move" && effective == Strength::Medium && is_lent_argument(tokens, i) {
+                // `f(move x)`: a medium file gives a value to a full
+                // function's `owned` parameter (#22 D3). The ownership
+                // check says whether `f` takes it `owned`.
+                continue;
+            }
             push_finding(out, f, effective, t.span);
         } else if lenient {
             out.push((t.span, e1105(word, t.span)));
@@ -290,6 +296,18 @@ fn collect_word(
             notes.push((t.span, w1234(word, f.strength, t.span)));
         }
     }
+}
+
+/// Is the `move` at `i` a call's argument, `(move x` or `, move x` followed
+/// by `)` or `,`?
+fn is_lent_argument(tokens: &[Token], i: usize) -> bool {
+    let prev = i.checked_sub(1).and_then(|p| kind_at(tokens, p));
+    matches!(prev, Some(TokenKind::LParen | TokenKind::Comma))
+        && matches!(kind_at(tokens, i + 1), Some(TokenKind::Ident(_)))
+        && matches!(
+            kind_at(tokens, i + 2),
+            Some(TokenKind::RParen | TokenKind::Comma)
+        )
 }
 
 /// L9: a reserved word where a name goes says so, and how to write it.

@@ -131,6 +131,32 @@ fn stick_is_deeply_immutable() {
     run("d2-");
 }
 
+/// D3 (ii): a medium file's value is lent to a full function, so the
+/// caller keeps it; an `owned` parameter takes it only with `move` (gone
+/// after, as at full) or `.copy()`; `move` is written nowhere else at
+/// medium. The full functions are in `tests/strict/boundary/plan.cigar`.
+#[test]
+fn a_medium_caller_lends_to_a_full_function() {
+    run("d3-");
+}
+
+/// D3 (ii): the refusal of a bare name names both ways out.
+#[test]
+fn an_owned_parameter_from_medium_needs_move_or_copy() {
+    let case =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/strict/d3-owned-without-move.cigar");
+    let src = std::fs::read_to_string(&case).unwrap();
+    let checked = check_file_source(Kind::Cigar, &src, None, Some(&case));
+    let d = checked.errors.first().expect("refused");
+    assert_eq!(d.code, "E1502");
+    assert_eq!(d.line, Some(5));
+    let hint = d.hint.as_deref().unwrap_or("");
+    assert!(
+        hint.contains("`move xs`") && hint.contains("`xs.copy()`"),
+        "{hint}"
+    );
+}
+
 /// D2 (#22, rule (a)): a `.cigar` file at mild is CigScript, and
 /// writing through a `stick` stays accepted there. Read as medium it is
 /// an error, but a mild file's checker never hits that rule. (Records
@@ -401,4 +427,82 @@ fn a_parameter_is_said_where_it_is_written() {
         .collect();
     assert!(lines.contains(&("W1230".into(), Some(4))), "{lines:?}");
     assert!(lines.contains(&("W1232".into(), Some(4))), "{lines:?}");
+}
+
+/// #38, section 1.1 (constraints): `max<T: Ord>` checks and runs with a
+/// hand-written `impl Ord` (the stand-in for `derive(Ord)`, not built
+/// yet); the bound's method is visible on a `T` in the body; a record with
+/// no `impl Ord` is `E1230` at the call; and the lowering strips the bounds
+/// and the `where` clause, so CigScript never sees them.
+#[test]
+fn bounded_generic_uses_the_bound() {
+    let decls = "strength medium\n\
+        interface Ord {\n  pull rank(self) -> Int\n}\n\
+        record Point { x: Int, y: Int }\n\
+        record Blob { n: Int }\n\
+        impl Ord for Point {\n  pull rank(self) -> Int {\n    snuff self.x + self.y\n  }\n}\n\
+        pull max<T: Ord>(xs: List<T>) -> T? {\n  roll best: T? = null\n  for x in xs {\n    if best == null or x.rank() > best.rank() {\n      best = x\n    }\n  }\n  snuff best\n}\n\
+        pull biggest<T>(xs: List<T>) -> Int where T: Ord {\n  stick m = max(xs)\n  snuff m?.rank() ?? 0\n}\n";
+    let good = format!(
+        "{decls}exhale max([Point {{ x: 1, y: 2 }}, Point {{ x: 3, y: 4 }}])\nexhale biggest([Point {{ x: 9, y: 1 }}])\n"
+    );
+    let checked = cigarscript::check::check_source(Kind::Cigar, &good, None);
+    assert!(
+        checked.errors.is_empty(),
+        "should check: {:?}",
+        checked
+            .errors
+            .iter()
+            .map(|d| format!("{} {}", d.code, d.message))
+            .collect::<Vec<_>>()
+    );
+    let text = &checked.source_as_cigscript_saw_it;
+    let sig = |name: &str| {
+        text.lines()
+            .find(|l| l.trim_start().starts_with(&format!("pull {name}")))
+            .unwrap_or_else(|| panic!("no `pull {name}` in:\n{text}"))
+            .to_string()
+    };
+    let (max, biggest) = (sig("max"), sig("biggest"));
+    assert!(!max.contains("Ord"), "the bound reached CigScript: {max}");
+    assert!(
+        !biggest.contains("where") && !biggest.contains("Ord"),
+        "the `where` clause reached CigScript: {biggest}"
+    );
+
+    // It runs: the bound's method dispatches by the value.
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("bounded.cigar");
+    std::fs::write(&file, &good).unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_cigar"))
+        .arg("--plain")
+        .arg("run")
+        .arg("bounded.cigar")
+        .current_dir(dir.path())
+        .env("XDG_CACHE_HOME", dir.path().join("cache"))
+        .env("CIGSCRIPT_HOME", dir.path().join("cig"))
+        .env("NO_COLOR", "1")
+        .output()
+        .expect("cigar runs");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "Point { x: 3, y: 4 }\n10\n",
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    // A record without the `impl` the bound asks for.
+    let bad = format!("{decls}exhale max([Blob {{ n: 1 }}])\n");
+    let checked = cigarscript::check::check_source(Kind::Cigar, &bad, None);
+    let d = checked.errors.first().expect("refused");
+    assert_eq!(d.code, "E1230");
+    assert_eq!(
+        d.message,
+        "`Blob` doesn't implement `Ord`, which `max` needs for `T`"
+    );
+    let hint = d.hint.as_deref().unwrap_or("");
+    assert!(
+        hint.contains("`T: Ord`") && hint.contains("impl Ord for Blob"),
+        "{hint}"
+    );
 }

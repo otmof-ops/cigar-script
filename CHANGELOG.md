@@ -8,6 +8,29 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **Bounds on type parameters (#38, constraints).** `pull max<T: Ord>(...)`
+  and `where T: Ord + Show` after the result. Inside the function a `T` has
+  its bounds' methods, checked with their signatures (`E1313` for one they
+  do not declare); at each call the type given to `T` must have an `impl` of
+  every bound, or it is the new `E1230` ("`Point` doesn't implement `Ord`,
+  which `max` needs for `T`"). A bound that names no interface is `E1202`,
+  and so is a bound on a record's or enum's type parameter (bounds go on
+  functions). The bounds are erased. Tests: `bounded_generic_uses_the_bound`
+  (`tests/strict.rs`), `tests/corpus/check/e1230-*`,
+  `e1313-method-not-in-bound`, `e1202-bound-not-an-interface`,
+  `tests/corpus/run/generic-bounded`.
+- **A medium file calling a full function (#22, D3).** A medium caller's
+  value is lent to the full function, so the caller keeps it after the call.
+  A parameter the full function takes `owned` needs `move x` (then `x` is
+  gone: `E1501`, or `E1503` after a branch) or `x.copy()` at the call; a bare
+  non-copy name there is `E1502`, with a hint naming both. `move` is written
+  in a medium file only there; anywhere else it is `E1101`. Tests:
+  `a_medium_caller_lends_to_a_full_function`,
+  `an_owned_parameter_from_medium_needs_move_or_copy` (`tests/strict.rs`).
+- **`stick`, copy types and the boundary, written down (#22, D2 and D3).**
+  `docs/LANGUAGE.md` has one section that says what `stick` means at each
+  strength, which types are copy types (scalars, `Text`; records only once
+  `derive(Copy)` exists, #38), and the rule for calls from medium into full.
 - **cig 1.21.0.** The `cigscript` dependency moved from tag `v1.20.0` to
   `v1.21.0` (cig-installer carton 0.2.0, row 11). The pin carries CigScript's
   faster tree-walker (#146), whose AST now records where the checker last

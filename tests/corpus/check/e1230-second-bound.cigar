@@ -1,0 +1,23 @@
+strength medium
+
+interface Ord {
+  pull rank(self) -> Int
+}
+
+interface Show {
+  pull show(self) -> Text
+}
+
+record Point { x: Int }
+
+impl Ord for Point {
+  pull rank(self) -> Int {
+    snuff self.x
+  }
+}
+
+pull label<T: Ord + Show>(x: T) -> Text {
+  snuff x.show() + " ${x.rank()}"
+}
+
+exhale label(Point { x: 1 })

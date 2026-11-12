@@ -6,6 +6,7 @@
 //! `Any`, and `Any` never produces an error. It reports only what it can
 //! prove wrong (docs: SPEC section 4, codes E1201-E1218, E1311-E1313).
 
+mod bounds;
 pub mod lint;
 pub mod stdlib;
 
@@ -141,6 +142,7 @@ pub fn check_all_strength(
     ck.source = source;
     ck.strength = strength;
     ck.validate_decls();
+    ck.validate_bounds();
     ck.check_impls();
     ck.scopes.push(HashMap::new());
     // A function declared anywhere in the file may be called before the point
@@ -534,6 +536,11 @@ struct Ck<'a> {
     locals: usize,
     /// The argument types of the last call `apply` checked.
     last_args: Vec<Ty>,
+    /// What the last call `apply` checked bound each type parameter to.
+    last_binds: HashMap<String, Ty>,
+    /// The type parameters of the functions being checked and their bounds
+    /// (#38), innermost last.
+    bounds: Vec<HashMap<String, Vec<String>>>,
     scopes: Vec<HashMap<String, Var>>,
     fns: HashMap<String, types::FnSig>,
     impl_self: HashMap<String, Ty>,
@@ -578,6 +585,8 @@ impl<'a> Ck<'a> {
             stmt_end: None,
             locals: 0,
             last_args: Vec::new(),
+            last_binds: HashMap::new(),
+            bounds: Vec::new(),
             scopes: vec![],
             fns,
             impl_self,
@@ -1464,6 +1473,7 @@ impl<'a> Ck<'a> {
             .cloned()
             .or_else(|| self.fns.get(&f.name).cloned());
         self.scopes.push(HashMap::new());
+        self.enter_bounds(sig.as_ref());
         for (i, pn) in f.params.iter().enumerate() {
             let declared = sig
                 .as_ref()
@@ -1500,6 +1510,7 @@ impl<'a> Ck<'a> {
             self.every_path_returns(&f.body, &rt, &shown_fn);
         }
         self.ctx.pop();
+        self.bounds.pop();
         self.scopes.pop();
     }
 
@@ -2053,6 +2064,7 @@ impl<'a> Ck<'a> {
                 unify(p, t, gens, &mut binds);
             }
         }
+        self.last_binds = binds.clone();
         for (i, t) in arg_tys.iter().enumerate() {
             if let Some(p) = params.get(i).or(rest) {
                 let p = subst(p, gens, &binds);
@@ -2157,6 +2169,7 @@ impl<'a> Ck<'a> {
                         span,
                         HashMap::new(),
                     );
+                    self.check_bounds(&shown_name(name), &s, span);
                     // A value the checker cannot see is checked where it is
                     // passed, so a bad one coughs on the caller's line.
                     if gens.is_empty() && args.len() == params.len() {
@@ -2747,6 +2760,40 @@ impl<'a> Ck<'a> {
         None
     }
 
+    /// `receiver.name(...)` with `name` from interface `iface`, picked by
+    /// the value when it runs: a dispatcher declared on this line, so a
+    /// value with no `impl` fails here.
+    fn dispatch_by_value(
+        &mut self,
+        iface: &str,
+        receiver: &Expr,
+        name: &str,
+        nargs: usize,
+        safe: bool,
+        span: Span,
+    ) {
+        let prog = self.prog;
+        let params: Vec<String> = (1..=nargs).map(|k| format!("a{k}")).collect();
+        let list = if params.is_empty() {
+            String::new()
+        } else {
+            format!(", {}", params.join(", "))
+        };
+        let lines = crate::lower::dispatch_lines(prog, iface, name, &list);
+        let plain = params.join(", ");
+        let func = self
+            .local(|n| format!("pull {n}(self{list}) {{ {lines}snuff self.{name}({plain}) }}"))
+            .unwrap_or_else(|| format!("_cg_dispatch_{iface}_{name}"));
+        self.resolutions.push(Resolution::Method {
+            recv_start: receiver.span.start,
+            recv_end: receiver.span.end,
+            call_end: span.end,
+            func,
+            has_args: nargs > 0,
+            safe,
+        });
+    }
+
     fn method(&mut self, receiver: &Expr, name: &str, args: &[Expr], safe: bool, span: Span) -> Ty {
         let prog = self.prog;
         // `fs.size(p)`: a stdlib module call
@@ -2783,6 +2830,7 @@ impl<'a> Ck<'a> {
                     span,
                     HashMap::new(),
                 );
+                self.check_bounds(&what, &sig, span);
                 return if safe { opt(t) } else { t };
             }
         }
@@ -2791,7 +2839,14 @@ impl<'a> Ck<'a> {
             self.must_narrow(receiver, &rt, &format!("`.{name}` is called on it"), span);
         }
         let recv = strip_opt(&rt);
-        let result = if matches!(recv, Ty::Any | Ty::Param(_) | Ty::Fn(..)) {
+        let bounded = match &recv {
+            Ty::Param(p) => self.bounds_of(p).cloned().map(|b| (p.clone(), b)),
+            _ => None,
+        };
+        let result = if let Some((p, bs)) = bounded {
+            // A bounded `T` (#38): the methods of its bounds.
+            self.bounded_method(receiver, &p, &bs, name, args, safe, span)
+        } else if matches!(recv, Ty::Any | Ty::Param(_) | Ty::Fn(..)) {
             // An interface's method on a value the checker cannot see: picked
             // by the value when it runs, by a dispatcher declared on this
             // line (so a value with no `impl` fails here).
@@ -2801,27 +2856,7 @@ impl<'a> Ck<'a> {
                     .values()
                     .find(|i| i.methods.iter().any(|m| m.name == name))
                 {
-                    let params: Vec<String> = (1..=args.len()).map(|k| format!("a{k}")).collect();
-                    let list = if params.is_empty() {
-                        String::new()
-                    } else {
-                        format!(", {}", params.join(", "))
-                    };
-                    let lines = crate::lower::dispatch_lines(prog, &i.name, name, &list);
-                    let plain = params.join(", ");
-                    let func = self
-                        .local(|n| {
-                            format!("pull {n}(self{list}) {{ {lines}snuff self.{name}({plain}) }}")
-                        })
-                        .unwrap_or_else(|| format!("_cg_dispatch_{}_{name}", i.name));
-                    self.resolutions.push(Resolution::Method {
-                        recv_start: receiver.span.start,
-                        recv_end: receiver.span.end,
-                        call_end: span.end,
-                        func,
-                        has_args: !args.is_empty(),
-                        safe,
-                    });
+                    self.dispatch_by_value(&i.name, receiver, name, args.len(), safe, span);
                 }
             }
             for a in args {

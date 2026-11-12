@@ -1,0 +1,5 @@
+strength medium
+use boundary.plan
+
+stick xs: List<Int> = [1, 2]
+exhale plan.look(move xs)

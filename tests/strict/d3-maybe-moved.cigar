@@ -1,0 +1,8 @@
+strength medium
+use boundary.plan
+
+stick xs: List<Int> = [1, 2]
+if xs.len() > 1 {
+  exhale plan.take(move xs)
+}
+exhale xs.len()

@@ -163,7 +163,7 @@ page; until then the message carries the whole explanation.
 
 | code | kind | when |
 |---|---|---|
-| `E1101` | check | a feature above the file's strength: names the feature, the strength that allows it, and the line to add |
+| `E1101` | check | a feature above the file's strength: names the feature, the strength that allows it, and the line to add. A medium file may write `move x` only as the argument of a full function's `owned` parameter |
 | `E1102` | check | a feature the file's strength allows, which this version has not built yet: names the issue it waits on. Today: `foreign`, `unchecked`, and a `within` context other than `retry`, `parallel` and `timeout` |
 | `E1103` | check | a strength declaration that is not the first statement, or names no strength |
 | `E1104` | check | a name that starts `_cg_` or `__cg_`. As kind `internal`: the file lowered to CigScript cig refuses, which is a bug in `cigar` |
@@ -196,6 +196,7 @@ page; until then the message carries the whole explanation.
 | `E1217` | a `snuff` whose value is not the function's declared result |
 | `E1218` | a `cough` of a record the function's `coughs` list does not hold |
 | `E1219` | a `?` that cannot send its error anywhere: outside a function, inside a `pack`, in a function whose result is not a `Result`, on a value that is not a `Result`, or with an error that does not fit the function's. Also coughed at run time when an untyped value reaches `?` and is not a `Result` |
+| `E1230` | a type argument doesn't implement a bound: the type a call gives a bounded type parameter has no `impl` of one of its interfaces ("`Point` doesn't implement `Ord`, which `max` needs for `T`"); the hint names the bound and the `impl` to write |
 | `E1210` | **at run time**: a value entering a typed place does not fit it (`E1210 double: n should be Int and is Text "x"`). For a list or map the message names the path to the first part that does not fit: `E1210 xs should be List<u8> and is List: xs[2] is 300, outside u8 (0 to 255)`, `m.users[0].age is Text "old", not u8`. The path starts at the name the value was given (`xs`, `m`, `Pixel.shades`), or at `value` for a place with no name of its own (a result, `json.parse<T>`) |
 
 **Modules and interfaces** (medium)
@@ -226,7 +227,7 @@ page; until then the message carries the whole explanation.
 | code | when |
 |---|---|
 | `E1501` | a name used after it was given to an `owned` parameter, to `move`, to a binding or a container, or into a `move pack`: names the line it went |
-| `E1502` | a `borrow` parameter returned, stored (`push`, `insert`, `set`) or given away |
+| `E1502` | a `borrow` parameter returned, stored (`push`, `insert`, `set`) or given away; at medium, a non-copy name given to a full function's `owned` parameter without `move` or `.copy()` (the value is lent, see [calls from medium into full](#stick-copy-types-and-calls-from-medium-into-full)) |
 | `E1503` | a name given away on some paths and used after they join (names the branch); a name given away while a function value that borrows it is used later |
 | `E1510` | a number outside its sized type: at check time for a number the checker can work out (written out, including inside a list or map written out, at any depth: `stick a: u8 = 300`, `stick xs: List<u8> = [1, 2, 300]`; or a `stick` of numbers through `+ - * / %`: `stick c: u8 = b + 10` with `stick b: u8 = 250`), **at run time** for one that is computed (`E1510 c is 300, outside u8 (0 to 255)`) |
 | `E1520` | **at run time**: a send on a closed channel |
@@ -292,8 +293,12 @@ full-type       = sized | "Bytes" | "Channel" , "<" , type , ">" ;
 
 annotated       = ( "stick" | "roll" ) , name , [ ":" , type ] , "=" , expr ;
 pull-decl       = "pull" , name , [ type-params ] , "(" , [ param , { "," , param } ] , ")" ,
-                  [ "->" , type ] , [ "coughs" , name , { "," , name } ] , block ;
-type-params     = "<" , name , { "," , name } , ">" ;
+                  [ "->" , type ] , [ "coughs" , name , { "," , name } ] ,
+                  [ where-clause ] , block ;
+type-params     = "<" , type-param , { "," , type-param } , ">" ;
+type-param      = name , [ ":" , bounds ] ;   (* bounds on a function's only, #38 *)
+bounds          = name , { "+" , name } ;    (* each an interface *)
+where-clause    = "where" , name , ":" , bounds , { "," , name , ":" , bounds } ;
 param           = [ "owned" | "borrow" ] , name , [ ":" , type ] ;
 ```
 
@@ -429,7 +434,9 @@ limit, `within timeout() { ... }`, is `E1405`.
 
 **Moves** (#22 S5 to S7; the same rules as Rust's, in a smaller model). A
 *non-copy* value is a list, a map, a record or a channel; ints, floats, bools,
-text and `null` are copies. The check knows a name holds one from a literal,
+text and `null` are copies (the list, and what a medium file's call into a
+full function does, are under
+[calls from medium into full](#stick-copy-types-and-calls-from-medium-into-full)). The check knows a name holds one from a literal,
 a call whose result is declared as one, an annotation, an `owned` parameter,
 `.copy()` of one, or another such name; a name it cannot tell is treated as a
 copy, so it never reports a use that is fine.
@@ -674,6 +681,21 @@ type system are written; each rule has programs in `tests/corpus` and
   checker elides none of them yet; what it can prove wrong it reports first.
 - **Generics** are checked, then erased: at run time a type parameter is
   `Any`.
+- **Bounds** (#38). A function's type parameter may name the interfaces it
+  needs: `pull max<T: Ord>(xs: List<T>) -> T?`, or the same after the result,
+  `pull top<T>(xs: List<T>) -> Text where T: Ord + Show`. Each bound names an
+  interface (`E1202` otherwise). Inside the function a `T` has the methods
+  of its bounds, checked with their signatures, and a method none of them
+  declares is `E1313`; a `T` with no bound is as before, any interface's
+  method picked by the value when it runs. At each call, the type the call
+  gives `T` must have an `impl` of every bound: `E1230` ("`Point` doesn't
+  implement `Ord`, which `max` needs for `T`"), with a hint naming the bound
+  and the `impl` to write. A type parameter of the calling function has the
+  bounds it declares, and a value the checker cannot see (`Any`) is not
+  judged. Bounds are erased, like every type: a method on a `T` dispatches
+  by the value. A bound on a record's or enum's type parameter is `E1202`
+  (bounds go on functions), and operators on a bounded `T` wait on the
+  standard interfaces.
 - **Standard library.** Every function and method of CigScript's standard
   library has a signature the checker knows, including whether it is an
   effect. Anything it does not know is `Any`, never a guess that rejects a
@@ -712,6 +734,91 @@ type system are written; each rule has programs in `tests/corpus` and
   order does not change the result: an empty loop reduces to `null`), or
   goes through a channel.
   `within retry(n)` runs its block up to `n` tries in all.
+
+## `stick`, copy types and calls from medium into full
+
+*(Decided: #22, D2 and D3. This is the rule the checker holds, written down
+before more code depends on it.)*
+
+**What `stick` means at each strength.**
+
+| strength | `stick x = e` |
+|---|---|
+| mild | CigScript's rule: `x` is never assigned again (`x = 2` is cig's own error). What `x` holds may still be changed through it (`x.push(3)`, `x.k = 2`) |
+| medium | deeply immutable through the name: no assignment, no field or element write, no mutating method (`.push`, `.set`, ...) on anything reached from `x`. Each is `E1215`. `roll` is the name that changes; `x.copy()` into a `roll` is the way to a changed copy |
+| full | as medium, and binding is a move: `stick y = x` gives a non-copy `x` away (`E1501` on a later use) |
+
+A `.cig` file is never held to the medium rule: read as medium, the find is a
+hint.
+
+**Copy types.** A copy type is copied where a non-copy value would move:
+binding it, storing it, or giving it to an `owned` parameter leaves the
+original usable.
+
+- Copy types: every scalar (`Bool`, `Int`, `Float`, the sized integers), `Text`,
+  `Path` and `null`. Text is immutable, so a copy is never seen to differ.
+- Not copy types: `List<T>`, `ListView<T>`, `Map<V>`, `Channel<T>`, and every
+  record and enum.
+- A record whose fields are all copy types will be a copy type when it says
+  so, with `derive(Copy)` (#38). `derive` is not built yet, so today every
+  record is a non-copy value: the side that refuses more, never less.
+
+**A medium file calling a full function.** Strength belongs to a file, so a
+call crosses strengths where a medium file calls a function of a full module
+it `use`s (`plan.take(xs)`, or `take(xs)` after `use tools.plan.{take}`).
+
+- The value is **lent**, as `borrow`: the medium caller keeps it after the
+  call. This is so for a full parameter written `borrow` and for one written
+  with no mode.
+- A parameter the full function takes **`owned`** takes the value only when
+  the call says so: `move xs` gives it away, and `xs` is gone after the call
+  (a later use is `E1501`, a use after a branch that moved it `E1503`, as at
+  full); `xs.copy()` gives a copy and keeps `xs`. A bare name of a non-copy
+  value there is `E1502`, with a hint naming both. A value made at the call
+  (a literal, another call's result) and a copy type need neither.
+- `move` is a full word: in a medium file it is written only as the argument
+  of an `owned` parameter. Anywhere else it is `E1101`.
+- A mild file that `use`s a full module is not checked at the call: mild is
+  CigScript, and the value is shared. A field or element (`plan.take(r.items)`)
+  is not refused, since `move` takes a name. Going the other way, a value
+  crossing from full into medium is copied or wrapped by the run time
+  ([Memory](#memory)).
+
+```cigar tools/plan.cigar
+strength full
+pub pull take(owned xs: List<Int>) -> Int {
+  snuff xs.len()
+}
+pub pull look(borrow xs: List<Int>) -> Int {
+  snuff xs.len()
+}
+```
+
+```cigar
+strength medium
+use tools.plan
+
+stick xs: List<Int> = [1, 2]
+exhale plan.look(xs)
+exhale plan.take(xs.copy())
+exhale plan.take(move xs)
+```
+
+```cigar tools/plan.cigar
+strength full
+pub pull take(owned xs: List<Int>) -> Int {
+  snuff xs.len()
+}
+```
+
+```cigar
+# expect: E1502
+strength medium
+use tools.plan
+
+stick xs: List<Int> = [1, 2]
+exhale plan.take(xs)
+```
 
 ## Memory
 

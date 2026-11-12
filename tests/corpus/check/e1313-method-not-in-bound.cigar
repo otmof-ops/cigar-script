@@ -1,0 +1,9 @@
+strength medium
+
+interface Ord {
+  pull rank(self) -> Int
+}
+
+pull name<T: Ord>(x: T) -> Text {
+  snuff x.show()
+}

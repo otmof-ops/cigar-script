@@ -22,6 +22,12 @@
 //! or `cough` does not join; one that ends in `break` joins after the loop.
 //!
 //! Ownership is erased when the program runs: `move x` is `x`.
+//!
+//! At medium, [`boundary`] checks where a medium file calls a full one (#22
+//! D3): a medium caller's value is lent, so it keeps it after the call,
+//! unless the full function takes the parameter `owned`. Then the call
+//! writes `move x` (and `x` is gone after it, as at full) or `x.copy()`;
+//! a bare name is `E1502`. Nothing else at medium moves.
 
 use crate::types::{self, Mode, Ty};
 use cigscript::diagnostics::{Diagnostic, Kind};
@@ -35,7 +41,40 @@ pub fn check(
     prog: &types::Program,
     original: &dyn Fn(usize) -> usize,
 ) -> Vec<Diagnostic> {
+    walk(ast, prog, original, false)
+}
+
+/// Does a medium file need [`boundary`]: does it call a module function
+/// that takes a parameter `owned` (only a full module can), or write `move`?
+pub fn crosses(prog: &types::Program) -> bool {
+    !prog.moves.is_empty()
+        || prog
+            .module_fns
+            .values()
+            .any(|s| s.params.iter().any(|p| p.mode == Mode::Owned))
+}
+
+/// A medium file's calls into full functions (#22 D3 (ii)). The value is
+/// lent: the caller keeps it, unless the parameter is `owned`, where the
+/// call gives it with `move` (gone afterwards, `E1501`) or gives a copy
+/// with `.copy()`. A bare non-copy name there is `E1502`. A `move` written
+/// anywhere else in a medium file is `E1101`.
+pub fn boundary(
+    ast: &Program,
+    prog: &types::Program,
+    original: &dyn Fn(usize) -> usize,
+) -> Vec<Diagnostic> {
+    walk(ast, prog, original, true)
+}
+
+fn walk(
+    ast: &Program,
+    prog: &types::Program,
+    original: &dyn Fn(usize) -> usize,
+    medium: bool,
+) -> Vec<Diagnostic> {
     let mut modes: HashMap<String, Vec<Mode>> = HashMap::new();
+    let mut params: HashMap<String, Vec<Option<Ty>>> = HashMap::new();
     for s in prog.fns.values() {
         modes.insert(s.name.clone(), s.params.iter().map(|p| p.mode).collect());
     }
@@ -43,6 +82,7 @@ pub fn check(
     // name brought in with braces, `take`.
     for (k, s) in &prog.module_fns {
         modes.insert(k.clone(), s.params.iter().map(|p| p.mode).collect());
+        params.insert(k.clone(), s.params.iter().map(|p| p.ty.clone()).collect());
     }
     let mut rets: HashMap<String, Option<Ty>> = HashMap::new();
     for s in prog.fns.values() {
@@ -53,6 +93,9 @@ pub fn check(
     }
     let mut o = Own {
         prog,
+        medium,
+        lent_ok: HashSet::new(),
+        params,
         modes,
         rets,
         original,
@@ -77,6 +120,13 @@ pub fn check(
 
 struct Own<'a> {
     prog: &'a types::Program,
+    /// A medium file: only the calls into full functions move (D3 (ii)).
+    medium: bool,
+    /// At medium, the `move x` written as the argument of an `owned`
+    /// parameter: the one place a medium file may write `move`.
+    lent_ok: HashSet<usize>,
+    /// The declared parameter types of each module function, by name.
+    params: HashMap<String, Vec<Option<Ty>>>,
     modes: HashMap<String, Vec<Mode>>,
     /// The declared result of each function, by name.
     rets: HashMap<String, Option<Ty>>,
@@ -722,6 +772,9 @@ impl Own<'_> {
     /// The names a function value reads from outside and that a binding
     /// would move.
     fn captures(&self, params: &[String], body: &LambdaBody) -> Vec<String> {
+        if self.medium {
+            return Vec::new();
+        }
         let mut all = Vec::new();
         match body {
             LambdaBody::Expr(x) => names(x, &mut all),
@@ -743,6 +796,11 @@ impl Own<'_> {
     /// A value kept: moved into a binding, a list, a map, a field, or sent.
     /// A name is given away; a function value moves what it reads.
     fn keep(&mut self, v: &Expr, moved: &mut Moved) {
+        if self.medium {
+            // Medium keeps shared semantics: a binding or a store moves
+            // nothing.
+            return;
+        }
         if let Some(n) = self.moves_name(v) {
             self.take(&n, v.span, How::Plain, moved);
         } else if let ExprKind::Lambda { params, body } = &v.kind {
@@ -1149,6 +1207,57 @@ impl Own<'_> {
         }
     }
 
+    /// At medium, argument `i` of a call to `key` (shown as `shown`): lent,
+    /// unless the parameter is `owned`. There, `move x` gives `x` away and
+    /// `x.copy()` gives a copy; a bare name holding a non-copy value is
+    /// `E1502`, since a lent value cannot be given away.
+    fn lend(&mut self, key: &str, shown: &str, i: usize, a: &Expr, owned: bool, moved: &mut Moved) {
+        let written_move = self.prog.moves.contains(&a.span.start);
+        if owned && written_move {
+            self.lent_ok.insert(a.span.start);
+        }
+        self.expr(a, moved);
+        if !owned || written_move {
+            return;
+        }
+        let ExprKind::Ident(n) = &a.kind else {
+            // A value made at the call (a literal, a call, `.copy()`) has no
+            // other holder: it is the callee's.
+            return;
+        };
+        let declared = self
+            .params
+            .get(key)
+            .and_then(|ps| ps.get(i))
+            .cloned()
+            .flatten();
+        if !(self.heavy.contains(n) || declared.as_ref().is_some_and(is_heavy_ty)) {
+            // A copy type (a scalar, `Text`) is copied: nothing to give.
+            return;
+        }
+        self.err(
+            "E1502",
+            format!(
+                "`{n}` is lent to `{shown}`, a full function that takes it `owned`: a medium file gives a value away only by saying so"
+            ),
+            a.span,
+            format!(
+                "write `move {n}` to give it away (it is gone after the call), or `{n}.copy()` to give a copy and keep `{n}`"
+            ),
+        );
+    }
+
+    /// A `move` in a medium file that is not given to an `owned` parameter
+    /// of a full function.
+    fn stray_move(&mut self, at: Span) {
+        self.err(
+            "E1101",
+            "using moves needs strength full; this file is medium".to_string(),
+            at,
+            "at medium, `move` is written only where a full function takes the value `owned`; to move anywhere else, put `strength full` at the top of the file".to_string(),
+        );
+    }
+
     fn expr(&mut self, e: &Expr, moved: &mut Moved) {
         match &e.kind {
             ExprKind::Ident(n) => {
@@ -1166,7 +1275,11 @@ impl Own<'_> {
                     }
                 }
                 if self.prog.moves.contains(&e.span.start) {
-                    self.give(e, "to `move`", moved);
+                    if self.medium && !self.lent_ok.contains(&e.span.start) {
+                        self.stray_move(e.span);
+                    } else {
+                        self.give(e, "to `move`", moved);
+                    }
                 }
             }
             ExprKind::Null | ExprKind::Bool(_) | ExprKind::Int(_) | ExprKind::Float(_) => {}
@@ -1210,13 +1323,18 @@ impl Own<'_> {
                     ExprKind::Ident(f) => self.modes.get(f).cloned(),
                     _ => None,
                 };
+                let f = match &callee.kind {
+                    ExprKind::Ident(f) => f.clone(),
+                    _ => String::new(),
+                };
                 for (i, a) in args.iter().enumerate() {
+                    let owned = modes.as_ref().and_then(|m| m.get(i)) == Some(&Mode::Owned);
+                    if self.medium {
+                        self.lend(&f, &f, i, a, owned, moved);
+                        continue;
+                    }
                     self.expr(a, moved);
-                    if modes.as_ref().and_then(|m| m.get(i)) == Some(&Mode::Owned) {
-                        let f = match &callee.kind {
-                            ExprKind::Ident(f) => f.clone(),
-                            _ => String::new(),
-                        };
+                    if owned {
                         self.give(a, &format!("to `{f}`, which takes it `owned`"), moved);
                     }
                 }
@@ -1229,11 +1347,17 @@ impl Own<'_> {
             } => {
                 self.expr(receiver, moved);
                 // `plan.take(a)`: a module's function, with its modes.
-                let modes = match &receiver.kind {
-                    ExprKind::Ident(l) => self.modes.get(&format!("{l}.{name}")).cloned(),
-                    _ => None,
+                let key = match &receiver.kind {
+                    ExprKind::Ident(l) => format!("{l}.{name}"),
+                    _ => String::new(),
                 };
+                let modes = self.modes.get(&key).cloned();
                 for (i, a) in args.iter().enumerate() {
+                    if self.medium {
+                        let owned = modes.as_ref().and_then(|m| m.get(i)) == Some(&Mode::Owned);
+                        self.lend(&key, name, i, a, owned, moved);
+                        continue;
+                    }
                     self.expr(a, moved);
                     if matches!(name.as_str(), "push" | "insert" | "set") {
                         self.stored(a);
