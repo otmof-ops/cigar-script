@@ -5,11 +5,65 @@ on:
     branches: [main]
   pull_request:
 
+# A new push to a pull request cancels its earlier run. A push to main (or a tag) finishes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # The repo is private and on the free plan, so this is one lean Linux
 # job: no macOS, no Windows, no matrix, no schedule.
 jobs:
+  # A docs-only change (docs/** and *.md where the job does not build or test docs) skips the heavy
+  # `check` job. Plain `git`, no third-party action. One `ci-ok` verdict always reports.
+  changes:
+    name: what changed
+    runs-on: ubuntu-latest
+    outputs:
+      code_changed: ${{ steps.filter.outputs.code_changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        name: are any non-docs paths touched
+        env:
+          GH_EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          case "$GH_EVENT" in
+            pull_request)
+              base="$BASE_SHA"
+              git fetch --no-tags --prune --depth=50 origin "+refs/heads/*:refs/remotes/origin/*" >/dev/null 2>&1 || true
+              files=$(git diff --name-only "$base"...HEAD)
+              ;;
+            *)
+              if git rev-parse HEAD^ >/dev/null 2>&1; then
+                files=$(git diff --name-only HEAD^ HEAD)
+              else
+                files=$(git ls-tree -r --name-only HEAD)
+              fi
+              ;;
+          esac
+          echo "changed files:"
+          printf '%s\n' "$files"
+          code_changed=false
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              docs/*|*.md) ;;
+              *) code_changed=true; break ;;
+            esac
+          done <<EOF
+          $files
+          EOF
+          echo "code_changed=$code_changed" >> "$GITHUB_OUTPUT"
+          echo "code_changed=$code_changed"
+
   check:
     name: fmt, clippy, test
+    needs: changes
+    if: needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always
@@ -22,11 +76,9 @@ jobs:
         run: |
           git clone --depth 1 --branch v1.20.0 https://github.com/otmof-ops/cig-script ../CigScript
 
-      - name: Install Rust (stable)
+      - name: Install Rust (pinned by rust-toolchain.toml)
         run: |
-          rustup update stable --no-self-update
-          rustup default stable
-          rustup component add rustfmt clippy
+          rustup show active-toolchain || rustup toolchain install
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -35,7 +87,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml', 'rust-toolchain.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -47,3 +99,23 @@ jobs:
 
       - name: cargo test
         run: cargo test --all-targets
+
+  # The one verdict every pull request reports: did every needed job pass or skip.
+  ci-ok:
+    name: ci
+    if: always()
+    needs: [changes, check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: every needed job passed or was skipped
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$NEEDS"
+          failed=$(printf '%s' "$NEEDS" | jq -r 'to_entries | map(select(.value.result != "success" and .value.result != "skipped")) | map(.key) | join(" ")')
+          if [ -n "$failed" ]; then
+            echo "::error::failed or cancelled: $failed"
+            exit 1
+          fi
+          echo "every needed job passed or was skipped"
