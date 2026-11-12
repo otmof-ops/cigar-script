@@ -2,7 +2,8 @@
 
 ## Supported versions
 
-Fixes go into the newest code on `main` until CigarScript has releases.
+The current release is 0.1.0. Fixes go into the newest code on `main`, and
+the next release carries them.
 
 ## Reporting a vulnerability
 

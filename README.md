@@ -36,8 +36,8 @@ ownership at full, and then checks the result as `cig check` would.
 user-declared `within` contexts, and custom journaling
 adapters are not built; a file that uses the first three gets `E1102`, which
 says so and names the issue. The syntax is **provisional** where the design
-questions (#1 to #5) are open. CigarScript is 0.1.0, not released, and not on
-crates.io.
+questions (#1 to #5) are open. CigarScript 0.1.0 is the first release and is
+not on crates.io.
 
 <p align="center"><img src="docs/assets/strengths.svg" alt="Three strengths, each including the one below: mild is CigScript as it is, medium adds types, records, enums, match, modules and interfaces, and full adds ownership, parallel loops, channels, sized numbers and layered meanings. The burn rule holds at every strength. Mild and medium are built; full is built except calls into Rust and C, unchecked blocks and some within contexts." width="820"></p>
 
@@ -106,9 +106,11 @@ broke.
 | full: `unchecked` blocks, user-declared `within` contexts | **not built** ([#12](https://github.com/otmof-ops/cigar-script/issues/12), [#13](https://github.com/otmof-ops/cigar-script/issues/13)). Every use is `E1102` |
 | full: custom journaling adapters, scripts reading each other's results | **not built** ([#12](https://github.com/otmof-ops/cigar-script/issues/12), [#14](https://github.com/otmof-ops/cigar-script/issues/14)). No syntax yet |
 | `cigar explain --layers file:line:col` | **built** ([#13](https://github.com/otmof-ops/cigar-script/issues/13)); `cig explain --layers` forwards to it once cig-script does |
-| the experience warning | **not built** |
+| the experience warning | **built** ([#7](https://github.com/otmof-ops/cigar-script/issues/7)). Asked once per project when a file first goes to `strength full`; the answer is kept in the person's state folder |
+| `cigar fmt` and `cigar-lsp` | **built** ([#16](https://github.com/otmof-ops/cigar-script/issues/16)). The formatter is idempotent and runs over the lexer `cigar check` uses; `cigar-lsp` speaks LSP over stdio from the same crates |
+| the VS Code extension and the tree-sitter grammar | **built** ([#16](https://github.com/otmof-ops/cigar-script/issues/16)), in `editors/`; installed from source or a VSIX today, not published to a marketplace yet |
 | compiling a `.cigar` file | **not built.** CigCompile builds CigScript today; CigarScript comes through it later. `cigar run` runs it |
-| carton, the language server | **not built** ([#15](https://github.com/otmof-ops/cigar-script/issues/15), [#16](https://github.com/otmof-ops/cigar-script/issues/16)) |
+| carton | **not built** ([#15](https://github.com/otmof-ops/cigar-script/issues/15)) |
 | `cig explain E1101` | no page yet: the codes are registered in cig when CigarScript ships; the message says all of it |
 
 The design questions (#1 to #5) are open, and the answers in
@@ -123,7 +125,8 @@ Each item above is on the [roadmap](docs/roadmap.md).
 | [Mild](docs/guides/mild.md) | you know CigScript: you already know it |
 | [Medium](docs/guides/medium.md) | write types, records, enums, `match`, modules and interfaces, and run them |
 | [Full](docs/guides/full.md) | use ownership, parallel loops, channels, sized numbers and layers, and see what is not built |
-| [Commands](docs/commands.md) | look up `cigar check` and `cigar run`, every flag, the exit codes and the JSON shape |
+| [Commands](docs/commands.md) | look up `cigar check`, `cigar run`, `cigar fmt`, `cigar explain` and `cigar-lsp`, every flag, the exit codes and the JSON shape |
+| [Editors](docs/editors.md) | set up `cigar-lsp` in your editor, build the VS Code extension and the tree-sitter grammar from source |
 | [The language](docs/LANGUAGE.md) | read the strengths, the feature table, the grammar and the open decisions |
 | [Lexicon](docs/LEXICON.md) | find a word (`strength`, `carton`, `record`, `within`, `pub`) and the manual's name for it |
 | [Roadmap](docs/roadmap.md) | see what is built, what is next, and the issue behind each |
@@ -136,8 +139,7 @@ block, with its path after the language.
 
 ## Install
 
-`cigar` has no release yet, so for now it is built from source (below). Once
-the first release is out, it is installed by
+Once carton 1.0.0 is published, `cigar` is installed by
 [`ciginstaller`](https://github.com/otmof-ops/cig-installer), the one way to
 install the CigScript family:
 
@@ -146,8 +148,25 @@ ciginstaller install carton
 ```
 
 The installer's manifest decides which carton, pack or stick carries `cigar`;
-until it lists one, nothing above installs it. No `ciginstaller` yet? Get it
-from <https://github.com/otmof-ops/cig-installer#install>.
+until carton 1.0.0 lists one, nothing above installs it. No `ciginstaller`
+yet? Get it from <https://github.com/otmof-ops/cig-installer#install>.
+Until then, [build from source](#build-from-source), or take the archive
+for your machine from the v0.1.0 release directly:
+
+```sh
+# Pick your machine's archive from the release, e.g. linux-x86_64
+ver=0.1.0
+asset=cigar-v$ver-linux-x86_64.tar.gz
+gh release download v$ver -R otmof-ops/cigar-script -p "$asset" -p "$asset.sha256" -p SHA256SUMS
+sha256sum -c "$asset.sha256"
+gh attestation verify "$asset" -R otmof-ops/cigar-script
+tar -xzf "$asset"
+./bin/cigar --version
+```
+
+Each release archive holds `bin/cigar` and `bin/cigar-lsp` (`.exe` on
+Windows). The release also carries `SHA256SUMS`, one `.sha256` per
+archive, and build attestations verifiable with `gh attestation verify`.
 
 `ciginstaller uninstall cigar` removes it and clears its run cache
 (`~/.cache/cigar/run`, or `%LOCALAPPDATA%\cigar\run` on Windows), which holds
@@ -212,8 +231,7 @@ run`). Unset, `cigar` reads no clock and writes nothing.
 for speed ([cig-compile#34](https://github.com/otmof-ops/cig-compile/issues/34)),
 automatic memory against ownership at full
 ([#12](https://github.com/otmof-ops/cigar-script/issues/12)), calling Rust and C
-([#5](https://github.com/otmof-ops/cigar-script/issues/5)), the language server
-([#16](https://github.com/otmof-ops/cigar-script/issues/16)) and reading other
+([#5](https://github.com/otmof-ops/cigar-script/issues/5)) and reading other
 scripts' results ([#14](https://github.com/otmof-ops/cigar-script/issues/14)).
 
 The suite runs nightly (`.github/workflows/bench-nightly.yml`) and its results
@@ -246,7 +264,7 @@ the work is in the [issues](https://github.com/otmof-ops/cigar-script/issues).
   - *It becomes Apache-2.0.* Each version converts to
     [Apache-2.0](LICENSES/Apache-2.0.txt) two years after it is made
     available.
-  - *Earlier releases.* Commits before the change were published under Apache-2.0 and stay under it; there has been no release. [LICENSING.md](LICENSING.md)
+  - *Earlier releases.* Commits before the change were published under Apache-2.0 and stay under it; no release was made in that period. [LICENSING.md](LICENSING.md)
     lists which versions carry which license.
 - **Documentation** (`docs/`, this README and the other guides at the root):
   [CC BY 4.0](LICENSES/CC-BY-4.0.txt). Reuse and adapt with credit.

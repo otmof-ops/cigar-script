@@ -18,11 +18,12 @@ pins: every CigScript script must check as mild CigarScript exactly as `cig
 check` checks it. CI runs formatting, clippy and the tests.
 
 Building from a checkout is the contributor's route. People who only want
-`cigar` install it with `ciginstaller` once it is released (see the
-[README](README.md#install)). `cigar __doctor [--json]` is the hidden
-self-check `ciginstaller doctor --tools` reads: it lowers a known sample,
-compares the CigScript `cigar` carries with an installed `cig`, and checks
-the run cache. It is read-only, exits 0, and never starts `ciginstaller`.
+`cigar` take the release archive, or, once carton 1.0.0 is published, install
+it with `ciginstaller` (see the [README](README.md#install)). `cigar
+__doctor [--json]` is the hidden self-check `ciginstaller doctor --tools`
+reads: it lowers a known sample, compares the CigScript `cigar` carries with
+an installed `cig`, and checks the run cache. It is read-only, exits 0, and
+never starts `ciginstaller`.
 
 ## Pull requests
 
