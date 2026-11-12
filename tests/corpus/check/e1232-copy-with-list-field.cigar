@@ -1,0 +1,3 @@
+strength full
+
+record Bag derive(Copy) { items: List<Int> }

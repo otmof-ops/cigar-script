@@ -7,8 +7,10 @@
 //! prove wrong (docs: SPEC section 4, codes E1201-E1218, E1311-E1313).
 
 mod bounds;
+mod derive;
 mod impls;
 pub mod lint;
+mod operators;
 pub mod stdlib;
 
 use crate::features::Strength;
@@ -146,6 +148,7 @@ pub fn check_all_strength(
     ck.validate_bounds();
     ck.check_impls();
     ck.check_coherence();
+    ck.check_derives();
     ck.scopes.push(HashMap::new());
     // A function declared anywhere in the file may be called before the point
     // where it is written (cig hoists `pull`s): what it assigns that is not
@@ -546,6 +549,8 @@ struct Ck<'a> {
     /// How deep `impl` selection is in checking the bounds of generic
     /// `impl`s (an `impl<T: Show> Show for T` would ask itself forever).
     selecting: std::cell::Cell<usize>,
+    /// How many `${...}` enclose the expression being checked.
+    interpolating: usize,
     scopes: Vec<HashMap<String, Var>>,
     fns: HashMap<String, types::FnSig>,
     impl_self: HashMap<String, Ty>,
@@ -593,6 +598,7 @@ impl<'a> Ck<'a> {
             last_binds: HashMap::new(),
             bounds: Vec::new(),
             selecting: std::cell::Cell::new(0),
+            interpolating: 0,
             scopes: vec![],
             fns,
             impl_self,
@@ -1301,6 +1307,9 @@ impl<'a> Ck<'a> {
                         false,
                     )
                 };
+                // A copy record bound from a place is a copy (#22 D3 (i)).
+                let given = self.unwrap_check(value).map(|(i, _)| i).unwrap_or(value);
+                self.copy_out(given, &ty);
                 self.define(name, ty, *mutable, annotated);
                 if let (false, Some(v)) = (*mutable, folded) {
                     self.set_const(name, v);
@@ -1336,6 +1345,7 @@ impl<'a> Ck<'a> {
                     }
                     let target = self.unwrap_check(v).map(|(i, _)| i).unwrap_or(v);
                     let t = self.infer(target);
+                    self.copy_out(target, &t);
                     if let Some((rt, f)) = ret {
                         let hint =
                             format!("expected `{rt}` here, because of the result type of `{f}`");
@@ -1596,6 +1606,7 @@ impl<'a> Ck<'a> {
         }
         let vt = self.infer(value);
         self.guarded = None;
+        self.copy_out(value, &vt);
         match target {
             AssignTarget::Var(n, _) => {
                 let Some(var) = self.find_var(n).cloned() else {
@@ -1765,11 +1776,13 @@ impl<'a> Ck<'a> {
             ExprKind::Int(_) => Ty::Int,
             ExprKind::Float(_) => Ty::Float,
             ExprKind::Str(parts) => {
+                self.interpolating += 1;
                 for p in parts {
                     if let StrPiece::Expr(x) = p {
                         self.infer(x);
                     }
                 }
+                self.interpolating -= 1;
                 Ty::Text
             }
             ExprKind::Ident(n) => self.lookup(n),
@@ -1777,6 +1790,7 @@ impl<'a> Ck<'a> {
                 let mut el: Option<Ty> = None;
                 for i in items {
                     let t = self.infer(i);
+                    self.copy_out(i, &t);
                     el = Some(match el {
                         Some(o) => join(&o, &t),
                         None => t,
@@ -1793,6 +1807,7 @@ impl<'a> Ck<'a> {
                         self.infer(x);
                     }
                     let t = self.infer(v);
+                    self.copy_out(v, &t);
                     el = Some(match el {
                         Some(o) => join(&o, &t),
                         None => t,
@@ -1804,6 +1819,10 @@ impl<'a> Ck<'a> {
                 let t = self.infer(expr);
                 if *op == UnOp::Neg {
                     self.must_narrow(expr, &t, "negated", e.span);
+                    // `-p` on a record: `Neg` (#38).
+                    if let Some(r) = self.user_negation(e, expr, &t) {
+                        return r;
+                    }
                 }
                 match op {
                     UnOp::Not => Ty::Bool,
@@ -1892,6 +1911,10 @@ impl<'a> Ck<'a> {
                 let ot = self.infer(object);
                 self.infer(index);
                 self.must_narrow(object, &ot, "indexed", e.span);
+                // `x[k]` on a record: `Index` (#38).
+                if let Some(t) = self.user_index(e, object, index, &ot) {
+                    return t;
+                }
                 match strip_opt(&ot) {
                     Ty::List(t) | Ty::ListView(t) | Ty::Map(t) => *t,
                     Ty::Text | Ty::Path => Ty::Text,
@@ -1976,6 +1999,11 @@ impl<'a> Ck<'a> {
             };
         }
         let r = self.infer(rhs);
+        // An operator on a record, an enum or a bounded `T`: its interface's
+        // method (#38).
+        if let Some(t) = self.user_operator(op, lhs, rhs, &l, &r) {
+            return t;
+        }
         match op {
             BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => Ty::Bool,
             BinOp::Range => Ty::List(Box::new(Ty::Int)),
@@ -2052,6 +2080,9 @@ impl<'a> Ck<'a> {
         mut binds: HashMap<String, Ty>,
     ) -> Ty {
         let arg_tys: Vec<Ty> = args.iter().map(|a| self.infer(a)).collect();
+        for (a, t) in args.iter().zip(&arg_tys) {
+            self.copy_out(a, t);
+        }
         self.last_args = arg_tys.clone();
         let min = params.len().saturating_sub(optional);
         let bad = args.len() < min || (rest.is_none() && args.len() > params.len());
@@ -2653,6 +2684,7 @@ impl<'a> Ck<'a> {
             let mut vals: Vec<(&str, Ty, &Expr)> = vec![];
             for (k, v) in entries {
                 let t = self.infer(v);
+                self.copy_out(v, &t);
                 match k {
                     MapKey::Static(s) => {
                         given.push(s);
@@ -2668,7 +2700,8 @@ impl<'a> Ck<'a> {
             for (fname, fty) in &rd.fields {
                 if let Some((_, t, _)) = vals.iter().find(|(n, _, _)| n == fname) {
                     unify(fty, t, &gens, &mut binds);
-                } else if !dynamic {
+                } else if !dynamic && !rd.defaults.iter().any(|d| &d.0 == fname) {
+                    // A field with a default may be left out (#38).
                     self.err(
                         "E1205",
                         format!("`{}` is missing the field `{fname}`", rd.name),
@@ -3409,6 +3442,8 @@ mod tests {
         RecordDecl {
             name: "Move".into(),
             generics: vec![],
+            derives: vec![],
+            defaults: vec![],
             fields: vec![("src".into(), Ty::Path), ("dst".into(), Ty::Path)],
             public: false,
             at: At::default(),
@@ -3596,6 +3631,7 @@ roll w = _cg_check(null, {k: \"opt\", of: {k: \"int\"}}, \"w\")\nstick e = _cg_c
             types::EnumDecl {
                 name: "Status".into(),
                 generics: vec![],
+                derives: vec![],
                 variants: vec![
                     types::Variant {
                         name: "ok".into(),

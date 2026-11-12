@@ -1,0 +1,7 @@
+strength medium
+
+impl Eq for Int {
+  pull eq(self, other: Int) -> Bool {
+    snuff true
+  }
+}

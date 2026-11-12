@@ -1,0 +1,6 @@
+strength full
+record Spot derive(Copy) { x: Int }
+stick a = Spot { x: 1 }
+stick f = move pack() => a.x
+exhale f()
+exhale a.x

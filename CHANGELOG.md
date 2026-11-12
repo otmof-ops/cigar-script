@@ -8,6 +8,25 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **The standard interfaces and operators (#38, section 2).** `Eq`, `Ord`,
+  `Hash`, `Show`, `Debug`, `Default`, `Clone`, `Add`, `Sub`, `Mul`, `Div`,
+  `Rem`, `Neg` and `Index` are in the prelude, with the built-in types' impls
+  as ordinary impls, for any file that names them. On a record or an enum an
+  operator is its interface's method (`a + b` is `add`, `a < b` is `cmp`),
+  through the bound on a bounded `T`; a record with no `impl` is `E1230` at
+  the operator. The built-in types' operators are unchanged. Test:
+  `operators_on_records`.
+- **`derive` and field defaults (#38).** `derive(Eq, Ord, Hash, Show, Debug,
+  Default, Clone)` on a record or an enum writes the impls field by field; a
+  field that does not implement the interface is the new `E1232`.
+  `retries: Int = 3` declares a default a record literal may leave out.
+  `cigar explain --derive file:Type` prints what was written. `derive(Json)`
+  is not built yet (`E1102`). Tests: `derive_writes_the_standard_impls`,
+  `explain_derive_prints_the_impls`.
+- **`derive(Copy)` (#22, D3).** A record or enum that carries it, with every
+  field a copy type, is a copy type: binding, passing, storing and returning
+  it copy it, it never moves at full, and an `owned` parameter takes a copy
+  with no `move` at medium. Test: `derive_copy_makes_a_copy_type`.
 - **Generic implementations and default methods (#38, sections 1.2 and
   1.3).** `impl<T: Show> Show for List<T>` (with a `where` clause if wanted)
   gives every list of a `Show` type the interface, statically and, for an

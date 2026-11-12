@@ -135,3 +135,21 @@ docs/LANGUAGE.md ("Types, values and checks"):
 | `run/generic-impl-blanket` | a blanket `impl` for `List<Point>` and `List<List<Point>>` |
 | `run/default-method` | a default method used, overridden, and called through a bounded `T` |
 | `run/dispatch-by-element-type` | `List<Int>` and `List<Text>` impls picked by the elements of an `Any` |
+
+## The standard interfaces, operators and `derive` (#38)
+
+| file | what it holds |
+|---|---|
+| `run/operators-on-records` | `+`, `-x`, `==`, `!=`, `<`, `>=` and `[k]` on records; a bounded `T`; built-in operators unchanged |
+| `run/standard-interfaces-built-in` | bounded functions over numbers, text and lists through the prelude's impls |
+| `check/e1230-operator-without-impl` | `+` on a record with no `impl Add` |
+| `check/e1230-comparison-without-ord` | `<` on a record with no `impl Ord` |
+| `check/e1230-operator-on-bounded-t` | `+` on a `T` bounded only by `Show` |
+| `check/e1231-standard-impl-for-built-in` | `impl Eq for Int` beside the prelude's |
+| `run/derive-standard` | every standard derive on a record and an enum, field defaults, `Point.default()` |
+| `run/derive-copy` | a copy record bound, passed, given `owned`, and nested, at full |
+| `check/e1232-field-without-impl`, `e1232-nested-record` | a field that does not implement the derived interface |
+| `check/e1232-copy-with-list-field` | `derive(Copy)` with a list field |
+| `check/e1232-enum-default` | `derive(Default)` on an enum |
+| `check/e1102-derive-json` | `derive(Json)`, not built yet |
+| `check/e1201-field-default` | a default that does not fit its field |

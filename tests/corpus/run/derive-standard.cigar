@@ -1,0 +1,30 @@
+strength medium
+
+record Point derive(Eq, Ord, Hash, Show, Debug, Default, Clone) { x: Int, y: Int }
+
+enum Shape derive(Eq, Ord, Hash, Show, Clone) { circle(r: Float), square(s: Float), dot }
+
+record Config derive(Default, Show) {
+  name: Text = "app"
+  retries: Int = 3
+  tags: List<Text>
+}
+
+stick a = Point { x: 1, y: 2 }
+stick b = Point { x: 1, y: 3 }
+exhale a == b, a < b, a == a.clone(), a.hash()
+exhale Point.default()
+exhale Config.default()
+exhale Config { tags: ["x"] }
+exhale Shape.circle(r: 1.0) == Shape.circle(r: 1.0), Shape.circle(r: 2.0) < Shape.square(s: 1.0)
+exhale Shape.dot.hash()
+pull top<T: Ord>(xs: List<T>) -> T? {
+  roll best: T? = null
+  for x in xs {
+    if best == null or x > best {
+      best = x
+    }
+  }
+  snuff best
+}
+exhale top([a, b, Point { x: 0, y: 9 }])

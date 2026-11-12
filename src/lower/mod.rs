@@ -8,8 +8,11 @@
 //! The result is ordinary CigScript, which cig parses, checks and runs.
 
 mod bounds;
+mod derive;
 mod impls;
+mod standard;
 pub use impls::SELF;
+pub use standard::{arith_op, ARITH};
 pub mod edits;
 pub mod ty;
 
@@ -797,6 +800,10 @@ impl<'a> L<'a> {
             }
             i += 1;
         }
+        // The prelude's standard interfaces this file names (#38).
+        self.standard_interfaces();
+        // What `derive` writes (#38).
+        self.derive_impls();
     }
 
     /// Does the file write about a `Result`: the word, `Ok(`, `Err(`,
@@ -885,8 +892,9 @@ impl<'a> L<'a> {
     /// `record Name<A> { field: Type, ... }` at token `s` (`record`).
     fn read_record(&mut self, s: usize, public: bool) -> Option<RecordDecl> {
         let name = self.ident(s + 1)?;
-        let (gens, mut j) = self.generic_params(s + 2);
+        let (gens, j) = self.generic_params(s + 2);
         self.no_bounds_on("record", &gens, s + 1);
+        let (derives, mut j) = self.derive_list(j);
         if !matches!(self.k(j), T::LBrace) {
             let sp = self.sp(j);
             self.err(
@@ -903,6 +911,7 @@ impl<'a> L<'a> {
             gens.iter().map(|g| g.0.clone()).collect(),
         );
         let mut fields: Vec<(String, Ty)> = Vec::new();
+        let mut defaults = Vec::new();
         j += 1;
         while j < close {
             if matches!(self.k(j), T::Newline | T::Comma) {
@@ -935,6 +944,14 @@ impl<'a> L<'a> {
                             sp.end,
                         );
                     }
+                    // `retries: Int = 3`: a field default (#38).
+                    let n = if matches!(self.k(n), T::Assign) {
+                        let (d, next) = self.field_default(&f, n + 1, close);
+                        defaults.extend(d);
+                        next
+                    } else {
+                        n
+                    };
                     fields.push((f, t));
                     j = n;
                 }
@@ -946,6 +963,8 @@ impl<'a> L<'a> {
             name,
             generics: gens.into_iter().map(|g| g.0).collect(),
             fields,
+            derives,
+            defaults,
             public,
             at: self.at_of(s, close),
         })
@@ -954,8 +973,9 @@ impl<'a> L<'a> {
     /// `enum Name<T> { a, b(x: T), c(Int, Text) }` at token `s` (`enum`).
     fn read_enum(&mut self, s: usize, public: bool) -> Option<EnumDecl> {
         let name = self.ident(s + 1)?;
-        let (gens, mut j) = self.generic_params(s + 2);
+        let (gens, j) = self.generic_params(s + 2);
         self.no_bounds_on("enum", &gens, s + 1);
+        let (derives, mut j) = self.derive_list(j);
         if !matches!(self.k(j), T::LBrace) {
             let sp = self.sp(j);
             self.err(
@@ -1040,6 +1060,7 @@ impl<'a> L<'a> {
             name,
             generics: gens.into_iter().map(|g| g.0).collect(),
             variants,
+            derives,
             public,
             at: self.at_of(s, close),
         })
@@ -1741,7 +1762,7 @@ impl<'a> L<'a> {
                 }
                 k += 1;
             }
-            ((), k)
+            ((), self.past_derive(k))
         };
         let close = if matches!(self.k(j), T::LBrace) {
             self.matching(j)
@@ -1758,8 +1779,14 @@ impl<'a> L<'a> {
                 .iter()
                 .map(|(f, t)| format!("{f}: {}", ty::descriptor(t)))
                 .collect();
+            // A field left out takes its default (#38).
+            let fill: String = r
+                .defaults
+                .iter()
+                .map(|(f, v, _)| format!("if not f.has(\"{f}\") {{ f[\"{f}\"] = {v} }}; "))
+                .collect();
             self.appended.push_str(&format!(
-                "pull _cg_new_{name}(f) {{ snuff _cg_record(\"{name}\", [{}], f, {{{}}}) }}\n",
+                "pull _cg_new_{name}(f) {{ {fill}snuff _cg_record(\"{name}\", [{}], f, {{{}}}) }}\n",
                 order.join(", "),
                 descs.join(", ")
             ));
@@ -1776,6 +1803,7 @@ impl<'a> L<'a> {
             }
             j += 1;
         }
+        let j = self.past_derive(j);
         let close = if matches!(self.k(j), T::LBrace) {
             self.matching(j)
         } else {
@@ -1878,6 +1906,7 @@ impl<'a> L<'a> {
             for_ty: t,
             methods,
             at: self.at_of(i, close),
+            builtin: false,
         });
         close + 1
     }
@@ -2245,6 +2274,13 @@ impl<'a> L<'a> {
                                 format!("mark it `pub` in module `{module}`"),
                             );
                         }
+                    }
+                    // `Point.default()` (#38).
+                    if (self.record_names.contains(&name) || self.enum_names.contains(&name))
+                        && self.type_default(j, &name)
+                    {
+                        j += 3;
+                        continue;
                     }
                     // A record literal: `Name { ... }` or `Name<T> { ... }`.
                     if self.record_names.contains(&name) {
@@ -3714,6 +3750,14 @@ impl<'a> L<'a> {
         for (n, i) in &m.program.interfaces {
             if i.public {
                 self.prog.foreign.insert(n.clone());
+                // A module's interface named like a standard one is the
+                // module's: the prelude's goes, with its impls.
+                if self.prog.standard.remove(n) {
+                    self.prog.interfaces.remove(n);
+                    self.prog
+                        .impls
+                        .retain(|im| !(im.builtin && &im.interface == n));
+                }
                 self.prog
                     .interfaces
                     .entry(n.clone())
@@ -3882,7 +3926,13 @@ impl<'a> L<'a> {
             if self.prog.foreign.contains(iname) {
                 continue;
             }
-            for m in &iface.methods {
+            // A method with no `self` (`Default.default`) is called on a
+            // type, never picked by a value.
+            for m in iface
+                .methods
+                .iter()
+                .filter(|m| m.params.first().is_some_and(|p| p.name == "self"))
+            {
                 let params: Vec<String> = m
                     .params
                     .iter()

@@ -1,0 +1,3 @@
+strength medium
+
+enum Light derive(Default) { red, green }

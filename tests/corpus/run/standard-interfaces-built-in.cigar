@@ -1,0 +1,32 @@
+strength medium
+
+# The prelude's interfaces, as the built-in types have them: a bounded
+# function works on numbers, text and lists as it does on a record.
+pull biggest<T: Ord>(xs: List<T>) -> T? {
+  roll best: T? = null
+  for x in xs {
+    if best == null or x > best {
+      best = x
+    }
+  }
+  snuff best
+}
+
+pull same<T: Eq>(a: T, b: T) -> Bool {
+  snuff a == b
+}
+
+pull key<T: Hash>(x: T) -> Text {
+  snuff x.hash()
+}
+
+exhale biggest([3, 9, 2])
+exhale biggest(["b", "c", "a"])
+exhale biggest([[1, 2], [1, 3], [1]])
+exhale same([1, 2], [1, 2]), same("a", "b")
+exhale key(1), key("1"), key([1, 2])
+pull shown<T: Show + Clone>(x: T) -> Text {
+  snuff x.clone().show()
+}
+
+exhale 3.cmp(4), shown("a"), shown([1, 2]), [1, 2].clone()

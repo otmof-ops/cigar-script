@@ -556,6 +556,87 @@ fn capitalize(s: &str) -> String {
     }
 }
 
+/// `cigar explain --derive file:Type` (#38): the `impl`s `derive` writes for
+/// a record or an enum, as the CigScript they lower to. Nothing generated is
+/// hidden.
+pub fn run_derive(ctx: &Ctx, spec: &str) -> i32 {
+    let fail = |d: cigscript::diagnostics::Diagnostic| {
+        cigscript::cli::report(ctx, &d, None, None);
+        exit::USAGE
+    };
+    let Some((file, ty)) = spec
+        .rsplit_once(':')
+        .filter(|(f, t)| !f.is_empty() && !t.is_empty())
+    else {
+        return fail(
+            usage(format!("`{spec}` names no type"))
+                .code("E800")
+                .with_hint("name the file and the type: cigar explain --derive shapes.cigar:Point"),
+        );
+    };
+    let path = std::path::PathBuf::from(file);
+    let source = match fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            return fail(
+                usage(format!("cannot read {}: {e}", path.display()))
+                    .code("E801")
+                    .with_hint("name a file you can read"),
+            )
+        }
+    };
+    let checked = check_file_source(Kind::Cigar, &source, None, Some(&path));
+    let name = path.to_string_lossy().to_string();
+    if !checked.ok() {
+        report_checked(ctx, &name, &checked);
+        return exit::CHECK;
+    }
+    let prog = &checked.program;
+    let derives = prog
+        .records
+        .get(ty)
+        .map(|r| r.derives.clone())
+        .or_else(|| prog.enums.get(ty).map(|e| e.derives.clone()));
+    let Some(derives) = derives else {
+        return fail(
+            usage(format!("{name} declares no record or enum `{ty}`"))
+                .code("E800")
+                .with_hint("name a record or an enum the file declares"),
+        );
+    };
+    let written: Vec<&(String, String, String)> = prog
+        .derived
+        .iter()
+        .filter(|(t, _, _)| t == ty || t.starts_with(&format!("{ty}<")))
+        .collect();
+    let copy = derives.iter().any(|(i, _)| i == "Copy");
+    if ctx.json {
+        let impls: Vec<serde_json::Value> = written
+            .iter()
+            .map(|(t, i, text)| serde_json::json!({"type": t, "interface": i, "lowered": text}))
+            .collect();
+        println!(
+            "{}",
+            serde_json::json!({"file": name, "type": ty, "copy": copy, "impls": impls})
+        );
+        return exit::OK;
+    }
+    if derives.is_empty() {
+        println!("{name}: `{ty}` derives nothing");
+        return exit::OK;
+    }
+    for (t, i, text) in written {
+        println!("{}", ctx.bold(&format!("impl {i} for {t}")));
+        println!("  {}", text.trim_end());
+        println!();
+    }
+    if copy {
+        println!("{}", ctx.bold(&format!("derive(Copy) on {ty}")));
+        println!("  a copy type: binding, passing or storing it copies it; nothing is written");
+    }
+    exit::OK
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

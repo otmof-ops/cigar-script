@@ -133,10 +133,18 @@ impl Ck<'_> {
         let prog = self.prog;
         for (k, b) in prog.impls.iter().enumerate() {
             for a in &prog.impls[..k] {
-                if a.interface == b.interface && overlap(&a.for_ty, &names(a), &b.for_ty, &names(b))
+                if a.interface == b.interface
+                    && !(a.builtin && b.builtin)
+                    && overlap(&a.for_ty, &names(a), &b.for_ty, &names(b))
                 {
-                    let line = self.line_at(a.at.start);
-                    let where_ = line.map(|l| format!(" on line {l}")).unwrap_or_default();
+                    // The prelude's impls come first: `b` is the file's.
+                    let where_ = if a.builtin {
+                        " in the prelude".to_string()
+                    } else {
+                        self.line_at(a.at.start)
+                            .map(|l| format!(" on line {l}"))
+                            .unwrap_or_default()
+                    };
                     self.push(
                         "E1231",
                         format!(
@@ -153,7 +161,7 @@ impl Ck<'_> {
                     break;
                 }
             }
-            if prog.foreign.contains(&b.interface) && !self.declared_here(&b.for_ty) {
+            if !b.builtin && prog.foreign.contains(&b.interface) && !self.declared_here(&b.for_ty) {
                 self.push(
                     "E1231",
                     format!(

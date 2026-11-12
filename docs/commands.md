@@ -4,6 +4,7 @@
 cigar check <path>... [--strength mild|medium|full] [--deny any|warnings]
 cigar run <file> [--dry-run] [--no-rollback] [--max-steps <n>] [--strength mild|medium|full] [-- <args>...]
 cigar explain --layers <file>:<line>:<col>
+cigar explain --derive <file>:<Type>
 cigar fmt <path>... [--check]
 cigar-lsp
 cigar --version
@@ -225,6 +226,12 @@ errors are printed and the exit is `2`. A `.cig` file, a mild file, a bad
 position and a place with no layer exit `3` (`E800`), the last listing where
 the file's layers are. [The language](LANGUAGE.md) has the rules.
 
+`cigar explain --derive FILE:TYPE` prints the `impl`s a record's or enum's
+`derive(...)` wrote, each as the CigScript it lowers to, and says so when the
+type carries `derive(Copy)`. `--json` prints one object with `file`, `type`,
+`copy` and `impls` (a list of `{type, interface, lowered}`). The file is checked
+first, as for `--layers`; a type the file does not declare exits `3` (`E800`).
+
 ## When `cigar` itself crashes
 
 A bug in `cigar` (a panic, not an error code) is kept for you, not sent. It joins the family's
@@ -382,7 +389,7 @@ step reads them the same way.
 | `W1232` | warning | a `stick`, `roll`, parameter or `use` that nothing reads; `_` silences it |
 | `W1233` | warning | the result of a pure method or a `-> T` function dropped; `_ = f()` says it is meant |
 | `E502`, `E1510` | check | a divisor, or a sized number, that the checker works out before the program runs (`10 / 0`, `stick c: u8 = b + 10`, `[1, 2, 300]` into `List<u8>`); they stop the run as well when the number is only known then |
-| `E1200` to `E1399` | check | medium's type, record, `match`, module and interface errors. `E1230` is a type argument without an `impl` of a bound its function asks for (`max<T: Ord>` given a record with no `impl Ord`), `E1231` an `impl` that overlaps another or is an orphan. `E1215` covers an assignment to a `stick`, a write through a `stick`-bound path (field, element or a mutating method), and a write to a `ListView<T>` |
+| `E1200` to `E1399` | check | medium's type, record, `match`, module and interface errors. `E1230` is a type argument without an `impl` of a bound its function asks for (`max<T: Ord>` given a record with no `impl Ord`), `E1231` an `impl` that overlaps another or is an orphan, `E1232` a `derive` a field of the type cannot have. `E1215` covers an assignment to a `stick`, a write through a `stick`-bound path (field, element or a mutating method), and a write to a `ListView<T>` |
 | `E1401`, `E1402` | check | layers: two meanings for a type, or none |
 | `E1403` | check | `break` or `continue` that would leave a `within retry` block |
 | `E1404` | cough, at run time | a `within timeout` block ran past its deadline |

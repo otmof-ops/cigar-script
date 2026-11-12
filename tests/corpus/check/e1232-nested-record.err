@@ -1,0 +1,2 @@
+E1232
+field `inner` is a `Inner`, which doesn't implement `Eq`

@@ -645,3 +645,155 @@ fn default_method_overridable() {
     assert_eq!(first_error(&f), None);
     assert_eq!(run_file(&f), "p1, p1\ntwo of #7\np2, p2\ntwo of #8\n");
 }
+
+/// #38, section 2: operators on records are their standard interfaces'
+/// methods (`+` is `Add`, `-x` is `Neg`, `==` is `Eq`, `<` is `Ord`, `[k]`
+/// is `Index`), on a bounded `T` through the bound, while the built-in
+/// types' operators stay CigScript's; a record with no `impl` is `E1230` at
+/// the operator; and a file's `impl` of a standard interface for its own
+/// record is no orphan, while one for a built-in type overlaps the
+/// prelude's (`E1231`).
+#[test]
+fn operators_on_records() {
+    let f = corpus("run/operators-on-records.cigar");
+    assert_eq!(first_error(&f), None);
+    assert_eq!(
+        run_file(&f),
+        std::fs::read_to_string(corpus("run/operators-on-records.out")).unwrap()
+    );
+    let f = corpus("run/standard-interfaces-built-in.cigar");
+    assert_eq!(first_error(&f), None);
+    assert_eq!(
+        run_file(&f),
+        std::fs::read_to_string(corpus("run/standard-interfaces-built-in.out")).unwrap()
+    );
+    for (rel, code, part) in [
+        (
+            "check/e1230-operator-without-impl.cigar",
+            "E1230",
+            "`Vec2` doesn't implement `Add`, which `+` needs",
+        ),
+        (
+            "check/e1230-comparison-without-ord.cigar",
+            "E1230",
+            "which `<` needs",
+        ),
+        (
+            "check/e1230-operator-on-bounded-t.cigar",
+            "E1230",
+            "`T` doesn't implement `Add`",
+        ),
+        (
+            "check/e1231-standard-impl-for-built-in.cigar",
+            "E1231",
+            "in the prelude",
+        ),
+    ] {
+        let (c, msg) = first_error(&corpus(rel)).unwrap_or_else(|| panic!("{rel} checks"));
+        assert_eq!(c, code, "{rel}: {msg}");
+        assert!(msg.contains(part), "{rel}: {msg}");
+    }
+}
+
+/// #38, section 2: `derive(Eq, Ord, Hash, Show, Debug, Default, Clone)` on
+/// records and enums writes each `impl` field by field (`Ord` lexicographic,
+/// an enum by variant order), field defaults fill a record literal and
+/// `Default`, a bounded `T` uses what was derived, and a field that does not
+/// implement the interface is `E1232`, named. `derive(Json)` is not built.
+#[test]
+fn derive_writes_the_standard_impls() {
+    let f = corpus("run/derive-standard.cigar");
+    assert_eq!(first_error(&f), None);
+    assert_eq!(
+        run_file(&f),
+        std::fs::read_to_string(corpus("run/derive-standard.out")).unwrap()
+    );
+    for (rel, code, part) in [
+        (
+            "check/e1232-field-without-impl.cigar",
+            "E1232",
+            "field `tags`",
+        ),
+        ("check/e1232-nested-record.cigar", "E1232", "field `inner`"),
+        (
+            "check/e1232-enum-default.cigar",
+            "E1232",
+            "no default variant",
+        ),
+        (
+            "check/e1102-derive-json.cigar",
+            "E1102",
+            "`derive(Json)` is not built yet",
+        ),
+        (
+            "check/e1201-field-default.cigar",
+            "E1201",
+            "the default of `retries`",
+        ),
+    ] {
+        let (c, msg) = first_error(&corpus(rel)).unwrap_or_else(|| panic!("{rel} checks"));
+        assert_eq!(c, code, "{rel}: {msg}");
+        assert!(msg.contains(part), "{rel}: {msg}");
+    }
+}
+
+/// #22 D3 (i): a record that carries `derive(Copy)`, whose fields are all
+/// copy types, is a copy type: binding it, passing it, storing it and giving
+/// it to an `owned` parameter copy it, at full and at medium, and a write
+/// through one copy is never seen through another. A record with a non-copy
+/// field cannot derive it (`E1232`).
+#[test]
+fn derive_copy_makes_a_copy_type() {
+    let f = corpus("run/derive-copy.cigar");
+    assert_eq!(first_error(&f), None);
+    assert_eq!(
+        run_file(&f),
+        std::fs::read_to_string(corpus("run/derive-copy.out")).unwrap()
+    );
+    let (c, msg) = first_error(&corpus("check/e1232-copy-with-list-field.cigar")).expect("refused");
+    assert_eq!(c, "E1232");
+    assert!(msg.contains("field `items`"), "{msg}");
+    for case in [
+        "ok-d3-copy-record.cigar",
+        "ok-s5-copy-record.cigar",
+        "ok-s6-copy-record.cigar",
+    ] {
+        let f = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/strict")
+            .join(case);
+        assert_eq!(first_error(&f), None, "{case}");
+    }
+}
+
+/// `cigar explain --derive file:Type` prints what `derive` wrote.
+#[test]
+fn explain_derive_prints_the_impls() {
+    let f = corpus("run/derive-standard.cigar");
+    let dir = tempfile::tempdir().unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_cigar"))
+        .arg("--plain")
+        .arg("explain")
+        .arg("--derive")
+        .arg(format!("{}:Point", f.display()))
+        .env("XDG_CACHE_HOME", dir.path().join("cache"))
+        .env("CIGSCRIPT_HOME", dir.path().join("cig"))
+        .env("NO_COLOR", "1")
+        .output()
+        .expect("cigar runs");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = String::from_utf8_lossy(&out.stdout);
+    for want in [
+        "impl Eq for Point",
+        "impl Ord for Point",
+        "impl Hash for Point",
+        "impl Default for Point",
+        "impl Clone for Point",
+        "_cg_impl_Ord_Point_cmp",
+    ] {
+        assert!(text.contains(want), "{want} missing from:\n{text}");
+    }
+}

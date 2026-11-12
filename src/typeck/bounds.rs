@@ -168,13 +168,18 @@ impl Ck<'_> {
             return Ty::Any;
         };
         self.dispatch_by_value(&iface, receiver, name, args.len(), safe, span);
+        // `Self` in the bound's signature is this `T`.
+        let me = Ty::Param(p.to_string());
         let params: Vec<Ty> = m
             .params
             .iter()
             .filter(|x| x.name != "self")
-            .map(|x| x.ty.clone().unwrap_or(Ty::Any))
+            .map(|x| x.ty.as_ref().map_or(Ty::Any, |t| types::subst_self(t, &me)))
             .collect();
-        let ret = m.ret.clone().unwrap_or(Ty::Any);
+        let ret = m
+            .ret
+            .as_ref()
+            .map_or(Ty::Any, |t| types::subst_self(t, &me));
         self.apply(
             name,
             &[],

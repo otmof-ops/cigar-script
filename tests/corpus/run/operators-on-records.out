@@ -1,0 +1,10 @@
+Vec2 { x: 4, y: 6 }
+Vec2 { x: 5, y: 8 }
+Vec2 { x: -1, y: -2 }
+true
+true
+true false
+Vec2 { x: 4, y: 6 }
+5 xy
+8
+3 ab [1, 2]

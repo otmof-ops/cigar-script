@@ -1,0 +1,27 @@
+strength full
+
+record P derive(Copy, Eq, Show) { x: Int, y: Int }
+record Line derive(Copy) { a: P, b: P }
+
+pull take(owned p: P) -> Int {
+  snuff p.x
+}
+
+pull bump(p: P) -> P {
+  roll q = p
+  q.x = q.x + 100
+  snuff q
+}
+
+roll a = P { x: 1, y: 2 }
+roll b = a
+b.x = 5
+exhale a.x, b.x
+exhale take(a), a.x
+stick c = a
+exhale c.x
+exhale bump(a).x, a.x
+roll l = Line { a: a, b: b }
+roll m = l
+m.a.x = 77
+exhale l.a.x, m.a.x, a.x

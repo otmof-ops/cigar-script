@@ -1,0 +1,7 @@
+strength medium
+
+pull total<T: Show>(a: T, b: T) -> T {
+  snuff a + b
+}
+
+exhale total(1, 2)

@@ -164,7 +164,7 @@ page; until then the message carries the whole explanation.
 | code | kind | when |
 |---|---|---|
 | `E1101` | check | a feature above the file's strength: names the feature, the strength that allows it, and the line to add. A medium file may write `move x` only as the argument of a full function's `owned` parameter |
-| `E1102` | check | a feature the file's strength allows, which this version has not built yet: names the issue it waits on. Today: `foreign`, `unchecked`, and a `within` context other than `retry`, `parallel` and `timeout` |
+| `E1102` | check | a feature the file's strength allows, which this version has not built yet: names the issue it waits on. Today: `foreign`, `unchecked`, a `within` context other than `retry`, `parallel` and `timeout`, `derive(Json)`, and an operator on a record inside `${...}` |
 | `E1103` | check | a strength declaration that is not the first statement, or names no strength |
 | `E1104` | check | a name that starts `_cg_` or `__cg_`. As kind `internal`: the file lowered to CigScript cig refuses, which is a bug in `cigar` |
 | `E1105` | check | a reserved word where a name goes (`stick match = 1`), in a file whose strength reserves it; or `r#word` and `r_word` both written. The message names the word and offers `r#word` |
@@ -196,8 +196,9 @@ page; until then the message carries the whole explanation.
 | `E1217` | a `snuff` whose value is not the function's declared result |
 | `E1218` | a `cough` of a record the function's `coughs` list does not hold |
 | `E1219` | a `?` that cannot send its error anywhere: outside a function, inside a `pack`, in a function whose result is not a `Result`, on a value that is not a `Result`, or with an error that does not fit the function's. Also coughed at run time when an untyped value reaches `?` and is not a `Result` |
-| `E1230` | a type argument doesn't implement a bound: the type a call gives a bounded type parameter has no `impl` of one of its interfaces ("`Point` doesn't implement `Ord`, which `max` needs for `T`"); the hint names the bound and the `impl` to write. Also a generic `impl` whose pattern fits a type its own bound does not hold for |
+| `E1230` | a type argument doesn't implement a bound: the type a call gives a bounded type parameter has no `impl` of one of its interfaces ("`Point` doesn't implement `Ord`, which `max` needs for `T`"); the hint names the bound and the `impl` to write. Also a generic `impl` whose pattern fits a type its own bound does not hold for, and an operator on a record or a bounded `T` with no `impl` of the operator's interface ("`Vec2` doesn't implement `Add`, which `+` needs") |
 | `E1231` | `impl`s that break coherence: two `impl`s of one interface whose types can be the same type (named both, with the first one's line), or an `impl` of a module's interface for a type this file does not declare (an orphan) |
+| `E1232` | `derive(X)` on a record or enum with a field that does not implement `X` (named, with its type); `derive(Copy)` with a field that is not a copy type; `derive(Default)` on an enum |
 | `E1210` | **at run time**: a value entering a typed place does not fit it (`E1210 double: n should be Int and is Text "x"`). For a list or map the message names the path to the first part that does not fit: `E1210 xs should be List<u8> and is List: xs[2] is 300, outside u8 (0 to 255)`, `m.users[0].age is Text "old", not u8`. The path starts at the name the value was given (`xs`, `m`, `Pixel.shades`), or at `value` for a place with no name of its own (a result, `json.parse<T>`) |
 
 **Modules and interfaces** (medium)
@@ -310,11 +311,13 @@ annotation is `Any`, unless local inference knows better.
 ### Records and enums (medium; #9)
 
 ```ebnf
-record-decl     = "record" , name , [ type-params ] , "{" , [ field , { sep , field } ] , "}" ;
-field           = name , ":" , type ;
+record-decl     = "record" , name , [ type-params ] , [ derive ] ,
+                  "{" , [ field , { sep , field } ] , "}" ;
+field           = name , ":" , type , [ "=" , literal ] ;   (* a default, #38 *)
+derive          = "derive" , "(" , name , { "," , name } , ")" ;
 record-literal  = name , "{" , [ name , ":" , expr , { sep , name , ":" , expr } ] , "}" ;
 
-enum-decl       = "enum" , name , [ type-params ] , "{" , variant , { sep , variant } , "}" ;
+enum-decl       = "enum" , name , [ type-params ] , [ derive ] , "{" , variant , { sep , variant } , "}" ;
 variant         = name , [ "(" , ( named-field | type ) , { "," , ( named-field | type ) } , ")" ] ;
 named-field     = name , ":" , type ;
 variant-value   = name , "." , name , [ "(" , args , ")" ] ;
@@ -411,6 +414,71 @@ impl<T: Show> Show for List<T> {
 
 stick ps: List<Point> = [Point { x: 1 }, Point { x: 2 }]
 exhale ps.twice()
+```
+
+### The standard interfaces, operators and `derive` (medium; #38)
+
+The prelude has these interfaces. A file has one when it names it (in a
+bound, an `impl` or a `derive`) and does not declare an interface of that
+name itself, so a file that names none lowers as it always did.
+
+| interface | method | gives | the built-in types' `impl`s |
+|---|---|---|---|
+| `Eq` | `eq(self, other: Self) -> Bool` | `==`, `!=` on records and enums | `Int`, `Float`, `Bool`, `Text`, `List<T: Eq>`, `Map<V: Eq>` |
+| `Ord` | `cmp(self, other: Self) -> Int` (negative, `0`, positive) | `<`, `<=`, `>`, `>=` | `Int`, `Float`, `Text`, `List<T: Ord>` (lexicographic) |
+| `Hash` | `hash(self) -> Text` | a key no other value has | the scalars, `Text`, `List<T: Hash>` |
+| `Show`, `Debug` | `show(self) -> Text`, `debug(self) -> Text` | the text of a value | the scalars, `Text`, `List<T>`, `Map<V>` |
+| `Default` | `default() -> Self` | `Point.default()` | `0`, `0.0`, `false`, `""`, `[]`, `{}` |
+| `Clone` | `clone(self) -> Self` | a copy | the scalars, `Text`, `List<T>`, `Map<V>` |
+| `Add`, `Sub`, `Mul`, `Div`, `Rem` | `add(self, other: Self) -> Self`, ... | `+ - * / %` | `Int`, `Float`; `Add` also `Text`, `List<T>` |
+| `Neg` | `neg(self) -> Self` | `-x` | `Int`, `Float` |
+| `Index` | `index(self, key: Any) -> Any` | `x[k]` | `List<T>`, `Map<V>` |
+
+`Path` is text, and has the `Text` impls. The arithmetic interfaces take and
+give `Self`, and `Index` gives `Any`, until interfaces have associated types.
+An `impl` of a standard interface for a record of the file is never an orphan;
+one for a built-in type overlaps the prelude's (`E1231`).
+
+- **Operators.** On a record or an enum, `a + b` is `add(a, b)`, `-a` is
+  `neg(a)`, `a < b` is `cmp(a, b) < 0`, `a == b` is `eq(a, b)` and `a[k]` is
+  `index(a, k)`. A record with no `impl` is `E1230` at the operator ("`Vec2`
+  doesn't implement `Add`, which `+` needs"), except `==` and `!=`, which
+  compare a record with no `impl Eq` field by field, as they always have. On a
+  bounded `T` the operator goes through the bound (`E1230` without it); on an
+  unbounded `T` and on the built-in types it is CigScript's operator, so a
+  `.cig` file means what it meant. Inside `${...}` an operator on a record is
+  not lowered yet (`E1102`): work it out in a `stick` first.
+- **`derive`.** `record Point derive(Eq, Ord, Hash, Show, Debug, Default, Clone) { ... }`
+  (and the same on an enum) writes each `impl`, field by field in declaration
+  order: `Ord` is lexicographic by field, an enum's by variant order and then
+  payload; `Hash` joins each field's key with its length in front; `Show` and
+  `Debug` are the text `exhale` gives; `Default` takes each field's default;
+  `Clone` clones each field. A generic record's `impl` asks its type
+  parameters for the interface. Every field must implement the interface, an
+  optional field its inner type: `E1232` names the one that does not. An enum
+  has no default variant, so `derive(Default)` on one is `E1232`.
+  `derive(Copy)` makes a copy type ([below](#stick-copy-types-and-calls-from-medium-into-full)).
+  `derive(Json)` is not built yet (`E1102`).
+- **Field defaults.** `retries: Int = 3`: a value written out (a number, a
+  text, `true`, `false`, `null`, `[]` or `{}`). A record literal may leave the
+  field out, and `Default` uses it. A default that does not fit its field is
+  `E1201`.
+- **Nothing generated is hidden.** `cigar explain --derive shapes.cigar:Point`
+  prints the `impl`s `derive` wrote, as the CigScript they lower to.
+
+```cigar
+strength medium
+
+record Vec2 derive(Eq, Show) { x: Int, y: Int = 0 }
+
+impl Add for Vec2 {
+  pull add(self, other: Vec2) -> Vec2 {
+    snuff Vec2 { x: self.x + other.x, y: self.y + other.y }
+  }
+}
+
+stick a = Vec2 { x: 1 }
+exhale a + Vec2 { x: 2, y: 3 }, a == Vec2 { x: 1, y: 0 }
 ```
 
 ### Modules (medium; #10)
@@ -813,11 +881,15 @@ original usable.
 
 - Copy types: every scalar (`Bool`, `Int`, `Float`, the sized integers), `Text`,
   `Path` and `null`. Text is immutable, so a copy is never seen to differ.
+- A record or an enum that carries `derive(Copy)` is a copy type. It may only
+  when every field is a copy type; a field that is not is `E1232`, named. Its
+  value is copied for real wherever a name, a field or an element holding it
+  is bound, assigned, passed, put in a list, map or record, or returned, so a
+  write through one copy is never seen through another, at medium and at full.
+  At full it never moves; an `owned` parameter of a copy type takes a copy,
+  with no `move` at medium.
 - Not copy types: `List<T>`, `ListView<T>`, `Map<V>`, `Channel<T>`, and every
-  record and enum.
-- A record whose fields are all copy types will be a copy type when it says
-  so, with `derive(Copy)` (#38). `derive` is not built yet, so today every
-  record is a non-copy value: the side that refuses more, never less.
+  record and enum without `derive(Copy)`.
 
 **A medium file calling a full function.** Strength belongs to a file, so a
 call crosses strengths where a medium file calls a function of a full module

@@ -190,6 +190,8 @@ struct Gone {
 /// Names that are gone, and where each went.
 type Moved = HashMap<String, Gone>;
 
+/// A list, map, record or channel; [`Own::heavy_ty`] also lets a record
+/// that carries `derive(Copy)` through as a copy.
 fn is_heavy_ty(t: &Ty) -> bool {
     matches!(
         t,
@@ -422,6 +424,15 @@ fn declared_names(ss: &[Stmt], out: &mut HashSet<String>) {
 }
 
 impl Own<'_> {
+    /// Does a value of type `t` move when bound (#22 D3 (i)): a list, a map,
+    /// a channel, or a record that does not carry `derive(Copy)`?
+    fn heavy_ty(&self, t: &Ty) -> bool {
+        match t {
+            Ty::Record(n, _) => !self.prog.is_copy(n),
+            _ => is_heavy_ty(t),
+        }
+    }
+
     /// #22 S8: the turns of a `parallel` loop may run side by side, so a
     /// turn writes only what it declares itself: never a name, list, map or
     /// record from outside the loop, directly or through a name it made for
@@ -762,8 +773,9 @@ impl Own<'_> {
             ExprKind::Call { callee, .. } => match &callee.kind {
                 ExprKind::Ident(f) => {
                     f == "_cg_channel"
-                        || f.starts_with("_cg_new_")
-                        || matches!(self.rets.get(f), Some(Some(t)) if is_heavy_ty(t))
+                        || f.strip_prefix("_cg_new_")
+                            .is_some_and(|r| !self.prog.is_copy(r))
+                        || matches!(self.rets.get(f), Some(Some(t)) if self.heavy_ty(t))
                 }
                 _ => false,
             },
@@ -773,7 +785,7 @@ impl Own<'_> {
                 }
                 match &receiver.kind {
                     ExprKind::Ident(l) => {
-                        matches!(self.rets.get(&format!("{l}.{name}")), Some(Some(t)) if is_heavy_ty(t))
+                        matches!(self.rets.get(&format!("{l}.{name}")), Some(Some(t)) if self.heavy_ty(t))
                     }
                     _ => false,
                 }
@@ -847,7 +859,11 @@ impl Own<'_> {
                 } else if owned_by_name {
                     self.stored(value);
                 }
-                let typed = self.prog.bindings.get(&span.start).map(is_heavy_ty);
+                let typed = self
+                    .prog
+                    .bindings
+                    .get(&span.start)
+                    .map(|t| self.heavy_ty(t));
                 let heavy = typed.unwrap_or_else(|| self.is_heavy(value));
                 if owned_by_name {
                     if matches!(value.kind, ExprKind::Ident(_)) {
@@ -1119,7 +1135,9 @@ impl Own<'_> {
             .map(|s| {
                 s.params
                     .iter()
-                    .map(|p| p.mode == Mode::Owned && p.ty.as_ref().is_some_and(is_heavy_ty))
+                    .map(|p| {
+                        p.mode == Mode::Owned && p.ty.as_ref().is_some_and(|t| self.heavy_ty(t))
+                    })
                     .collect()
             })
             .unwrap_or_default();
@@ -1248,12 +1266,22 @@ impl Own<'_> {
     }
 
     /// Is parameter `i` of `key` declared as a non-copy type?
+    /// Is parameter `i` of `key` declared as a copy type (#22 D3 (i))? An
+    /// `owned` one then takes a copy, and the caller keeps its value.
+    fn copy_param(&self, key: &str, i: usize) -> bool {
+        self.params
+            .get(key)
+            .and_then(|ps| ps.get(i))
+            .and_then(|t| t.as_ref())
+            .is_some_and(|t| self.prog.copy_type(t))
+    }
+
     fn declared_heavy(&self, key: &str, i: usize) -> bool {
         self.params
             .get(key)
             .and_then(|ps| ps.get(i))
             .and_then(|t| t.as_ref())
-            .is_some_and(is_heavy_ty)
+            .is_some_and(|t| self.heavy_ty(t))
     }
 
     /// An argument given to an `owned` parameter of `shown` must be the
@@ -1472,7 +1500,7 @@ impl Own<'_> {
                         continue;
                     }
                     self.expr(a, moved);
-                    if owned {
+                    if owned && !self.copy_param(&f, i) {
                         self.give(a, &format!("to `{f}`, which takes it `owned`"), moved);
                         self.part_at_full(a, &f, i);
                     }
@@ -1504,7 +1532,9 @@ impl Own<'_> {
                     if matches!(name.as_str(), "push" | "insert" | "set" | "send") {
                         self.keep(a, moved);
                     }
-                    if modes.as_ref().and_then(|m| m.get(i)) == Some(&Mode::Owned) {
+                    if modes.as_ref().and_then(|m| m.get(i)) == Some(&Mode::Owned)
+                        && !self.copy_param(&key, i)
+                    {
                         self.give(a, &format!("to `{name}`, which takes it `owned`"), moved);
                         self.part_at_full(a, &key, i);
                     }

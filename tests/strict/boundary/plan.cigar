@@ -27,3 +27,9 @@ pub pull keep(owned h: Holder) -> Int {
 pub pull nest(owned xss: List<List<Int>>) -> Int {
   snuff xss.len()
 }
+
+pub record Spot derive(Copy) { x: Int, y: Int }
+
+pub pull place(owned s: Spot) -> Int {
+  snuff s.x + s.y
+}

@@ -407,7 +407,10 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
                     // In the appended text: a module's (reported as its
                     // own), or the lowering's, which is a bug.
                     Some(p) if appended(p) => {
-                        if !modules_failed {
+                        // A file the checker refused already (two `impl`s
+                        // of one name, `E1231`) can make cig refuse what was
+                        // appended for it: that is the same fault, not a bug.
+                        if !modules_failed && errors.is_empty() {
                             errors.push(internal(mapped(d, &back)));
                         }
                     }
