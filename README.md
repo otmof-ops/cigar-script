@@ -139,7 +139,7 @@ block, with its path after the language.
 
 ## Install
 
-Once carton 1.0.0 is published, `cigar` is installed by
+`cigar` is installed by
 [`ciginstaller`](https://github.com/otmof-ops/cig-installer), the one way to
 install the CigScript family:
 
@@ -148,10 +148,10 @@ ciginstaller install carton
 ```
 
 The installer's manifest decides which carton, pack or stick carries `cigar`;
-until carton 1.0.0 lists one, nothing above installs it. No `ciginstaller`
-yet? Get it from <https://github.com/otmof-ops/cig-installer#install>.
-Until then, [build from source](#build-from-source), or take the archive
-for your machine from the v0.1.0 release directly:
+carton 0.1.0, the first, carries cigar 0.1.0. No `ciginstaller` yet? Get it
+from <https://github.com/otmof-ops/cig-installer#install>. Without the
+installer, [build from source](#build-from-source), or take the archive for
+your machine from the v0.1.0 release directly:
 
 ```sh
 # Pick your machine's archive from the release, e.g. linux-x86_64

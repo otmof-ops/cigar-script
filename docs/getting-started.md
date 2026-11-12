@@ -26,15 +26,14 @@ tar -xzf "$asset"
 ./bin/cigar --version
 ```
 
-**With `ciginstaller`.** Once carton 1.0.0 is published, the installer
-takes care of the download and the sha256:
+**With `ciginstaller`.** From carton 0.1.0 on, the installer takes care of
+the download and the sha256:
 
 ```sh
 ciginstaller install carton
 ```
 
-(or a pack or stick with `cigar` in it, once the installer's manifest lists
-one). No `ciginstaller` yet? It is at
+(or `ciginstaller install stick cigar` for `cigar` alone). No `ciginstaller` yet? It is at
 <https://github.com/otmof-ops/cig-installer#install>. To remove `cigar`, run
 `ciginstaller uninstall cigar`; that also clears its run cache, the programs
 `cigar run` built, which it makes again when needed.
@@ -369,9 +368,8 @@ cigar check .
 ```
 
 The job needs `cigar` on its `PATH` first. The lightest way is to download
-the release archive for the runner's platform and verify its sha256; once
-carton 1.0.0 is published, `ciginstaller install carton` does the same with
-one command, which the installer's page shows how to fetch on a runner:
+the release archive for the runner's platform and verify its sha256;
+`ciginstaller install carton` does the same with one command, which the installer's page shows how to fetch on a runner:
 <https://github.com/otmof-ops/cig-installer#install>.
 
 `cigar check .` checks the `.cig` and `.cigar` files at the top of the
