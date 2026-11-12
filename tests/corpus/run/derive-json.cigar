@@ -1,0 +1,36 @@
+strength medium
+
+enum Shape derive(Json, Eq, Show) { circle(r: Float), square(s: Float), dot }
+
+record Inner derive(Json, Eq, Show) { tag: Text }
+
+record Config derive(Json, Eq, Show) {
+  name: Text
+  retries: Int = 3
+  tags: List<Text>
+  limits: Map<Int>
+  note: Text?
+  inner: Inner
+  shape: Shape
+  shapes: List<Shape>
+}
+
+stick c = Config { name: "app", retries: 5, tags: ["a", "b"], limits: {cpu: 2}, note: null, inner: Inner { tag: "x" }, shape: Shape.circle(r: 1.5), shapes: [Shape.dot, Shape.square(s: 2.0)] }
+stick text = c.to_json()
+exhale text
+stick back = Config.from_json(text)
+match back {
+  Ok(v) => exhale v == c
+  Err(e) => exhale "error", e
+}
+exhale Config.from_json("{\"name\": \"x\", \"tags\": [], \"limits\": {}, \"note\": \"n\", \"inner\": {\"tag\": \"t\"}, \"shape\": \"dot\", \"shapes\": []}")
+exhale Config.from_json("{\"name\": \"x\", \"retries\": \"three\", \"tags\": [], \"limits\": {}, \"note\": null, \"inner\": {\"tag\": \"t\"}, \"shape\": \"dot\", \"shapes\": []}")
+exhale Config.from_json("{\"name\": \"x\", \"extra\": 1}")
+exhale Config.from_json("{\"retries\": 1}")
+exhale Config.from_json("{\"name\": \"x\", \"tags\": [1], \"limits\": {}, \"note\": null, \"inner\": {\"tag\": \"t\"}, \"shape\": \"dot\", \"shapes\": []}")
+exhale Config.from_json("{\"name\": \"x\", \"tags\": [], \"limits\": {}, \"note\": null, \"inner\": {\"tag\": \"t\"}, \"shape\": {\"hexagon\": {}}, \"shapes\": []}")
+exhale Config.from_json("not json")
+
+record Loose derive(Json(lenient), Show) { a: Int = 1 }
+
+exhale Loose.from_json("{\"zzz\": 1}")

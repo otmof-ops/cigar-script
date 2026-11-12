@@ -1,0 +1,5 @@
+stick m = {k: 1}
+m.k = 2
+stick xs = [1]
+xs.push(2)
+exhale m.k, xs.len()

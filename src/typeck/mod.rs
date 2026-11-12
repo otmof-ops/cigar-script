@@ -6,9 +6,15 @@
 //! `Any`, and `Any` never produces an error. It reports only what it can
 //! prove wrong (docs: SPEC section 4, codes E1201-E1218, E1311-E1313).
 
+mod bounds;
+mod derive;
+mod impls;
+mod keyed;
 pub mod lint;
+mod operators;
 pub mod stdlib;
 
+use crate::features::Strength;
 use crate::types::{self, At, SizedInt, Ty};
 use cigscript::diagnostics::{Diagnostic, Kind};
 use cigscript::syntax::ast::*;
@@ -122,11 +128,28 @@ pub fn check_all_in(
     original: &dyn Fn(usize) -> usize,
     source: &str,
 ) -> Output {
+    check_all_strength(ast, prog, original, source, None)
+}
+
+/// `check_all_in` with the strength the file is being held to, so rules
+/// that vary between `.cig` and `.cigar` and across strengths (#22, D2: a
+/// `stick`'s immutability is deep at medium and above) can be applied.
+pub fn check_all_strength(
+    ast: &Program,
+    prog: &types::Program,
+    original: &dyn Fn(usize) -> usize,
+    source: &str,
+    strength: Option<Strength>,
+) -> Output {
     let prog = normalize(prog);
     let mut ck = Ck::new(&prog, original);
     ck.source = source;
+    ck.strength = strength;
     ck.validate_decls();
+    ck.validate_bounds();
     ck.check_impls();
+    ck.check_coherence();
+    ck.check_derives();
     ck.scopes.push(HashMap::new());
     // A function declared anywhere in the file may be called before the point
     // where it is written (cig hoists `pull`s): what it assigns that is not
@@ -155,6 +178,8 @@ fn norm_ty(t: &Ty, p: &types::Program) -> Ty {
         Ty::List(a) => Ty::List(Box::new(go(a))),
         Ty::ListView(a) => Ty::ListView(Box::new(go(a))),
         Ty::Map(a) => Ty::Map(Box::new(go(a))),
+        Ty::KeyMap(k, v) => Ty::KeyMap(Box::new(go(k)), Box::new(go(v))),
+        Ty::Set(a) => Ty::Set(Box::new(go(a))),
         Ty::Opt(a) => Ty::Opt(Box::new(go(a))),
         Ty::Channel(a) => Ty::Channel(Box::new(go(a))),
         Ty::Fn(ps, r) => Ty::Fn(ps.iter().map(go).collect(), Box::new(go(r))),
@@ -217,6 +242,28 @@ fn assignable(from: &Ty, to: &Ty) -> bool {
     fits(from, to, false)
 }
 
+/// The variable at the root of `a`, `a.b`, `a[i]` or `a.b[i].c`. The name
+/// is what the programmer wrote, so a `stick`'s deep-immutability rule
+/// (#22, D2) can find whether the whole path starts at a `stick` or a
+/// `roll`.
+fn path_root_name(e: &Expr) -> Option<&str> {
+    match &e.kind {
+        ExprKind::Ident(n) => Some(n.as_str()),
+        ExprKind::Member { object, .. } | ExprKind::Index { object, .. } => path_root_name(object),
+        _ => None,
+    }
+}
+
+/// Methods on `List` and `Map` that write their receiver in place. Used
+/// by the D2 rule (#22): calling one on a `stick`-bound container is as
+/// much a mutation as `x.field =` or `x[i] =`. The names match the cig
+/// convention: `own.rs::MUTATORS` lists the same methods for the S8
+/// parallel-body rule, and `cig-script/src/stdlib/methods.rs` is the
+/// source: these are the entries that call `borrow_mut`. `sort`,
+/// `sort_by` and `reverse` are pure in cig (they clone and return a new
+/// list), so they are not here.
+const STICK_MUTATORS: &[&str] = &["push", "pop", "insert", "remove", "set", "clear", "delete"];
+
 /// Does a value in a mutable container's type argument fit? A mutable
 /// container is invariant: `List<Int>` is not a `List<Any>`, because the
 /// `List<Any>` could be written to with a text. `Any` where a type is wanted
@@ -228,6 +275,8 @@ fn invariant(from: &Ty, to: &Ty) -> bool {
         (_, Any) => false,
         (Opt(a), Opt(b)) => invariant(a, b),
         (List(a), List(b)) | (Map(a), Map(b)) | (Channel(a), Channel(b)) => invariant(a, b),
+        (Set(a), Set(b)) => invariant(a, b),
+        (KeyMap(ka, va), KeyMap(kb, vb)) => invariant(ka, kb) && invariant(va, vb),
         (ListView(a), ListView(b)) => invariant(a, b),
         (Fn(pa, ra), Fn(pb, rb)) => {
             pa.len() == pb.len()
@@ -282,6 +331,11 @@ fn fits(from: &Ty, to: &Ty, cov: bool) -> bool {
         (Bool, Bool) => true,
         (List(a) | ListView(a), ListView(b)) => fits(a, b, cov),
         (List(a), List(b)) | (Map(a), Map(b)) | (Channel(a), Channel(b)) => args(a, b),
+        (Set(a), Set(b)) => args(a, b),
+        (KeyMap(ka, va), KeyMap(kb, vb)) => args(ka, kb) && args(va, vb),
+        // `{}` written out starts a `Map<K, V>` (a map with entries is refused
+        // where it is bound).
+        (Map(_), KeyMap(..)) => cov,
         (Fn(pa, ra), Fn(pb, rb)) => {
             pa.len() == pb.len()
                 && pa.iter().zip(pb).all(|(a, b)| param_fits(b, a, cov))
@@ -302,6 +356,9 @@ fn fits(from: &Ty, to: &Ty, cov: bool) -> bool {
 fn is_fresh(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::List(_) | ExprKind::Map(_) => true,
+        ExprKind::Call { callee, .. } => {
+            matches!(&callee.kind, ExprKind::Ident(f) if f == "_cg_set_new" || f == "_cg_set_of")
+        }
         ExprKind::Binary {
             op: BinOp::Range, ..
         } => true,
@@ -481,6 +538,9 @@ struct Ck<'a> {
     resolutions: Vec<Resolution>,
     /// The file as written, when the caller gave it.
     source: &'a str,
+    /// The strength this file is held to (None = unknown, apply the base
+    /// rules). D2 (`stick` deeply immutable) applies at medium and above.
+    strength: Option<Strength>,
     /// Every layer choice, for `cigar explain --layers`.
     layers: Vec<LayerNote>,
     /// How many `burn` blocks enclose the statement being checked.
@@ -494,6 +554,16 @@ struct Ck<'a> {
     locals: usize,
     /// The argument types of the last call `apply` checked.
     last_args: Vec<Ty>,
+    /// What the last call `apply` checked bound each type parameter to.
+    last_binds: HashMap<String, Ty>,
+    /// The type parameters of the functions being checked and their bounds
+    /// (#38), innermost last.
+    bounds: Vec<HashMap<String, Vec<String>>>,
+    /// How deep `impl` selection is in checking the bounds of generic
+    /// `impl`s (an `impl<T: Show> Show for T` would ask itself forever).
+    selecting: std::cell::Cell<usize>,
+    /// How many `${...}` enclose the expression being checked.
+    interpolating: usize,
     scopes: Vec<HashMap<String, Var>>,
     fns: HashMap<String, types::FnSig>,
     impl_self: HashMap<String, Ty>,
@@ -531,12 +601,17 @@ impl<'a> Ck<'a> {
             warnings: vec![],
             resolutions: vec![],
             source: "",
+            strength: None,
             layers: vec![],
             burn_depth: 0,
             guarded: None,
             stmt_end: None,
             locals: 0,
             last_args: Vec::new(),
+            last_binds: HashMap::new(),
+            bounds: Vec::new(),
+            selecting: std::cell::Cell::new(0),
+            interpolating: 0,
             scopes: vec![],
             fns,
             impl_self,
@@ -746,6 +821,15 @@ impl<'a> Ck<'a> {
             Ty::List(a) | Ty::ListView(a) | Ty::Map(a) | Ty::Opt(a) | Ty::Channel(a) => {
                 self.validate_ty(a, at, span, generics)
             }
+            Ty::KeyMap(k, v) => {
+                self.validate_ty(k, at, span, generics);
+                self.validate_ty(v, at, span, generics);
+                self.key_type_ok(k, "a `Map` key", at, span);
+            }
+            Ty::Set(a) => {
+                self.validate_ty(a, at, span, generics);
+                self.key_type_ok(a, "a `Set` element", at, span);
+            }
             Ty::Fn(ps, r) => {
                 for p in ps {
                     self.validate_ty(p, at, span, generics);
@@ -860,8 +944,16 @@ impl<'a> Ck<'a> {
                     );
                     continue;
                 };
+                // `Self` in the interface's signature is the impl's type.
+                let selfs = vec![crate::lower::SELF.to_string()];
+                let sb: HashMap<String, Ty> = [(selfs[0].clone(), im.for_ty.clone())]
+                    .into_iter()
+                    .collect();
                 let ty_ok = |a: &Option<Ty>, b: &Option<Ty>| match (a, b) {
-                    (Some(a), Some(b)) => assignable(a, b) && assignable(b, a),
+                    (Some(a), Some(b)) => {
+                        let a = subst(a, &selfs, &sb);
+                        assignable(&a, b) && assignable(b, &a)
+                    }
                     _ => true,
                 };
                 let same = want.params.len() == have.params.len()
@@ -965,6 +1057,44 @@ impl<'a> Ck<'a> {
             } => matches!(&expr.kind, ExprKind::Float(f) if *f == 0.0) || self.fold(e) == Some(0),
             _ => self.fold(e) == Some(0),
         }
+    }
+
+    /// The root of a path (`a`, `a.b`, `a[i]`, `a.b[i].c`), when it
+    /// resolves to a `stick`. A `roll`, a parameter, a loop variable or a
+    /// name the checker does not know returns `None`: the rule is strict
+    /// but never false.
+    fn stick_root(&self, e: &Expr) -> Option<String> {
+        let root = path_root_name(e)?;
+        let var = self.find_var(root)?;
+        if var.mutable {
+            return None;
+        }
+        Some(root.to_string())
+    }
+
+    /// At medium and above, a `stick` is deeply immutable through that
+    /// name (#22, D2, rule (a)): no field write, no index write, and
+    /// none of the methods in `STICK_MUTATORS` through the path rooted
+    /// at it. At mild the rule is CigScript's, which accepts them.
+    fn d2_applies(&self) -> bool {
+        matches!(self.strength, Some(Strength::Medium) | Some(Strength::Full))
+    }
+
+    /// Emit E1215 for a write through a `stick`-bound path (#22, D2).
+    /// `what_writes` is a short phrase that names the write, in the shape
+    /// of the sentence "a `stick` and its {what_writes} cannot be
+    /// assigned through it" or similar. The hint names `roll`.
+    fn stick_mutation(&mut self, root: &str, what_writes: &str, span: Span) {
+        self.err(
+            "E1215",
+            format!(
+                "`{root}` is a `stick` and its {what_writes} cannot be assigned through it"
+            ),
+            span,
+            Some(format!(
+                "declare it with `roll {root} = ...` if it has to change; a `stick` is deeply immutable at medium and above"
+            )),
+        );
     }
 
     /// `x / 0` and `x % 0`, found before the program runs (E502).
@@ -1199,6 +1329,24 @@ impl<'a> Ck<'a> {
                         false,
                     )
                 };
+                // A `Map<K, V>` starts empty: its entries go in through
+                // `m[k] = v`, which hashes the key (#38).
+                if let (Ty::KeyMap(..), ExprKind::Map(entries)) = (&ty, &value.kind) {
+                    if !entries.is_empty() {
+                        self.err(
+                            "E1201",
+                            format!("a `{ty}` written out starts empty: `{{}}`"),
+                            value.span,
+                            Some(
+                                "add each entry with `m[k] = v`; a map written out has text keys"
+                                    .into(),
+                            ),
+                        );
+                    }
+                }
+                // A copy record bound from a place is a copy (#22 D3 (i)).
+                let given = self.unwrap_check(value).map(|(i, _)| i).unwrap_or(value);
+                self.copy_out(given, &ty);
                 self.define(name, ty, *mutable, annotated);
                 if let (false, Some(v)) = (*mutable, folded) {
                     self.set_const(name, v);
@@ -1234,6 +1382,7 @@ impl<'a> Ck<'a> {
                     }
                     let target = self.unwrap_check(v).map(|(i, _)| i).unwrap_or(v);
                     let t = self.infer(target);
+                    self.copy_out(target, &t);
                     if let Some((rt, f)) = ret {
                         let hint =
                             format!("expected `{rt}` here, because of the result type of `{f}`");
@@ -1243,7 +1392,8 @@ impl<'a> Ck<'a> {
             }
             Stmt::Exhale { values, .. } => {
                 for v in values {
-                    self.infer(v);
+                    let t = self.infer(v);
+                    self.keyed_show(v, &t);
                 }
             }
             Stmt::Cough { value, .. } => {
@@ -1308,7 +1458,9 @@ impl<'a> Ck<'a> {
             } => {
                 self.reset_narrowing(&assigned(&body.stmts));
                 let it = self.infer(iter);
+                let keyed = self.keyed_iter(iter, &strip_opt(&it));
                 let el = match strip_opt(&it) {
+                    _ if keyed.is_some() => keyed.unwrap_or(Ty::Any),
                     Ty::List(t) | Ty::ListView(t) => *t,
                     Ty::Map(_) => Ty::Text,
                     Ty::Text | Ty::Path => Ty::Text,
@@ -1385,6 +1537,7 @@ impl<'a> Ck<'a> {
             .cloned()
             .or_else(|| self.fns.get(&f.name).cloned());
         self.scopes.push(HashMap::new());
+        self.enter_bounds(sig.as_ref());
         for (i, pn) in f.params.iter().enumerate() {
             let declared = sig
                 .as_ref()
@@ -1421,6 +1574,7 @@ impl<'a> Ck<'a> {
             self.every_path_returns(&f.body, &rt, &shown_fn);
         }
         self.ctx.pop();
+        self.bounds.pop();
         self.scopes.pop();
     }
 
@@ -1468,7 +1622,7 @@ impl<'a> Ck<'a> {
     fn assign(&mut self, target: &AssignTarget, op: AssignOp, value: &Expr, span: Span) {
         // `_ = f()`: the result is meant to be dropped (#22, L4). It is a
         // `stick` of a name nothing can read.
-        if matches!(target, AssignTarget::Var(n) if n == "_")
+        if matches!(target, AssignTarget::Var(n, _) if n == "_")
             && op == AssignOp::Set
             && self.find_var("_").is_none()
         {
@@ -1482,7 +1636,7 @@ impl<'a> Ck<'a> {
             return;
         }
         let sized_target = match target {
-            AssignTarget::Var(n) => self
+            AssignTarget::Var(n, _) => self
                 .find_var(n)
                 .is_some_and(|v| matches!(v.declared, Ty::Sized(_))),
             _ => false,
@@ -1492,8 +1646,9 @@ impl<'a> Ck<'a> {
         }
         let vt = self.infer(value);
         self.guarded = None;
+        self.copy_out(value, &vt);
         match target {
-            AssignTarget::Var(n) => {
+            AssignTarget::Var(n, _) => {
                 let Some(var) = self.find_var(n).cloned() else {
                     return;
                 };
@@ -1563,6 +1718,10 @@ impl<'a> Ck<'a> {
             }
             AssignTarget::Index { object, index } => {
                 let ot = self.infer(object);
+                // `m[k] = v` on a `Map<K, V>` (#38).
+                if self.keyed_assign(object, index, value, op, span, &strip_opt(&ot), &vt) {
+                    return;
+                }
                 self.infer(index);
                 self.must_narrow(object, &ot, "indexed", span);
                 if let Ty::ListView(_) = strip_opt(&ot) {
@@ -1572,9 +1731,13 @@ impl<'a> Ck<'a> {
                         span,
                         Some("a `ListView<T>` is for reading; ask for a `List<T>` to write, or `.copy()` it first".into()),
                     );
+                } else if self.d2_applies() {
+                    if let Some(root) = self.stick_root(object) {
+                        self.stick_mutation(&root, "elements", span);
+                    }
                 }
             }
-            AssignTarget::Member { object, name } => {
+            AssignTarget::Member { object, name, .. } => {
                 let ot = self.infer(object);
                 self.must_narrow(object, &ot, "written through", span);
                 if let Ty::Record(..) = strip_opt(&ot) {
@@ -1585,6 +1748,11 @@ impl<'a> Ck<'a> {
                             "expected `{ft}` here, because of the declared type of field `{name}`"
                         );
                         self.expect(value, &vt, &ft, "E1201", hint);
+                    }
+                }
+                if self.d2_applies() {
+                    if let Some(root) = self.stick_root(object) {
+                        self.stick_mutation(&root, "fields", span);
                     }
                 }
             }
@@ -1652,11 +1820,13 @@ impl<'a> Ck<'a> {
             ExprKind::Int(_) => Ty::Int,
             ExprKind::Float(_) => Ty::Float,
             ExprKind::Str(parts) => {
+                self.interpolating += 1;
                 for p in parts {
                     if let StrPiece::Expr(x) = p {
                         self.infer(x);
                     }
                 }
+                self.interpolating -= 1;
                 Ty::Text
             }
             ExprKind::Ident(n) => self.lookup(n),
@@ -1664,6 +1834,7 @@ impl<'a> Ck<'a> {
                 let mut el: Option<Ty> = None;
                 for i in items {
                     let t = self.infer(i);
+                    self.copy_out(i, &t);
                     el = Some(match el {
                         Some(o) => join(&o, &t),
                         None => t,
@@ -1680,6 +1851,7 @@ impl<'a> Ck<'a> {
                         self.infer(x);
                     }
                     let t = self.infer(v);
+                    self.copy_out(v, &t);
                     el = Some(match el {
                         Some(o) => join(&o, &t),
                         None => t,
@@ -1691,6 +1863,10 @@ impl<'a> Ck<'a> {
                 let t = self.infer(expr);
                 if *op == UnOp::Neg {
                     self.must_narrow(expr, &t, "negated", e.span);
+                    // `-p` on a record: `Neg` (#38).
+                    if let Some(r) = self.user_negation(e, expr, &t) {
+                        return r;
+                    }
                 }
                 match op {
                     UnOp::Not => Ty::Bool,
@@ -1753,7 +1929,9 @@ impl<'a> Ck<'a> {
                 self.after_call();
                 t
             }
-            ExprKind::Member { object, name, safe } => {
+            ExprKind::Member {
+                object, name, safe, ..
+            } => {
                 let ot = self.infer(object);
                 if !*safe {
                     self.must_narrow(object, &ot, "its field is read", e.span);
@@ -1777,6 +1955,14 @@ impl<'a> Ck<'a> {
                 let ot = self.infer(object);
                 self.infer(index);
                 self.must_narrow(object, &ot, "indexed", e.span);
+                // `m[k]` on a `Map<K, V>` (#38).
+                if let Some(t) = self.keyed_index(e, object, index, &strip_opt(&ot)) {
+                    return t;
+                }
+                // `x[k]` on a record: `Index` (#38).
+                if let Some(t) = self.user_index(e, object, index, &ot) {
+                    return t;
+                }
                 match strip_opt(&ot) {
                     Ty::List(t) | Ty::ListView(t) | Ty::Map(t) => *t,
                     Ty::Text | Ty::Path => Ty::Text,
@@ -1861,6 +2047,11 @@ impl<'a> Ck<'a> {
             };
         }
         let r = self.infer(rhs);
+        // An operator on a record, an enum or a bounded `T`: its interface's
+        // method (#38).
+        if let Some(t) = self.user_operator(op, lhs, rhs, &l, &r) {
+            return t;
+        }
         match op {
             BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => Ty::Bool,
             BinOp::Range => Ty::List(Box::new(Ty::Int)),
@@ -1937,6 +2128,9 @@ impl<'a> Ck<'a> {
         mut binds: HashMap<String, Ty>,
     ) -> Ty {
         let arg_tys: Vec<Ty> = args.iter().map(|a| self.infer(a)).collect();
+        for (a, t) in args.iter().zip(&arg_tys) {
+            self.copy_out(a, t);
+        }
         self.last_args = arg_tys.clone();
         let min = params.len().saturating_sub(optional);
         let bad = args.len() < min || (rest.is_none() && args.len() > params.len());
@@ -1963,6 +2157,7 @@ impl<'a> Ck<'a> {
                 unify(p, t, gens, &mut binds);
             }
         }
+        self.last_binds = binds.clone();
         for (i, t) in arg_tys.iter().enumerate() {
             if let Some(p) = params.get(i).or(rest) {
                 let p = subst(p, gens, &binds);
@@ -2023,6 +2218,35 @@ impl<'a> Ck<'a> {
                     }
                     return Ty::Bool;
                 }
+                if let Some(t) = self.set_constructor(name, args, span) {
+                    return t;
+                }
+                // `Config.from_json(text)` (#38): `Result<Config, Text>`.
+                if let Some(ty) = name.strip_prefix("_cg_json_from_") {
+                    for a in args {
+                        let t = self.infer(a);
+                        self.expect(
+                            a,
+                            &t,
+                            &Ty::Text,
+                            "E1201",
+                            format!("`{ty}.from_json` reads JSON text"),
+                        );
+                    }
+                    let me = if prog.enums.contains_key(ty) && !prog.records.contains_key(ty) {
+                        Ty::Enum(ty.to_string(), Vec::new())
+                    } else {
+                        Ty::Record(ty.to_string(), Vec::new())
+                    };
+                    return Ty::Enum("Result".into(), vec![me, Ty::Text]);
+                }
+                // `exhale m` and `str(m)`, lowered through `_cg_show`: a keyed
+                // map or a set shows its keys (#38).
+                if name == "_cg_show" && args.len() == 1 {
+                    let t = self.infer(&args[0]);
+                    self.keyed_show(&args[0], &t);
+                    return Ty::Text;
+                }
                 if name == "_cg_try" && args.len() == 1 {
                     return self.try_operator(&args[0]);
                 }
@@ -2067,6 +2291,7 @@ impl<'a> Ck<'a> {
                         span,
                         HashMap::new(),
                     );
+                    self.check_bounds(&shown_name(name), &s, span);
                     // A value the checker cannot see is checked where it is
                     // passed, so a bad one coughs on the caller's line.
                     if gens.is_empty() && args.len() == params.len() {
@@ -2536,6 +2761,7 @@ impl<'a> Ck<'a> {
             let mut vals: Vec<(&str, Ty, &Expr)> = vec![];
             for (k, v) in entries {
                 let t = self.infer(v);
+                self.copy_out(v, &t);
                 match k {
                     MapKey::Static(s) => {
                         given.push(s);
@@ -2551,7 +2777,8 @@ impl<'a> Ck<'a> {
             for (fname, fty) in &rd.fields {
                 if let Some((_, t, _)) = vals.iter().find(|(n, _, _)| n == fname) {
                     unify(fty, t, &gens, &mut binds);
-                } else if !dynamic {
+                } else if !dynamic && !rd.defaults.iter().any(|d| &d.0 == fname) {
+                    // A field with a default may be left out (#38).
                     self.err(
                         "E1205",
                         format!("`{}` is missing the field `{fname}`", rd.name),
@@ -2657,6 +2884,40 @@ impl<'a> Ck<'a> {
         None
     }
 
+    /// `receiver.name(...)` with `name` from interface `iface`, picked by
+    /// the value when it runs: a dispatcher declared on this line, so a
+    /// value with no `impl` fails here.
+    fn dispatch_by_value(
+        &mut self,
+        iface: &str,
+        receiver: &Expr,
+        name: &str,
+        nargs: usize,
+        safe: bool,
+        span: Span,
+    ) {
+        let prog = self.prog;
+        let params: Vec<String> = (1..=nargs).map(|k| format!("a{k}")).collect();
+        let list = if params.is_empty() {
+            String::new()
+        } else {
+            format!(", {}", params.join(", "))
+        };
+        let lines = crate::lower::dispatch_lines(prog, iface, name, &list);
+        let plain = params.join(", ");
+        let func = self
+            .local(|n| format!("pull {n}(self{list}) {{ {lines}snuff self.{name}({plain}) }}"))
+            .unwrap_or_else(|| format!("_cg_dispatch_{iface}_{name}"));
+        self.resolutions.push(Resolution::Method {
+            recv_start: receiver.span.start,
+            recv_end: receiver.span.end,
+            call_end: span.end,
+            func,
+            has_args: nargs > 0,
+            safe,
+        });
+    }
+
     fn method(&mut self, receiver: &Expr, name: &str, args: &[Expr], safe: bool, span: Span) -> Ty {
         let prog = self.prog;
         // `fs.size(p)`: a stdlib module call
@@ -2693,6 +2954,7 @@ impl<'a> Ck<'a> {
                     span,
                     HashMap::new(),
                 );
+                self.check_bounds(&what, &sig, span);
                 return if safe { opt(t) } else { t };
             }
         }
@@ -2701,7 +2963,18 @@ impl<'a> Ck<'a> {
             self.must_narrow(receiver, &rt, &format!("`.{name}` is called on it"), span);
         }
         let recv = strip_opt(&rt);
-        let result = if matches!(recv, Ty::Any | Ty::Param(_) | Ty::Fn(..)) {
+        // A `Map<K, V>` or a `Set<T>` (#38).
+        if let Some(t) = self.keyed_method(receiver, name, args, safe, span, &recv) {
+            return if safe { opt(t) } else { t };
+        }
+        let bounded = match &recv {
+            Ty::Param(p) => self.bounds_of(p).cloned().map(|b| (p.clone(), b)),
+            _ => None,
+        };
+        let result = if let Some((p, bs)) = bounded {
+            // A bounded `T` (#38): the methods of its bounds.
+            self.bounded_method(receiver, &p, &bs, name, args, safe, span)
+        } else if matches!(recv, Ty::Any | Ty::Param(_) | Ty::Fn(..)) {
             // An interface's method on a value the checker cannot see: picked
             // by the value when it runs, by a dispatcher declared on this
             // line (so a value with no `impl` fails here).
@@ -2711,27 +2984,7 @@ impl<'a> Ck<'a> {
                     .values()
                     .find(|i| i.methods.iter().any(|m| m.name == name))
                 {
-                    let params: Vec<String> = (1..=args.len()).map(|k| format!("a{k}")).collect();
-                    let list = if params.is_empty() {
-                        String::new()
-                    } else {
-                        format!(", {}", params.join(", "))
-                    };
-                    let lines = crate::lower::dispatch_lines(prog, &i.name, name, &list);
-                    let plain = params.join(", ");
-                    let func = self
-                        .local(|n| {
-                            format!("pull {n}(self{list}) {{ {lines}snuff self.{name}({plain}) }}")
-                        })
-                        .unwrap_or_else(|| format!("_cg_dispatch_{}_{name}", i.name));
-                    self.resolutions.push(Resolution::Method {
-                        recv_start: receiver.span.start,
-                        recv_end: receiver.span.end,
-                        call_end: span.end,
-                        func,
-                        has_args: !args.is_empty(),
-                        safe,
-                    });
+                    self.dispatch_by_value(&i.name, receiver, name, args.len(), safe, span);
                 }
             }
             for a in args {
@@ -2754,6 +3007,29 @@ impl<'a> Ck<'a> {
             );
             Ty::Any
         } else if let Some(s) = stdlib::method(&recv, name) {
+            // D2 (#22, rule (a)): a mutating method through
+            // a `stick`-bound path is a write through a name that cannot
+            // be written to. Refused at medium and above. The ListView
+            // arm above runs first for read-only lists, so this one only
+            // fires for a writable receiver whose root is a `stick`.
+            if self.d2_applies()
+                && STICK_MUTATORS.contains(&name)
+                && matches!(strip_opt(&recv), Ty::List(_) | Ty::Map(_))
+            {
+                if let Some(root) = self.stick_root(receiver) {
+                    self.err(
+                        "E1215",
+                        format!("`{root}` is a `stick` and `.{name}` would write through it"),
+                        span,
+                        Some(format!(
+                            "declare it with `roll {root} = ...` if it has to change, or call `.copy()` for a fresh list"
+                        )),
+                    );
+                    // Fall through: still check the argument types so a
+                    // caller fixing the stick-vs-roll sees the real
+                    // signature, not a second error about the receiver.
+                }
+            }
             let mut binds = HashMap::new();
             match &recv {
                 Ty::List(t) | Ty::ListView(t) => {
@@ -2778,12 +3054,43 @@ impl<'a> Ck<'a> {
                 }
                 Ty::Any
             } else {
-                let found = candidates.iter().find_map(|(i, m)| {
-                    prog.impls
+                let mut missing = None;
+                let found =
+                    candidates
                         .iter()
-                        .find(|im| im.interface == i.name && same_ty(&im.for_ty, &recv))
-                        .map(|im| (i, m, im))
-                });
+                        .find_map(|(i, m)| match self.select(&i.name, &recv) {
+                            Ok((im, _)) => Some((i, m, im)),
+                            Err(miss) => {
+                                if missing.is_none() {
+                                    missing = miss;
+                                }
+                                None
+                            }
+                        });
+                if found.is_none() {
+                    if let Some(u) = missing {
+                        let impls::Unmet {
+                            im,
+                            param: g,
+                            bound: b,
+                            ty: t,
+                        } = *u;
+                        // A generic `impl` fits, and its bound does not hold.
+                        for a in args {
+                            self.infer(a);
+                        }
+                        self.err(
+                            "E1230",
+                            format!(
+                                "`{t}` doesn't implement `{b}`, which `impl {} for {}` needs for `{g}`",
+                                im.interface, im.for_ty
+                            ),
+                            span,
+                            Some(format!("write `impl {b} for {t} {{ ... }}` (or `derive({b})` once `derive` is built)")),
+                        );
+                        return Ty::Any;
+                    }
+                }
                 match found {
                     Some((i, m, im)) => {
                         self.resolutions.push(Resolution::Method {
@@ -2794,13 +3101,17 @@ impl<'a> Ck<'a> {
                             has_args: !args.is_empty(),
                             safe,
                         });
+                        // `Self` in the interface's signature is the receiver's type.
+                        let selfs = vec![crate::lower::SELF.to_string()];
+                        let sb: HashMap<String, Ty> =
+                            [(selfs[0].clone(), recv.clone())].into_iter().collect();
                         let params: Vec<Ty> = m
                             .params
                             .iter()
                             .filter(|p| p.name != "self")
-                            .map(|p| p.ty.clone().unwrap_or(Ty::Any))
+                            .map(|p| subst(&p.ty.clone().unwrap_or(Ty::Any), &selfs, &sb))
                             .collect();
-                        let ret = m.ret.clone().unwrap_or(Ty::Any);
+                        let ret = subst(&m.ret.clone().unwrap_or(Ty::Any), &selfs, &sb);
                         self.apply(
                             name,
                             &[],
@@ -3145,7 +3456,7 @@ fn assigned(ss: &[Stmt]) -> HashSet<String> {
         for s in ss {
             match s {
                 Stmt::Assign {
-                    target: AssignTarget::Var(n),
+                    target: AssignTarget::Var(n, _),
                     ..
                 } => {
                     out.insert(n.clone());
@@ -3212,6 +3523,8 @@ mod tests {
         RecordDecl {
             name: "Move".into(),
             generics: vec![],
+            derives: vec![],
+            defaults: vec![],
             fields: vec![("src".into(), Ty::Path), ("dst".into(), Ty::Path)],
             public: false,
             at: At::default(),
@@ -3399,6 +3712,7 @@ roll w = _cg_check(null, {k: \"opt\", of: {k: \"int\"}}, \"w\")\nstick e = _cg_c
             types::EnumDecl {
                 name: "Status".into(),
                 generics: vec![],
+                derives: vec![],
                 variants: vec![
                     types::Variant {
                         name: "ok".into(),

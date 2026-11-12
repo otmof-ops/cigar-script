@@ -1,0 +1,9 @@
+strength medium
+record P { x: Int }
+roll p = P { x: 1 }
+p.x = 2
+roll xs = [1]
+xs.push(2)
+roll m = {k: 1}
+m.set("k", 2)
+exhale p.x, xs.len(), m.k

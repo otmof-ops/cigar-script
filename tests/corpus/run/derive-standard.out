@@ -1,0 +1,7 @@
+false true true Point:5:int:1:5:int:2
+Point { x: 0, y: 0 }
+Config { name: "app", retries: 3, tags: [] }
+Config { name: "app", retries: 3, tags: ["x"] }
+true true
+Shape.dot
+Point { x: 1, y: 3 }

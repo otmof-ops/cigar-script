@@ -1,7 +1,7 @@
 strength medium
 pull f(n: Int) -> Int { snuff n }
 pull g(n: Int) { exhale n }
-stick xs = [1, 2]
+roll xs = [1, 2]
 _ = f(1)
 _ = xs.copy()
 _ = f(2)

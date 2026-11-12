@@ -1,0 +1,4 @@
+strength medium
+stick xs = [1, 2]
+xs[0] = 10
+exhale xs[0]

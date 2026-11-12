@@ -351,7 +351,7 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
     // 3. Types and ownership.
     let original = |p: usize| lowered.original(p);
     let out = crate::phases::phase("typeck", || {
-        typeck::check_all_in(&ast, &lowered.program, &original, source)
+        typeck::check_all_strength(&ast, &lowered.program, &original, source, Some(effective))
     });
     let mut errors = out.errors;
     let mut warnings = out.warnings;
@@ -373,6 +373,11 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
     if effective == Strength::Full {
         errors.extend(crate::phases::phase("own", || {
             own::check(&ast, &lowered.program, &original)
+        }));
+    } else if effective == Strength::Medium && own::crosses(&lowered.program) {
+        // A medium file's calls into full functions (#22 D3).
+        errors.extend(crate::phases::phase("own", || {
+            own::boundary(&ast, &lowered.program, &original)
         }));
     }
 
@@ -402,7 +407,10 @@ fn check_cigar(source: &str, override_strength: Option<Strength>, env: &Env) -> 
                     // In the appended text: a module's (reported as its
                     // own), or the lowering's, which is a bug.
                     Some(p) if appended(p) => {
-                        if !modules_failed {
+                        // A file the checker refused already (two `impl`s
+                        // of one name, `E1231`) can make cig refuse what was
+                        // appended for it: that is the same fault, not a bug.
+                        if !modules_failed && errors.is_empty() {
                             errors.push(internal(mapped(d, &back)));
                         }
                     }

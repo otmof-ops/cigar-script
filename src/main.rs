@@ -77,6 +77,9 @@ struct ExplainArgs {
     /// The place to peel, as an error shows it: sales.cigar:12:1
     #[arg(long, value_name = "FILE:LINE:COL")]
     layers: Option<String>,
+    /// The `impl`s `derive` writes for a record or an enum: shapes.cigar:Point
+    #[arg(long, value_name = "FILE:TYPE", conflicts_with = "layers")]
+    derive: Option<String>,
 }
 
 #[derive(Args)]
@@ -187,12 +190,15 @@ fn explain_cmd(top: &Cli, a: &ExplainArgs) -> i32 {
         deny: Deny::default(),
     };
     let ctx = ctx_from(&flags);
+    if let Some(spec) = a.derive.as_deref() {
+        return cigarscript::explain::run_derive(&ctx, spec);
+    }
     match a.layers.as_deref() {
         Some(position) => cigarscript::explain::run_layers(&ctx, position),
         None => {
             let d = cigscript::diagnostics::usage("cigar explain: name a place to peel")
                 .code("E800")
-                .with_hint("cigar explain --layers sales.cigar:12:1; for an error code, `cig explain E1401`");
+                .with_hint("cigar explain --layers sales.cigar:12:1, or --derive shapes.cigar:Point; for an error code, `cig explain E1401`");
             cigscript::cli::report(&ctx, &d, None, None);
             exit::USAGE
         }

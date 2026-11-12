@@ -1,0 +1,35 @@
+strength medium
+
+record Point derive(Hash, Eq) { x: Int, y: Int }
+
+roll names: Map<Point, Text> = {}
+names[Point { x: 1, y: 2 }] = "a"
+names[Point { x: 3, y: 4 }] = "b"
+names[Point { x: 1, y: 2 }] = "c"
+exhale names
+exhale names[Point { x: 3, y: 4 }], names.len()
+exhale names.get(Point { x: 9, y: 9 }), names.has(Point { x: 1, y: 2 })
+for p in names {
+  exhale p.x, names[p]
+}
+stick ks: List<Point> = names.keys()
+exhale ks
+names.remove(Point { x: 1, y: 2 })
+exhale names
+
+roll byint: Map<Int, Text> = {}
+byint[1] = "one"
+byint[2] = "two"
+exhale byint, byint[2]
+
+# Changed while it is iterated: the loop reads the keys as they were when
+# it started, as a cig map's loop does.
+for k in byint {
+  byint.remove(2)
+  byint[k + 10] = "later"
+  exhale k
+}
+exhale byint
+
+roll plain: Map<Text, Int> = {a: 1}
+exhale plain

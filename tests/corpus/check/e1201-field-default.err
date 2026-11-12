@@ -1,0 +1,2 @@
+E1201
+the default of `retries` is `"three"`, which is not a `Int`

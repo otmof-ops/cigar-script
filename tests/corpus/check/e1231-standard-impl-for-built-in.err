@@ -1,0 +1,2 @@
+E1231
+`impl Eq for Int` overlaps `impl Eq for Int` in the prelude

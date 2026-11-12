@@ -177,15 +177,21 @@ fn named(name: &str, args: Vec<Ty>, params: &[String], names: &dyn Names) -> Res
             2 => {
                 let mut it = args.into_iter();
                 let k = it.next().unwrap();
-                if !matches!(k, Ty::Text | Ty::Path | Ty::Any) {
-                    return Err(format!(
-                        "E1202 a map's keys are text in cig, so `Map<{k}, ...>` cannot be"
-                    ));
+                let v = it.next().unwrap();
+                // Text keys are cig's own; any other key goes through its
+                // `hash()` (#38).
+                if matches!(k, Ty::Text | Ty::Path | Ty::Any) {
+                    Ty::Map(Box::new(v))
+                } else {
+                    Ty::KeyMap(Box::new(k), Box::new(v))
                 }
-                Ty::Map(Box::new(it.next().unwrap()))
             }
-            _ => return Err("E1203 `Map` takes `Map<V>` or `Map<Text, V>`".into()),
+            _ => return Err("E1203 `Map` takes `Map<V>` or `Map<K, V>`".into()),
         },
+        "Set" => {
+            arity(1)?;
+            Ty::Set(Box::new(args.into_iter().next().unwrap()))
+        }
         "Channel" => {
             arity(1)?;
             Ty::Channel(Box::new(args.into_iter().next().unwrap()))
@@ -203,7 +209,15 @@ fn named(name: &str, args: Vec<Ty>, params: &[String], names: &dyn Names) -> Res
 /// The run-time descriptor of a type, as CigScript map literal text.
 pub fn descriptor(t: &Ty) -> String {
     match t {
-        Ty::Any | Ty::Param(_) | Ty::Never | Ty::Bytes | Ty::Channel(_) => "{k: \"any\"}".into(),
+        // A map with keys that are not text, and a set, are held in cig maps
+        // keyed by `hash()`: not checked by shape.
+        Ty::Any
+        | Ty::Param(_)
+        | Ty::Never
+        | Ty::Bytes
+        | Ty::Channel(_)
+        | Ty::KeyMap(..)
+        | Ty::Set(_) => "{k: \"any\"}".into(),
         Ty::Null => "{k: \"null\"}".into(),
         Ty::Bool => "{k: \"bool\"}".into(),
         Ty::Int => "{k: \"int\"}".into(),
@@ -229,6 +243,12 @@ pub fn descriptor(t: &Ty) -> String {
 pub fn checks(t: &Ty) -> bool {
     !matches!(
         t,
-        Ty::Any | Ty::Param(_) | Ty::Never | Ty::Bytes | Ty::Channel(_)
+        Ty::Any
+            | Ty::Param(_)
+            | Ty::Never
+            | Ty::Bytes
+            | Ty::Channel(_)
+            | Ty::KeyMap(..)
+            | Ty::Set(_)
     )
 }

@@ -1,0 +1,4 @@
+strength medium
+
+record Inner { n: Int }
+record Outer derive(Eq) { inner: Inner }

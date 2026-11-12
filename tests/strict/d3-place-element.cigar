@@ -1,0 +1,5 @@
+strength medium
+use boundary.plan
+
+stick xss = [[1], [2]]
+exhale plan.take(xss[0])

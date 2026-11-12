@@ -1,0 +1,5 @@
+strength medium
+
+record Config derive(Json) { n: Int }
+
+exhale Config.from_json(42)

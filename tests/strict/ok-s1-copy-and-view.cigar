@@ -1,7 +1,7 @@
 strength medium
 pull total(xs: ListView<Any>) -> Int { snuff xs.len() }
 stick a: List<Int> = [1, 2]
-stick b: List<Any> = a.copy()
+roll b: List<Any> = a.copy()
 stick c: List<Any> = [1, "x"]
 b.push("y")
 exhale total(a), total(b), total(c)

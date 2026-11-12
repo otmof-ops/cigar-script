@@ -1,0 +1,2 @@
+E1232
+field `s` is a `Set<Int>`, which has no JSON form

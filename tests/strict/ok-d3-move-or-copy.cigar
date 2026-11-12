@@ -1,0 +1,12 @@
+strength medium
+use boundary.plan
+
+# `.copy()` gives a copy and keeps the value; a value made at the call has
+# no other holder; a copy type is copied; `move` is fine as the last use.
+stick xs: List<Int> = [1, 2]
+exhale plan.take(xs.copy())
+exhale plan.take([3, 4])
+stick n = 41
+exhale plan.bump(n)
+exhale n
+exhale plan.take(move xs)

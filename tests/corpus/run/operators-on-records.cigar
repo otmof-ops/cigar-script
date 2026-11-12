@@ -1,0 +1,53 @@
+strength medium
+
+record Vec2 { x: Int, y: Int }
+
+impl Add for Vec2 {
+  pull add(self, other: Vec2) -> Vec2 {
+    snuff Vec2 { x: self.x + other.x, y: self.y + other.y }
+  }
+}
+
+impl Neg for Vec2 {
+  pull neg(self) -> Vec2 {
+    snuff Vec2 { x: 0 - self.x, y: 0 - self.y }
+  }
+}
+
+impl Eq for Vec2 {
+  pull eq(self, other: Vec2) -> Bool {
+    snuff self.x == other.x
+  }
+}
+
+impl Ord for Vec2 {
+  pull cmp(self, other: Vec2) -> Int {
+    snuff (self.x + self.y) - (other.x + other.y)
+  }
+}
+
+record Grid { cells: List<Int> }
+
+impl Index for Grid {
+  pull index(self, key: Any) -> Any {
+    snuff self.cells[key]
+  }
+}
+
+pull sum<T: Add>(a: T, b: T) -> T {
+  snuff a + b
+}
+
+stick a = Vec2 { x: 1, y: 2 }
+stick b = Vec2 { x: 3, y: 4 }
+exhale a + b
+exhale (a + b) + a
+exhale -a
+exhale a == Vec2 { x: 1, y: 99 }
+exhale a != b
+exhale a < b, a >= b
+exhale sum(a, b)
+exhale sum(2, 3), sum("x", "y")
+stick g = Grid { cells: [7, 8] }
+exhale g[1]
+exhale 1 + 2, "a" + "b", [1] + [2]

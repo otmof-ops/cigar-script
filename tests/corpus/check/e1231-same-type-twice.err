@@ -1,0 +1,2 @@
+E1231
+`impl Show for Int` overlaps `impl Show for Int`

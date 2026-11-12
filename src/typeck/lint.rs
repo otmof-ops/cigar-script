@@ -452,7 +452,7 @@ impl<'a> Lint<'a> {
                 self.expr(value);
                 match target {
                     // Setting a name is not reading it; `x += 1` reads it.
-                    AssignTarget::Var(n) => {
+                    AssignTarget::Var(n, _) => {
                         if *op != AssignOp::Set {
                             self.read(n);
                         }
@@ -778,7 +778,7 @@ fn walk_stmt(s: &Stmt, fs: &mut dyn FnMut(&Stmt), fe: &mut dyn FnMut(&Expr)) {
         Stmt::Assign { target, value, .. } => {
             walk_expr(value, fs, fe);
             match target {
-                AssignTarget::Var(_) => {}
+                AssignTarget::Var(..) => {}
                 AssignTarget::Index { object, index } => {
                     walk_expr(object, fs, fe);
                     walk_expr(index, fs, fe);

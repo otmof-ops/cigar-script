@@ -7,6 +7,14 @@
 //! prelude are `pull`s appended after the last line (cig hoists `pull`).
 //! The result is ordinary CigScript, which cig parses, checks and runs.
 
+mod bounds;
+mod derive;
+mod impls;
+mod json;
+mod keyed;
+mod standard;
+pub use impls::SELF;
+pub use standard::{arith_op, ARITH};
 pub mod edits;
 pub mod ty;
 
@@ -125,6 +133,7 @@ pub struct Module {
 /// What an exported name is.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Export {
+    Interface,
     Record,
     Enum,
     Function(FnSig),
@@ -225,6 +234,9 @@ struct L<'a> {
     private_types: BTreeMap<String, String>,
     /// Type parameters in scope (of the enclosing generic function).
     tparams: Vec<String>,
+    /// The type parameters of the `impl` (or the default method's `Self`)
+    /// whose methods are being lowered (#38).
+    impl_generics: Vec<(String, Vec<String>)>,
     public_next: bool,
     record_names: BTreeSet<String>,
     enum_names: BTreeSet<String>,
@@ -327,6 +339,7 @@ pub fn lower(src: &str, opts: &Options) -> Lowered {
         bound_modules: BTreeSet::new(),
         private_types: BTreeMap::new(),
         tparams: Vec::new(),
+        impl_generics: Vec::new(),
         public_next: false,
         record_names: BTreeSet::new(),
         enum_names: BTreeSet::new(),
@@ -789,12 +802,18 @@ impl<'a> L<'a> {
             }
             i += 1;
         }
+        // The prelude's standard interfaces this file names (#38).
+        self.standard_interfaces();
+        // What `derive` writes (#38).
+        self.derive_impls();
     }
 
     /// Does the file write about a `Result`: the word, `Ok(`, `Err(`,
     /// `attempt(`, or a `?` straight after a `)` or `]` (a call's `?`)?
     fn wants_result(&self) -> bool {
-        let named = |n: &str| n == "Result" || n == "Ok" || n == "Err" || n == "attempt";
+        // `derive(Json)` gives `from_json`, whose value is a `Result`.
+        let named =
+            |n: &str| n == "Result" || n == "Ok" || n == "Err" || n == "attempt" || n == "Json";
         let words = self.toks.iter().enumerate().any(|(i, t)| {
             matches!(&t.kind, T::Ident(n) if named(n))
                 && !matches!(
@@ -843,16 +862,8 @@ impl<'a> L<'a> {
             j += 1;
             let mut bounds = Vec::new();
             if matches!(self.k(j), T::Colon) {
-                j += 1;
-                while let Some(b) = self.ident(j) {
-                    bounds.push(b);
-                    j += 1;
-                    if matches!(self.k(j), T::Plus) {
-                        j += 1;
-                    } else {
-                        break;
-                    }
-                }
+                // `T: A + B` (#38): see `bounds.rs`.
+                (bounds, j) = self.bound_list(j + 1);
             }
             out.push((n, bounds));
             if matches!(self.k(j), T::Comma) {
@@ -885,7 +896,9 @@ impl<'a> L<'a> {
     /// `record Name<A> { field: Type, ... }` at token `s` (`record`).
     fn read_record(&mut self, s: usize, public: bool) -> Option<RecordDecl> {
         let name = self.ident(s + 1)?;
-        let (gens, mut j) = self.generic_params(s + 2);
+        let (gens, j) = self.generic_params(s + 2);
+        self.no_bounds_on("record", &gens, s + 1);
+        let (derives, mut j) = self.derive_list(j);
         if !matches!(self.k(j), T::LBrace) {
             let sp = self.sp(j);
             self.err(
@@ -902,6 +915,7 @@ impl<'a> L<'a> {
             gens.iter().map(|g| g.0.clone()).collect(),
         );
         let mut fields: Vec<(String, Ty)> = Vec::new();
+        let mut defaults = Vec::new();
         j += 1;
         while j < close {
             if matches!(self.k(j), T::Newline | T::Comma) {
@@ -934,6 +948,14 @@ impl<'a> L<'a> {
                             sp.end,
                         );
                     }
+                    // `retries: Int = 3`: a field default (#38).
+                    let n = if matches!(self.k(n), T::Assign) {
+                        let (d, next) = self.field_default(&f, n + 1, close);
+                        defaults.extend(d);
+                        next
+                    } else {
+                        n
+                    };
                     fields.push((f, t));
                     j = n;
                 }
@@ -945,6 +967,8 @@ impl<'a> L<'a> {
             name,
             generics: gens.into_iter().map(|g| g.0).collect(),
             fields,
+            derives,
+            defaults,
             public,
             at: self.at_of(s, close),
         })
@@ -953,7 +977,9 @@ impl<'a> L<'a> {
     /// `enum Name<T> { a, b(x: T), c(Int, Text) }` at token `s` (`enum`).
     fn read_enum(&mut self, s: usize, public: bool) -> Option<EnumDecl> {
         let name = self.ident(s + 1)?;
-        let (gens, mut j) = self.generic_params(s + 2);
+        let (gens, j) = self.generic_params(s + 2);
+        self.no_bounds_on("enum", &gens, s + 1);
+        let (derives, mut j) = self.derive_list(j);
         if !matches!(self.k(j), T::LBrace) {
             let sp = self.sp(j);
             self.err(
@@ -1038,6 +1064,7 @@ impl<'a> L<'a> {
             name,
             generics: gens.into_iter().map(|g| g.0).collect(),
             variants,
+            derives,
             public,
             at: self.at_of(s, close),
         })
@@ -1052,20 +1079,31 @@ impl<'a> L<'a> {
         }
         let close = self.matching(j);
         let mut methods = Vec::new();
+        let mut defaults = Vec::new();
         let mut k = j + 1;
+        // `Self` names the implementing type in a signature (#38).
+        let saved = self.tparams.clone();
+        self.tparams.push(impls::SELF.to_string());
         while k < close {
             if matches!(self.k(k), T::Pull) {
                 if let Some((sig, next)) = self.read_sig(k, false) {
-                    methods.push(sig);
                     k = next;
+                    // A body: the method's default.
+                    if matches!(self.k(k), T::LBrace) {
+                        defaults.push(sig.name.clone());
+                        k = self.matching(k) + 1;
+                    }
+                    methods.push(sig);
                     continue;
                 }
             }
             k += 1;
         }
+        self.tparams = saved;
         Some(InterfaceDecl {
             name,
             methods,
+            defaults,
             public,
             at: self.at_of(s, close),
         })
@@ -1076,7 +1114,7 @@ impl<'a> L<'a> {
     /// When `edit` is set, its annotations are blanked.
     fn read_sig(&mut self, p: usize, edit: bool) -> Option<(FnSig, usize)> {
         let name = self.ident(p + 1)?;
-        let (gens, mut j) = self.generic_params(p + 2);
+        let (mut gens, mut j) = self.generic_params(p + 2);
         if edit && j > p + 2 {
             self.e
                 .blank(self.src, self.sp(p + 2).start, self.sp(j - 1).end);
@@ -1167,6 +1205,7 @@ impl<'a> L<'a> {
                 self.e.blank(self.src, self.sp(kw).start, last);
             }
         }
+        j = self.where_clause(j, edit, &mut gens);
         self.tparams = saved;
         let sig = FnSig {
             name,
@@ -1214,12 +1253,10 @@ impl<'a> L<'a> {
             match w.as_str() {
                 "record" if next_is_name => return self.record_stmt(i, end),
                 "enum" if next_is_name => return self.enum_stmt(i, end),
-                "interface" if next_is_name => {
-                    let close = self.matching(i + 2);
-                    self.e.blank(self.src, self.sp(i).start, self.sp(close).end);
-                    return close + 1;
+                "interface" if next_is_name => return self.interface_stmt(i),
+                "impl" if next_is_name || matches!(self.k(i + 1), T::Lt) => {
+                    return self.impl_stmt(i, end)
                 }
-                "impl" if next_is_name => return self.impl_stmt(i, end),
                 "use" if next_is_name => return self.use_stmt(i, end),
                 "layer" if next_is_name && self.strength == Strength::Full => {
                     let e = self.stmt_end(i, end);
@@ -1658,6 +1695,10 @@ impl<'a> L<'a> {
         // The name a message shows: `size`, not the lowered impl name.
         let shown = sig.name.clone();
         if let Some((iface, t)) = impl_of {
+            // The impl's type parameters are the method's too.
+            let mut gens = self.impl_generics.clone();
+            gens.append(&mut sig.generics);
+            sig.generics = gens;
             let lowered = impl_fn_name(iface, t, &sig.name);
             let sp = self.sp(p + 1);
             self.e.replace(sp.start, sp.end, lowered.clone());
@@ -1725,7 +1766,7 @@ impl<'a> L<'a> {
                 }
                 k += 1;
             }
-            ((), k)
+            ((), self.past_derive(k))
         };
         let close = if matches!(self.k(j), T::LBrace) {
             self.matching(j)
@@ -1742,8 +1783,14 @@ impl<'a> L<'a> {
                 .iter()
                 .map(|(f, t)| format!("{f}: {}", ty::descriptor(t)))
                 .collect();
+            // A field left out takes its default (#38).
+            let fill: String = r
+                .defaults
+                .iter()
+                .map(|(f, v, _)| format!("if not f.has(\"{f}\") {{ f[\"{f}\"] = {v} }}; "))
+                .collect();
             self.appended.push_str(&format!(
-                "pull _cg_new_{name}(f) {{ snuff _cg_record(\"{name}\", [{}], f, {{{}}}) }}\n",
+                "pull _cg_new_{name}(f) {{ {fill}snuff _cg_record(\"{name}\", [{}], f, {{{}}}) }}\n",
                 order.join(", "),
                 descs.join(", ")
             ));
@@ -1760,6 +1807,7 @@ impl<'a> L<'a> {
             }
             j += 1;
         }
+        let j = self.past_derive(j);
         let close = if matches!(self.k(j), T::LBrace) {
             self.matching(j)
         } else {
@@ -1806,8 +1854,10 @@ impl<'a> L<'a> {
     /// `impl Interface for Type { pull ... }`: the methods stay where they
     /// are, renamed; the header and the closing brace go.
     fn impl_stmt(&mut self, i: usize, end: usize) -> usize {
-        let iface = self.ident(i + 1).unwrap_or_default();
-        if !matches!(self.k(i + 2), T::For) {
+        // `impl<T: Show> Show for List<T> where ...` (#38): see `impls.rs`.
+        let (mut gens, n) = self.impl_params(i);
+        let iface = self.ident(n).unwrap_or_default();
+        if !matches!(self.k(n + 1), T::For) {
             let sp = self.sp(i);
             self.err(
                 "E1311",
@@ -1817,12 +1867,19 @@ impl<'a> L<'a> {
             );
             return self.stmt_end(i, end);
         }
-        let Some((t, j)) = self.parse_ty(i + 3) else {
+        let saved_tparams = self.tparams.clone();
+        self.tparams.extend(gens.iter().map(|g| g.0.clone()));
+        let parsed = self.parse_ty(n + 2);
+        let Some((t, j)) = parsed else {
+            self.tparams = saved_tparams;
             return self.stmt_end(i, end);
         };
+        let j = self.where_clause(j, false, &mut gens);
         if !matches!(self.k(j), T::LBrace) {
+            self.tparams = saved_tparams;
             return self.stmt_end(i, end);
         }
+        let saved_gens = std::mem::replace(&mut self.impl_generics, gens.clone());
         let close = self.matching(j);
         self.e.blank(self.src, self.sp(i).start, self.sp(j).end);
         self.e
@@ -1845,11 +1902,15 @@ impl<'a> L<'a> {
             }
             k += 1;
         }
+        self.impl_generics = saved_gens;
+        self.tparams = saved_tparams;
         self.prog.impls.push(ImplDecl {
+            generics: gens,
             interface: iface,
             for_ty: t,
             methods,
             at: self.at_of(i, close),
+            builtin: false,
         });
         close + 1
     }
@@ -2218,6 +2279,18 @@ impl<'a> L<'a> {
                             );
                         }
                     }
+                    // `Set.new()`, `Set.of(xs)` (#38).
+                    if self.set_constructor(j) {
+                        j += 3;
+                        continue;
+                    }
+                    // `Point.default()` (#38).
+                    if (self.record_names.contains(&name) || self.enum_names.contains(&name))
+                        && (self.type_default(j, &name) || self.type_from_json(j, &name))
+                    {
+                        j += 3;
+                        continue;
+                    }
                     // A record literal: `Name { ... }` or `Name<T> { ... }`.
                     if self.record_names.contains(&name) {
                         let mut b = j + 1;
@@ -2287,10 +2360,13 @@ impl<'a> L<'a> {
                     }
                     if name == "move"
                         && (self.ident(j + 1).is_some() || matches!(self.k(j + 1), T::Pack))
-                        && self.strength == Strength::Full
+                        && (self.strength == Strength::Full
+                            || (self.strength == Strength::Medium && self.ident(j + 1).is_some()))
                     {
                         // `move x` gives `x` away; `move pack ...` is a
-                        // function value that owns what it captures.
+                        // function value that owns what it captures. At
+                        // medium the gate has let through only `f(move x)`,
+                        // a value given to a full function (#22 D3).
                         let sp = self.sp(j);
                         self.e.blank(self.src, sp.start, sp.end);
                         self.move_keys.push(self.sp(j + 1).start);
@@ -3518,7 +3594,7 @@ impl<'a> L<'a> {
             for n in &names {
                 match m.exports.iter().find(|(x, _)| x == n).map(|x| &x.1) {
                     // A type: its constructor is global, nothing to bind.
-                    Some(Export::Record | Export::Enum) => {}
+                    Some(Export::Interface | Export::Record | Export::Enum) => {}
                     Some(Export::Function(sig)) => {
                         self.prog.module_fns.insert(n.clone(), sig.clone());
                         let off = text.len() + 2;
@@ -3678,6 +3754,28 @@ impl<'a> L<'a> {
                 format!("`cigar check {}` shows where", m.path.display()),
             );
         }
+        // A module's `pub` interfaces can be bounds and `impl`s here (for a
+        // type this file declares: the orphan rule, #38).
+        for (n, i) in &m.program.interfaces {
+            if i.public {
+                self.prog.foreign.insert(n.clone());
+                // A module's interface named like a standard one is the
+                // module's: the prelude's goes, with its impls.
+                if self.prog.standard.remove(n) {
+                    self.prog.interfaces.remove(n);
+                    self.prog
+                        .impls
+                        .retain(|im| !(im.builtin && &im.interface == n));
+                }
+                self.prog
+                    .interfaces
+                    .entry(n.clone())
+                    .or_insert_with(|| i.clone());
+            }
+        }
+        for n in m.program.records.keys().chain(m.program.enums.keys()) {
+            self.prog.foreign.insert(n.clone());
+        }
         // A module's `pub` records and enums are types here; the others stay
         // its own (their values can still reach this file, untyped).
         for (n, r) in &m.program.records {
@@ -3712,6 +3810,7 @@ impl<'a> L<'a> {
     // ----- finish --------------------------------------------------------------------
 
     fn finish(mut self) -> Lowered {
+        self.fill_defaults();
         if let Some((a, b)) = self.e.overlap() {
             let mut d = Diagnostic::new(
                 DK::Internal,
@@ -3748,6 +3847,11 @@ impl<'a> L<'a> {
             "pull _cg_records() {{ snuff {{{}}} }}\n",
             records.join(", ")
         ));
+        // `derive(Json)` (#38): what each type reads, and the reader.
+        if json::any(&self.prog) {
+            text.push_str(&json::specs(&self.prog));
+            text.push_str(json::JSON);
+        }
         // Each record's field types, for the path a boundary failure names.
         let rdescs: Vec<String> = self
             .prog
@@ -3832,7 +3936,17 @@ impl<'a> L<'a> {
     fn dispatchers(&self) -> String {
         let mut out = String::new();
         for (iname, iface) in &self.prog.interfaces {
-            for m in &iface.methods {
+            // A module's interface has its dispatcher in the module.
+            if self.prog.foreign.contains(iname) {
+                continue;
+            }
+            // A method with no `self` (`Default.default`) is called on a
+            // type, never picked by a value.
+            for m in iface
+                .methods
+                .iter()
+                .filter(|m| m.params.first().is_some_and(|p| p.name == "self"))
+            {
                 let params: Vec<String> = m
                     .params
                     .iter()
@@ -3853,7 +3967,7 @@ impl<'a> L<'a> {
                     })
                 {
                     let f = impl_fn_name(iname, &imp.for_ty, &m.name);
-                    let test = type_test(&imp.for_ty, "self");
+                    let test = impls::impl_test(&imp.for_ty, "self");
                     body.push_str(&format!("  if {test} {{ snuff {f}(self{args}) }}\n"));
                 }
                 let plain = params.join(", ");
@@ -3894,7 +4008,7 @@ pub fn dispatch_lines(prog: &Program, iface: &str, method: &str, args: &str) -> 
         .filter(|i| i.interface == iface && i.methods.iter().any(|x| x.name == method))
     {
         let f = impl_fn_name(iface, &imp.for_ty, method);
-        let test = type_test(&imp.for_ty, "self");
+        let test = impls::impl_test(&imp.for_ty, "self");
         body.push_str(&format!("if {test} {{ snuff {f}(self{args}) }}; "));
     }
     body
@@ -3933,6 +4047,12 @@ pub fn module_names(src: &str, program: &Program) -> (Vec<(String, Export)>, Vec
         declared.push(n.clone());
         if e.public {
             exports.push((n.clone(), Export::Enum));
+        }
+    }
+    for (n, i) in &program.interfaces {
+        declared.push(n.clone());
+        if i.public {
+            exports.push((n.clone(), Export::Interface));
         }
     }
     for s in program.fns.values() {

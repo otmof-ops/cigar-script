@@ -1,0 +1,5 @@
+strength medium
+record Box { items: List<Int> }
+stick b = Box { items: [1] }
+b.items.push(2)
+exhale b.items.len()

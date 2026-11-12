@@ -1,0 +1,6 @@
+strength medium
+use boundary.plan.{take}
+
+stick xs: List<Int> = [1, 2]
+stick f = take
+exhale f(xs)

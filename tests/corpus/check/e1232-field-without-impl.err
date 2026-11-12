@@ -1,0 +1,2 @@
+E1232
+`Tagged` can't derive `Ord`: field `tags` is a `Map<Int>`

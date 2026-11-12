@@ -1,7 +1,7 @@
 strength full
 pull consume(owned xs: List<Int>) -> Int { snuff xs.len() }
 stick data = [1, 2]
-stick alias = data
+roll alias = data
 exhale consume(data)
 alias.push(3)
 exhale alias

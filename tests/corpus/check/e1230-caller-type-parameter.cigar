@@ -1,0 +1,15 @@
+strength medium
+
+interface Ord {
+  pull rank(self) -> Int
+}
+
+pull need<T: Ord>(x: T) -> Int {
+  snuff x.rank()
+}
+
+pull pass<U>(x: U) -> Int {
+  snuff need(x)
+}
+
+exhale pass(1)

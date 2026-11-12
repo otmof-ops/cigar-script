@@ -1,0 +1,28 @@
+strength medium
+
+interface Show {
+  pull show(self) -> Text
+}
+
+record Point { x: Int, y: Int }
+
+impl Show for Point {
+  pull show(self) -> Text {
+    snuff "(${self.x}, ${self.y})"
+  }
+}
+
+impl<T: Show> Show for List<T> {
+  pull show(self) -> Text {
+    roll parts: List<Text> = []
+    for x in self {
+      parts.push(x.show())
+    }
+    snuff "[" + parts.join("; ") + "]"
+  }
+}
+
+stick ps: List<Point> = [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
+exhale ps.show()
+stick nested: List<List<Point>> = [ps, [Point { x: 0, y: 0 }]]
+exhale nested.show()

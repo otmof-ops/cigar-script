@@ -1,0 +1,35 @@
+strength full
+
+# Full functions a medium file calls (#22 D3): one takes its list `owned`,
+# one borrows it, one takes it plainly, one takes a copy type `owned`.
+pub pull take(owned xs: List<Int>) -> Int {
+  snuff xs.len()
+}
+
+pub pull look(borrow xs: List<Int>) -> Int {
+  snuff xs.len()
+}
+
+pub pull plain(xs: List<Int>) -> Int {
+  snuff xs.len()
+}
+
+pub pull bump(owned n: Int) -> Int {
+  snuff n + 1
+}
+
+pub record Holder { items: List<Int> }
+
+pub pull keep(owned h: Holder) -> Int {
+  snuff h.items.len()
+}
+
+pub pull nest(owned xss: List<List<Int>>) -> Int {
+  snuff xss.len()
+}
+
+pub record Spot derive(Copy) { x: Int, y: Int }
+
+pub pull place(owned s: Spot) -> Int {
+  snuff s.x + s.y
+}

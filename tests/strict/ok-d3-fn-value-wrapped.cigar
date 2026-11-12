@@ -1,0 +1,16 @@
+strength medium
+use boundary.plan
+
+# A function that takes its value `owned` is called by name; a function
+# value that calls it says what it gives. One that only borrows is a value
+# like any other.
+pull apply(g: (List<Int>) -> Int, v: List<Int>) -> Int {
+  snuff g(v)
+}
+
+stick xs: List<Int> = [1, 2]
+exhale apply(pack(v) => plan.take(v.copy()), xs)
+stick look = plan.look
+exhale look(xs)
+exhale apply(plan.look, xs)
+exhale xs.len()

@@ -1,0 +1,13 @@
+strength medium
+use boundary.plan
+
+# A part, or a name inside a literal, goes to an `owned` parameter as a
+# copy; a literal of fresh values is the callee's alone.
+stick h = plan.Holder { items: [1, 2] }
+stick xss = [[1], [2]]
+stick xs = [3]
+exhale plan.take(h.items.copy())
+exhale plan.take(xss[0].copy())
+exhale plan.nest([xs.copy(), [4]])
+exhale plan.take([5, 6])
+exhale h.items.len() + xss.len() + xs.len()

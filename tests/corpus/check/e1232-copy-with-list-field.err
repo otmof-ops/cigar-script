@@ -1,0 +1,2 @@
+E1232
+`Bag` can't derive `Copy`: field `items` is a `List<Int>`, which is not a copy type

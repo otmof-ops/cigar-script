@@ -1,0 +1,8 @@
+true false
+Set {3, 2, 5} true 3 [3, 2, 5]
+Set {3, 2, 5, 7} Set {2, 5} Set {3}
+2 true
+3
+2
+5
+0

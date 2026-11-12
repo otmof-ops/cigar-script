@@ -1,0 +1,7 @@
+strength medium
+
+pub interface Show {
+  pull show(self) -> Text
+}
+
+pub record Dot { x: Int }

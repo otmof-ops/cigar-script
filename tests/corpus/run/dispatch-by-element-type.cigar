@@ -1,0 +1,26 @@
+strength medium
+
+interface Show {
+  pull show(self) -> Text
+}
+
+impl Show for List<Int> {
+  pull show(self) -> Text {
+    snuff "ints"
+  }
+}
+
+impl Show for List<Text> {
+  pull show(self) -> Text {
+    snuff "texts"
+  }
+}
+
+pull say(x: Any) -> Text {
+  snuff x.show()
+}
+
+stick t: List<Text> = ["b"]
+exhale t.show()
+exhale say([1, 2])
+exhale say(["a"])

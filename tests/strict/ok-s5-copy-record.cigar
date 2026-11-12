@@ -1,0 +1,7 @@
+strength full
+record Spot derive(Copy) { x: Int, y: Int }
+pull consume(owned s: Spot) -> Int { snuff s.x }
+stick a = Spot { x: 1, y: 2 }
+stick b = a
+exhale consume(a)
+exhale a.x + b.x

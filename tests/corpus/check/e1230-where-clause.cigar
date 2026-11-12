@@ -1,0 +1,17 @@
+strength medium
+
+interface Show {
+  pull show(self) -> Text
+}
+
+record Point { x: Int }
+
+pull all<T>(xs: List<T>) -> Text where T: Show {
+  roll out = ""
+  for x in xs {
+    out = out + x.show()
+  }
+  snuff out
+}
+
+exhale all([Point { x: 1 }])

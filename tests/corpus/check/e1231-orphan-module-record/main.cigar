@@ -1,0 +1,8 @@
+strength medium
+use tools.shapes
+
+impl Show for Dot {
+  pull show(self) -> Text {
+    snuff "a dot"
+  }
+}

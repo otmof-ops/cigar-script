@@ -1,0 +1,7 @@
+strength medium
+
+pull first<T: Sortable>(xs: List<T>) -> T? {
+  snuff xs.first()
+}
+
+exhale first([1])

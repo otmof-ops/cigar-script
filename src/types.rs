@@ -52,6 +52,11 @@ pub enum Ty {
     ListView(Box<Ty>),
     /// Keys are text in cig; `Map<V>` and `Map<Text, V>` are the same.
     Map(Box<Ty>),
+    /// `Map<K, V>` whose keys are not text (#38): `K` implements `Hash` and
+    /// `Eq`, and the map is lowered through `K`'s `hash()`.
+    KeyMap(Box<Ty>, Box<Ty>),
+    /// `Set<T>` (#38): `T` implements `Hash` and `Eq`.
+    Set(Box<Ty>),
     /// `T?`: a `T` or `null`.
     Opt(Box<Ty>),
     /// A function: parameters, result.
@@ -145,6 +150,8 @@ impl fmt::Display for Ty {
             Ty::List(t) => write!(f, "List<{t}>"),
             Ty::ListView(t) => write!(f, "ListView<{t}>"),
             Ty::Map(t) => write!(f, "Map<{t}>"),
+            Ty::KeyMap(k, v) => write!(f, "Map<{k}, {v}>"),
+            Ty::Set(t) => write!(f, "Set<{t}>"),
             Ty::Opt(t) => write!(f, "{t}?"),
             Ty::Fn(ps, r) => {
                 write!(f, "(")?;
@@ -182,6 +189,11 @@ pub struct RecordDecl {
     pub generics: Vec<String>,
     /// In declaration order.
     pub fields: Vec<(String, Ty)>,
+    /// `derive(Eq, Copy, ...)` (#38): each interface, and where it is written.
+    pub derives: Vec<(String, At)>,
+    /// Field defaults (`retries: Int = 3`): the field, the value as written
+    /// (a literal), and the literal's type.
+    pub defaults: Vec<(String, String, Ty)>,
     pub public: bool,
     pub at: At,
 }
@@ -201,6 +213,8 @@ pub struct EnumDecl {
     pub name: String,
     pub generics: Vec<String>,
     pub variants: Vec<Variant>,
+    /// `derive(Eq, Show, ...)` (#38).
+    pub derives: Vec<(String, At)>,
     pub public: bool,
     pub at: At,
 }
@@ -243,6 +257,9 @@ pub enum Mode {
 pub struct InterfaceDecl {
     pub name: String,
     pub methods: Vec<FnSig>,
+    /// The methods written with a body (#38, default methods): an `impl`
+    /// that leaves one out gets the interface's.
+    pub defaults: Vec<String>,
     pub public: bool,
     pub at: At,
 }
@@ -251,10 +268,15 @@ pub struct InterfaceDecl {
 /// function named by [`impl_fn_name`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct ImplDecl {
+    /// `impl<T: Show> Show for List<T>` (#38): the impl's type parameters
+    /// and their bounds.
+    pub generics: Vec<(String, Vec<String>)>,
     pub interface: String,
     pub for_ty: Ty,
     pub methods: Vec<FnSig>,
     pub at: At,
+    /// One of the prelude's impls for a built-in type (#38).
+    pub builtin: bool,
 }
 
 /// A layer: `measure for Path = fs.size` (or `into`, or a layer declared
@@ -293,6 +315,54 @@ pub struct Program {
     /// The functions modules export, as this file reaches them: `plan.f`
     /// for `use tools.plan`, and `f` for `use tools.plan.{f}`.
     pub module_fns: BTreeMap<String, FnSig>,
+    /// The interfaces, records and enums a module declares and this file
+    /// uses: what the orphan rule (#38, `E1231`) does not let it `impl`
+    /// together.
+    pub foreign: std::collections::BTreeSet<String>,
+    /// The prelude's standard interfaces this file has (#38): no file's own,
+    /// so an `impl` of one is never an orphan.
+    pub standard: std::collections::BTreeSet<String>,
+    /// What `derive` generated, for `cigar explain --derive`: the type, the
+    /// interface, and the generated function as CigScript.
+    pub derived: Vec<(String, String, String)>,
+}
+
+impl Program {
+    /// Does the record or enum `name` carry `derive(Copy)` (#22 D3 (i))?
+    pub fn is_copy(&self, name: &str) -> bool {
+        let says = |d: &[(String, At)]| d.iter().any(|(i, _)| i == "Copy");
+        self.records.get(name).is_some_and(|r| says(&r.derives))
+            || self.enums.get(name).is_some_and(|e| says(&e.derives))
+    }
+
+    /// Is a value of type `t` a copy (#22 D3 (i)): a scalar, text, `null`,
+    /// or a record or enum that carries `derive(Copy)`?
+    pub fn copy_type(&self, t: &Ty) -> bool {
+        match t {
+            Ty::Null | Ty::Bool | Ty::Int | Ty::Float | Ty::Text | Ty::Path | Ty::Sized(_) => true,
+            Ty::Record(n, _) | Ty::Enum(n, _) => self.is_copy(n),
+            _ => false,
+        }
+    }
+}
+
+/// `t` with the type parameter `Self` replaced by `with`.
+pub fn subst_self(t: &Ty, with: &Ty) -> Ty {
+    let go = |x: &Ty| subst_self(x, with);
+    match t {
+        Ty::Param(p) if p == "Self" => with.clone(),
+        Ty::List(a) => Ty::List(Box::new(go(a))),
+        Ty::ListView(a) => Ty::ListView(Box::new(go(a))),
+        Ty::Map(a) => Ty::Map(Box::new(go(a))),
+        Ty::KeyMap(k, v) => Ty::KeyMap(Box::new(go(k)), Box::new(go(v))),
+        Ty::Set(a) => Ty::Set(Box::new(go(a))),
+        Ty::Opt(a) => Ty::Opt(Box::new(go(a))),
+        Ty::Channel(a) => Ty::Channel(Box::new(go(a))),
+        Ty::Fn(ps, r) => Ty::Fn(ps.iter().map(go).collect(), Box::new(go(r))),
+        Ty::Record(n, a) => Ty::Record(n.clone(), a.iter().map(go).collect()),
+        Ty::Enum(n, a) => Ty::Enum(n.clone(), a.iter().map(go).collect()),
+        o => o.clone(),
+    }
 }
 
 /// The built-in `enum Result<T, E> { Ok(value: T), Err(error: E) }` (#2),
@@ -302,6 +372,7 @@ pub fn result_decl() -> EnumDecl {
     EnumDecl {
         name: "Result".to_string(),
         generics: vec!["T".to_string(), "E".to_string()],
+        derives: Vec::new(),
         variants: vec![
             Variant {
                 name: "Ok".to_string(),
@@ -346,7 +417,11 @@ pub const BUILTIN_TYPES: &[(&str, &str)] = &[
         "ListView",
         "ListView<T>: a list read through, never written (covariant)",
     ),
-    ("Map", "Map<V> or Map<Text, V>: text keys to V"),
+    (
+        "Map",
+        "Map<V> or Map<Text, V>: text keys to V; Map<K, V>: keys of a Hash + Eq type",
+    ),
+    ("Set", "Set<T>: values of a Hash + Eq type, each once"),
     ("Channel", "Channel<T>: a channel of T (full)"),
     (
         "Result",

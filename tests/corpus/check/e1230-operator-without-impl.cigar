@@ -1,0 +1,6 @@
+strength medium
+
+record Vec2 { x: Int, y: Int }
+
+stick a = Vec2 { x: 1, y: 2 }
+exhale a + a

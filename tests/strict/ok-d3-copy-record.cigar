@@ -1,0 +1,8 @@
+strength medium
+use boundary.plan
+
+# A record that derives `Copy` is a copy type: an `owned` parameter takes a
+# copy, with no `move`, and the caller keeps its value.
+stick s = plan.Spot { x: 1, y: 2 }
+exhale plan.place(s)
+exhale s.x

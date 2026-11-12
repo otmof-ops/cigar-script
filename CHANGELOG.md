@@ -6,6 +6,110 @@
 All notable changes to CigarScript. The format follows Keep a Changelog; the
 project follows semantic versioning.
 
+## Unreleased
+
+- **Maps with keys that are not text, and sets (#38).** `Map<K, V>` with a
+  key that is not text, and `Set<T>`, for any `Hash + Eq` type (`E1230`
+  otherwise), held in cig maps keyed by `hash()`, with the keys read back as
+  themselves. `Map<V>` and `Map<Text, V>` are cig's maps as before. Tests:
+  `records_as_map_keys`, `sets_hold_each_value_once`.
+- **`derive(Json)` (#38).** `to_json`, and `Type.from_json(text)` giving a
+  `Result` whose `Err` names the path of the first mismatch; unknown keys are
+  refused unless `derive(Json(lenient))`, field defaults fill missing keys,
+  and nested records, lists, maps, optionals and enums round-trip. A field
+  with no JSON form is `E1232`. Test: `derive_json_round_trips`.
+- **The standard interfaces and operators (#38, section 2).** `Eq`, `Ord`,
+  `Hash`, `Show`, `Debug`, `Default`, `Clone`, `Add`, `Sub`, `Mul`, `Div`,
+  `Rem`, `Neg` and `Index` are in the prelude, with the built-in types' impls
+  as ordinary impls, for any file that names them. On a record or an enum an
+  operator is its interface's method (`a + b` is `add`, `a < b` is `cmp`),
+  through the bound on a bounded `T`; a record with no `impl` is `E1230` at
+  the operator. The built-in types' operators are unchanged. Test:
+  `operators_on_records`.
+- **`derive` and field defaults (#38).** `derive(Eq, Ord, Hash, Show, Debug,
+  Default, Clone)` on a record or an enum writes the impls field by field; a
+  field that does not implement the interface is the new `E1232`.
+  `retries: Int = 3` declares a default a record literal may leave out.
+  `cigar explain --derive file:Type` prints what was written. Tests: `derive_writes_the_standard_impls`,
+  `explain_derive_prints_the_impls`.
+- **`derive(Copy)` (#22, D3).** A record or enum that carries it, with every
+  field a copy type, is a copy type: binding, passing, storing and returning
+  it copy it, it never moves at full, and an `owned` parameter takes a copy
+  with no `move` at medium. Test: `derive_copy_makes_a_copy_type`.
+- **Generic implementations and default methods (#38, sections 1.2 and
+  1.3).** `impl<T: Show> Show for List<T>` (with a `where` clause if wanted)
+  gives every list of a `Show` type the interface, statically and, for an
+  `Any`, by the list's elements at run time. Two `impl`s that can cover one
+  type, and an `impl` of a module's interface for a type the file does not
+  declare, are the new `E1231`. A generic `impl` whose bound does not hold is
+  `E1230`. A method written with a body in an interface is a default an
+  `impl` may override; `Self` names the implementing type in an interface's
+  signatures. `pub interface` is exported by a module. Tests:
+  `blanket_impl_selects`, `orphan_and_overlap_refused`,
+  `default_method_overridable` (`tests/strict.rs`), `tests/corpus/check/e1231-*`,
+  `e1230-blanket-bound`, `tests/corpus/run/generic-impl-blanket`,
+  `default-method`, `dispatch-by-element-type`.
+- **An `owned` parameter takes only what can be given (#22, D3).** A field or
+  an element of a value the caller holds (`plan.take(r.items)`,
+  `plan.take(xs[0])`) given to an `owned` parameter is `E1502`, at medium and
+  at full (full accepted it before, and the caller kept reaching what the
+  callee now owned); the hint names `.copy()`. At medium, a non-copy name put
+  in a list, map or record written at the call is `E1502` too. Test:
+  `an_owned_parameter_takes_only_what_can_be_given`.
+- **A function with an `owned` parameter is called by name only (#22, D3).**
+  Function types carry no parameter modes, so a call through a function value
+  neither moved at full nor was checked at medium. Writing such a function as
+  a value (`stick f = plan.take`, `apply(take, xs)`) is now `E1502`, with a
+  hint to wrap it: `pack(v) => take(v.copy())`. Test:
+  `an_owned_function_is_not_a_function_value`.
+- **Bounds on type parameters (#38, constraints).** `pull max<T: Ord>(...)`
+  and `where T: Ord + Show` after the result. Inside the function a `T` has
+  its bounds' methods, checked with their signatures (`E1313` for one they
+  do not declare); at each call the type given to `T` must have an `impl` of
+  every bound, or it is the new `E1230` ("`Point` doesn't implement `Ord`,
+  which `max` needs for `T`"). A bound that names no interface is `E1202`,
+  and so is a bound on a record's or enum's type parameter (bounds go on
+  functions). The bounds are erased. Tests: `bounded_generic_uses_the_bound`
+  (`tests/strict.rs`), `tests/corpus/check/e1230-*`,
+  `e1313-method-not-in-bound`, `e1202-bound-not-an-interface`,
+  `tests/corpus/run/generic-bounded`.
+- **A medium file calling a full function (#22, D3).** A medium caller's
+  value is lent to the full function, so the caller keeps it after the call.
+  A parameter the full function takes `owned` needs `move x` (then `x` is
+  gone: `E1501`, or `E1503` after a branch) or `x.copy()` at the call; a bare
+  non-copy name there is `E1502`, with a hint naming both. `move` is written
+  in a medium file only there; anywhere else it is `E1101`. Tests:
+  `a_medium_caller_lends_to_a_full_function`,
+  `an_owned_parameter_from_medium_needs_move_or_copy` (`tests/strict.rs`).
+- **`stick`, copy types and the boundary, written down (#22, D2 and D3).**
+  `docs/LANGUAGE.md` has one section that says what `stick` means at each
+  strength, which types are copy types (scalars, `Text`; records only once
+  `derive(Copy)` exists, #38), and the rule for calls from medium into full.
+- **cig 1.21.0.** The `cigscript` dependency moved from tag `v1.20.0` to
+  `v1.21.0` (cig-installer carton 0.2.0, row 11). The pin carries CigScript's
+  faster tree-walker (#146), whose AST now records where the checker last
+  found each name and where a map key was last found, so every pattern on
+  `AssignTarget::Var`, `AssignTarget::Member` and `ExprKind::Member` gained
+  a field. Thirteen pattern sites in `src/own.rs`, `src/typeck/mod.rs` and
+  `src/typeck/lint.rs` were adjusted; no construction sites changed, because
+  the lowering writes cig source and cig's own parser builds the AST.
+- **`stick` is deeply immutable (#22, D2, rule (a)).** At
+  strength medium and above, writing through a `stick`-bound path is
+  `E1215`: a field write (`p.x = 2`), an element write (`xs[0] = 1`), and
+  any in-place method (`.push`, `.pop`, `.insert`, `.remove`, `.set`,
+  `.delete`, `.clear`) on a list or map reached from a `stick` root. The
+  method list matches cig's own `own.rs::MUTATORS` and the entries in
+  CigScript's `stdlib/methods.rs` that call `borrow_mut`. Mild is
+  CigScript's as-is rule and keeps the acceptance it had; a `.cig` file
+  never gets a new error, and the find comes back as a hint when the file
+  is read as medium. New tests:
+  `stick_is_deeply_immutable`, `a_mild_file_may_mutate_through_a_stick`,
+  `a_cig_file_with_a_stick_mutation_is_not_refused` (`tests/strict.rs`),
+  `tests/strict/d2-*.cigar` + `ok-d2-*.cigar`. The superset test
+  (`tests/superset.rs::turning_up_is_additive`) now carries `E1215` as a
+  new error category medium and full add, the same way it already carried
+  ownership errors and `W1230` for full.
+
 ## 0.1.0 — 2026-11-12
 
 The first release: three strengths of CigarScript (mild, medium and

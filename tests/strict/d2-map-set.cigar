@@ -1,0 +1,4 @@
+strength medium
+stick m = {k: 1}
+m.set("k", 2)
+exhale m.k

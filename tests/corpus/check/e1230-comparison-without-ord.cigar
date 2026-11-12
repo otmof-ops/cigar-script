@@ -1,0 +1,7 @@
+strength medium
+
+record Point { x: Int }
+
+stick a = Point { x: 1 }
+stick b = Point { x: 2 }
+exhale a < b

@@ -1,0 +1,12 @@
+{Point { x: 1, y: 2 }: "c", Point { x: 3, y: 4 }: "b"}
+b 2
+null true
+1 c
+3 b
+[Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
+{Point { x: 3, y: 4 }: "b"}
+{1: "one", 2: "two"} two
+1
+2
+{1: "one", 11: "later", 12: "later"}
+{a: 1}

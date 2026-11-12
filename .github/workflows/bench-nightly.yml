@@ -19,12 +19,12 @@ jobs:
     with:
       mode: nightly
       # The cig the suite is measured with, sha256 checked: the one cigar is built on.
-      cig-version: "1.20.0"
+      cig-version: "1.21.0"
       # What the suite needs beside cig: the CigScript checkout (../CigScript,
       # the compute set and the examples) and this repository's `cigar`.
       prepare: |
         set -eu
-        git clone --depth 1 --branch v1.20.0 https://github.com/otmof-ops/cig-script ../CigScript
+        git clone --depth 1 --branch v1.21.0 https://github.com/otmof-ops/cig-script ../CigScript
         cargo build --release --locked --bin cigar
         echo "$PWD/target/release" >> "$GITHUB_PATH"
     permissions:

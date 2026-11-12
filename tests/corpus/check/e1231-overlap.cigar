@@ -1,0 +1,17 @@
+strength medium
+
+interface Show {
+  pull show(self) -> Text
+}
+
+impl Show for List<Int> {
+  pull show(self) -> Text {
+    snuff "ints"
+  }
+}
+
+impl<T> Show for List<T> {
+  pull show(self) -> Text {
+    snuff "a list"
+  }
+}

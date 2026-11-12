@@ -1,0 +1,16 @@
+strength medium
+
+interface Show {
+  pull show(self) -> Text
+}
+
+record Blob { n: Int }
+
+impl<T: Show> Show for List<T> {
+  pull show(self) -> Text {
+    snuff "a list"
+  }
+}
+
+stick bs: List<Blob> = [Blob { n: 1 }]
+exhale bs.show()

@@ -153,27 +153,38 @@ fn turning_up_is_additive() {
             .into_iter()
             .map(|(code, kind, line, col)| (code, kind, line.map(|l| l + 1), col))
             .collect();
-        // Medium only lets a file write more: its errors stay the same.
+        // Medium adds D2 (#22, rule (a)): writing through a
+        // `stick` is `E1215`. No other new errors come from turning up to
+        // medium: the mild file's errors stay the same, plus the D2 ones.
         let medium = Strength::Medium;
         let got = fingerprints(&as_cigar(&format!("strength {medium}\n{source}"), None).errors);
-        if expected != got {
+        let lost: Vec<_> = expected.iter().filter(|f| !got.contains(f)).collect();
+        let foreign_medium: Vec<_> = got
+            .iter()
+            .filter(|f| !expected.contains(f) && f.0 != "E1215")
+            .collect();
+        if !lost.is_empty() || !foreign_medium.is_empty() {
             diffs.push(format!(
-                "{}: turning up to {medium} changed the errors\n  mild+1 = {expected:?}\n  {medium} = {got:?}",
+                "{}: turning up to {medium} lost {lost:?} or added errors other than D2: {foreign_medium:?}",
                 path.display()
             ));
         }
-        // Full adds the ownership rules (#22 S5-S7) and the typed parameter
-        // (L1: `W1230` is an error at full) and nothing else: every error the
-        // file had is still there, and the only new ones say a value was used
-        // after it was given away, or that a parameter has no type. A `.cig`
-        // file itself never gets either.
+        // Full adds the ownership rules (#22 S5-S7), the typed parameter
+        // (L1: `W1230` is an error at full), and D2's `E1215` (the same
+        // rule medium had). Every error the file had is still there, and
+        // the only new ones say a value was used after it was given away,
+        // that a parameter has no type, or that a `stick` was mutated.
+        // A `.cig` file itself never gets any of these.
         let full = Strength::Full;
         let got = fingerprints(&as_cigar(&format!("strength {full}\n{source}"), None).errors);
         let lost: Vec<_> = expected.iter().filter(|f| !got.contains(f)).collect();
         let foreign: Vec<_> = got
             .iter()
             .filter(|f| {
-                !expected.contains(f) && !OWNERSHIP.contains(&f.0.as_str()) && f.0 != "W1230"
+                !expected.contains(f)
+                    && !OWNERSHIP.contains(&f.0.as_str())
+                    && f.0 != "W1230"
+                    && f.0 != "E1215"
             })
             .collect();
         if !lost.is_empty() || !foreign.is_empty() {

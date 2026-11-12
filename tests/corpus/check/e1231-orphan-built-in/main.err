@@ -1,0 +1,2 @@
+E1231
+`impl Show for Int` belongs in the module that declares `Show`

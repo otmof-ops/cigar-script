@@ -1,0 +1,4 @@
+strength medium
+
+roll m: Map<Int, Text> = {}
+m["one"] = "x"

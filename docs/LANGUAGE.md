@@ -163,8 +163,8 @@ page; until then the message carries the whole explanation.
 
 | code | kind | when |
 |---|---|---|
-| `E1101` | check | a feature above the file's strength: names the feature, the strength that allows it, and the line to add |
-| `E1102` | check | a feature the file's strength allows, which this version has not built yet: names the issue it waits on. Today: `foreign`, `unchecked`, and a `within` context other than `retry`, `parallel` and `timeout` |
+| `E1101` | check | a feature above the file's strength: names the feature, the strength that allows it, and the line to add. A medium file may write `move x` only as the argument of a full function's `owned` parameter |
+| `E1102` | check | a feature the file's strength allows, which this version has not built yet: names the issue it waits on. Today: `foreign`, `unchecked`, a `within` context other than `retry`, `parallel` and `timeout`, an operator on a record inside `${...}`, and `m[k] += x` on a map with keys that are not text |
 | `E1103` | check | a strength declaration that is not the first statement, or names no strength |
 | `E1104` | check | a name that starts `_cg_` or `__cg_`. As kind `internal`: the file lowered to CigScript cig refuses, which is a bug in `cigar` |
 | `E1105` | check | a reserved word where a name goes (`stick match = 1`), in a file whose strength reserves it; or `r#word` and `r_word` both written. The message names the word and offers `r#word` |
@@ -179,7 +179,7 @@ page; until then the message carries the whole explanation.
 | code | when |
 |---|---|
 | `E1201` | a value does not fit the type expected: a call's argument, an annotated `stick` or `roll`, a record or variant field, a list or map item. The span is on the value, with a note naming the signature or annotation |
-| `E1202` | a type that is not one: no record, enum or type parameter has that name; a map keyed by anything but text; a type or a declaration written wrongly |
+| `E1202` | a type that is not one: no record, enum or type parameter has that name; a type or a declaration written wrongly |
 | `E1203` | a type given the wrong number of type arguments (`List<Int, Text>`) |
 | `E1204` | a field a record does not have is read |
 | `E1205` | a record literal leaves a field out. Also coughed at run time when the fields are not known until then |
@@ -191,11 +191,14 @@ page; until then the message carries the whole explanation.
 | `E1212` | a `match` or an arm `cigar` cannot read: a pattern it does not know, an arm with no `=>`, a `match` nested as an arm's result, or a `match` that is neither a statement nor bound by `stick`, `roll`, an assignment or `snuff` |
 | `E1213` | a block as the arm of a `match` used as a value |
 | `E1214` | a record that names a field twice, an enum that names a variant twice, or a record, enum or interface name declared twice |
-| `E1215` | an assignment to a `stick` |
+| `E1215` | an assignment to a `stick`, a write through a `stick`-bound path (its field, element, or a mutating method), or an attempt to write a `ListView<T>` |
 | `E1216` | a call with the wrong number of arguments |
 | `E1217` | a `snuff` whose value is not the function's declared result |
 | `E1218` | a `cough` of a record the function's `coughs` list does not hold |
 | `E1219` | a `?` that cannot send its error anywhere: outside a function, inside a `pack`, in a function whose result is not a `Result`, on a value that is not a `Result`, or with an error that does not fit the function's. Also coughed at run time when an untyped value reaches `?` and is not a `Result` |
+| `E1230` | a type argument doesn't implement a bound: the type a call gives a bounded type parameter has no `impl` of one of its interfaces ("`Point` doesn't implement `Ord`, which `max` needs for `T`"); the hint names the bound and the `impl` to write. Also a generic `impl` whose pattern fits a type its own bound does not hold for, and an operator on a record or a bounded `T` with no `impl` of the operator's interface ("`Vec2` doesn't implement `Add`, which `+` needs"); and a `Map<K, V>` key or `Set<T>` element type without `Hash` or `Eq` |
+| `E1231` | `impl`s that break coherence: two `impl`s of one interface whose types can be the same type (named both, with the first one's line), or an `impl` of a module's interface for a type this file does not declare (an orphan) |
+| `E1232` | `derive(X)` on a record or enum with a field that does not implement `X` (named, with its type); `derive(Copy)` with a field that is not a copy type; `derive(Json)` with a field that has no JSON form; `derive(Default)` on an enum |
 | `E1210` | **at run time**: a value entering a typed place does not fit it (`E1210 double: n should be Int and is Text "x"`). For a list or map the message names the path to the first part that does not fit: `E1210 xs should be List<u8> and is List: xs[2] is 300, outside u8 (0 to 255)`, `m.users[0].age is Text "old", not u8`. The path starts at the name the value was given (`xs`, `m`, `Pixel.shades`), or at `value` for a place with no name of its own (a result, `json.parse<T>`) |
 
 **Modules and interfaces** (medium)
@@ -208,7 +211,7 @@ page; until then the message carries the whole explanation.
 | `E1304` | a name a module does not have |
 | `E1311` | an `impl` that leaves out a method its interface declares, or an `impl` written wrongly |
 | `E1312` | an `impl` method whose signature is not the interface's |
-| `E1313` | a method called on a type that has no `impl` giving it that method |
+| `E1313` | a method called on a type that has no `impl` giving it that method; on a bounded type parameter, a method none of its bounds declares |
 
 **Layers** (medium and full)
 
@@ -226,7 +229,7 @@ page; until then the message carries the whole explanation.
 | code | when |
 |---|---|
 | `E1501` | a name used after it was given to an `owned` parameter, to `move`, to a binding or a container, or into a `move pack`: names the line it went |
-| `E1502` | a `borrow` parameter returned, stored (`push`, `insert`, `set`) or given away |
+| `E1502` | a `borrow` parameter returned, stored (`push`, `insert`, `set`) or given away; at medium, a non-copy name given to a full function's `owned` parameter without `move` or `.copy()`, or put in a literal given to one; at medium and full, a field or element of a held value given to `owned`, and a function with an `owned` parameter used as a function value (the value is lent, see [calls from medium into full](#stick-copy-types-and-calls-from-medium-into-full)) |
 | `E1503` | a name given away on some paths and used after they join (names the branch); a name given away while a function value that borrows it is used later |
 | `E1510` | a number outside its sized type: at check time for a number the checker can work out (written out, including inside a list or map written out, at any depth: `stick a: u8 = 300`, `stick xs: List<u8> = [1, 2, 300]`; or a `stick` of numbers through `+ - * / %`: `stick c: u8 = b + 10` with `stick b: u8 = 250`), **at run time** for one that is computed (`E1510 c is 300, outside u8 (0 to 255)`) |
 | `E1520` | **at run time**: a send on a closed channel |
@@ -281,7 +284,8 @@ declaration     = pull-decl | record-decl | enum-decl | interface-decl
 type            = base | type , "?" | fn-type | named ;
 base            = "Any" | "Null" | "Bool" | "Int" | "Float" | "Text" | "Path"
                 | "List" , [ "<" , type , ">" ] | "ListView" , "<" , type , ">"
-                | "Map"  , [ "<" , [ "Text" , "," ] , type , ">" ] ;
+                | "Map"  , [ "<" , [ type , "," ] , type , ">" ]   (* a key that is not text, #38 *)
+                | "Set"  , "<" , type , ">" ;                         (* #38 *)
 fn-type         = "(" , [ type , { "," , type } ] , ")" , "->" , type ;
 named           = name , [ "<" , type , { "," , type } , ">" ] ;
                   (* a record, an enum or a type parameter *)
@@ -292,8 +296,12 @@ full-type       = sized | "Bytes" | "Channel" , "<" , type , ">" ;
 
 annotated       = ( "stick" | "roll" ) , name , [ ":" , type ] , "=" , expr ;
 pull-decl       = "pull" , name , [ type-params ] , "(" , [ param , { "," , param } ] , ")" ,
-                  [ "->" , type ] , [ "coughs" , name , { "," , name } ] , block ;
-type-params     = "<" , name , { "," , name } , ">" ;
+                  [ "->" , type ] , [ "coughs" , name , { "," , name } ] ,
+                  [ where-clause ] , block ;
+type-params     = "<" , type-param , { "," , type-param } , ">" ;
+type-param      = name , [ ":" , bounds ] ;   (* bounds on a function's only, #38 *)
+bounds          = name , { "+" , name } ;    (* each an interface *)
+where-clause    = "where" , name , ":" , bounds , { "," , name , ":" , bounds } ;
 param           = [ "owned" | "borrow" ] , name , [ ":" , type ] ;
 ```
 
@@ -304,11 +312,13 @@ annotation is `Any`, unless local inference knows better.
 ### Records and enums (medium; #9)
 
 ```ebnf
-record-decl     = "record" , name , [ type-params ] , "{" , [ field , { sep , field } ] , "}" ;
-field           = name , ":" , type ;
+record-decl     = "record" , name , [ type-params ] , [ derive ] ,
+                  "{" , [ field , { sep , field } ] , "}" ;
+field           = name , ":" , type , [ "=" , literal ] ;   (* a default, #38 *)
+derive          = "derive" , "(" , name , { "," , name } , ")" ;
 record-literal  = name , "{" , [ name , ":" , expr , { sep , name , ":" , expr } ] , "}" ;
 
-enum-decl       = "enum" , name , [ type-params ] , "{" , variant , { sep , variant } , "}" ;
+enum-decl       = "enum" , name , [ type-params ] , [ derive ] , "{" , variant , { sep , variant } , "}" ;
 variant         = name , [ "(" , ( named-field | type ) , { "," , ( named-field | type ) } , ")" ] ;
 named-field     = name , ":" , type ;
 variant-value   = name , "." , name , [ "(" , args , ")" ] ;
@@ -343,14 +353,166 @@ not count as covering its pattern.
 ### Interfaces and implementations (medium; #10)
 
 ```ebnf
-interface-decl  = "interface" , name , [ type-params ] , "{" , { method-sig } , "}" ;
-method-sig      = "pull" , name , "(" , [ "self" , { "," , param } ] , ")" , [ "->" , type ] ;
-impl-decl       = "impl" , name , "for" , type , "{" , { pull-decl } , "}" ;
+interface-decl  = [ "pub" ] , "interface" , name , "{" , { method-sig } , "}" ;
+method-sig      = "pull" , name , "(" , [ "self" , { "," , param } ] , ")" , [ "->" , type ] ,
+                  [ block ] ;                       (* a block is the default, #38 *)
+impl-decl       = "impl" , [ type-params ] , name , "for" , type , [ where-clause ] ,
+                  "{" , { pull-decl } , "}" ;
 ```
 
 A call `x.m(...)` uses the `impl` the type of `x` selects **when the checker
 knows the type**, and a run-time choice by the value's record or enum name
-or CigScript type when `x` is `Any`.
+or CigScript type when `x` is `Any`. In a signature of an interface, `Self`
+is the implementing type.
+
+- **Generic implementations** (#38). `impl<T: Show> Show for List<T> { ... }`
+  is a pattern: a `List<Point>` has `Show` through it when `Point` has `Show`,
+  and a `List<List<Point>>` through it twice. A type the pattern fits whose
+  bound does not hold is `E1230`. Inside the methods, a `T` has the methods
+  of its bounds. When the type is known the call goes straight to the
+  pattern's method; when it is `Any`, the run-time choice reads a list's or
+  map's elements too, so `impl Show for List<Int>` and
+  `impl Show for List<Text>` are told apart by what the list holds.
+- **Coherence** (`E1231`). Two `impl`s of one interface whose types can be
+  the same type overlap (`List<Int>` and `List<T>`, or one `impl` written
+  twice), and there is no specialization: one has to go. An `impl` belongs
+  in the module that declares the interface or the one that declares the
+  type: implementing a module's interface (`pub interface`, brought in by
+  `use`) for a built-in type or for another module's record is an orphan.
+- **Default methods** (#38). A method written with a body in the interface is
+  its default: an `impl` that leaves it out gets it, one that writes it
+  overrides it. In the default, `self` is a `Self` bounded by the interface,
+  so it calls the interface's other methods, as the implementing type has
+  them.
+
+```cigar
+strength medium
+
+interface Show {
+  pull show(self) -> Text
+  pull twice(self) -> Text {
+    snuff self.show() + ", " + self.show()
+  }
+}
+
+record Point { x: Int }
+
+impl Show for Point {
+  pull show(self) -> Text {
+    snuff "p${self.x}"
+  }
+}
+
+impl<T: Show> Show for List<T> {
+  pull show(self) -> Text {
+    roll parts: List<Text> = []
+    for x in self {
+      parts.push(x.show())
+    }
+    snuff parts.join(" ")
+  }
+}
+
+stick ps: List<Point> = [Point { x: 1 }, Point { x: 2 }]
+exhale ps.twice()
+```
+
+### The standard interfaces, operators and `derive` (medium; #38)
+
+The prelude has these interfaces. A file has one when it names it (in a
+bound, an `impl` or a `derive`) and does not declare an interface of that
+name itself, so a file that names none lowers as it always did.
+
+| interface | method | gives | the built-in types' `impl`s |
+|---|---|---|---|
+| `Eq` | `eq(self, other: Self) -> Bool` | `==`, `!=` on records and enums | `Int`, `Float`, `Bool`, `Text`, `List<T: Eq>`, `Map<V: Eq>` |
+| `Ord` | `cmp(self, other: Self) -> Int` (negative, `0`, positive) | `<`, `<=`, `>`, `>=` | `Int`, `Float`, `Text`, `List<T: Ord>` (lexicographic) |
+| `Hash` | `hash(self) -> Text` | a key no other value has: `Map<K, V>` keys and `Set<T>` elements | the scalars, `Text`, `List<T: Hash>` |
+| `Show`, `Debug` | `show(self) -> Text`, `debug(self) -> Text` | the text of a value | the scalars, `Text`, `List<T>`, `Map<V>` |
+| `Default` | `default() -> Self` | `Point.default()` | `0`, `0.0`, `false`, `""`, `[]`, `{}` |
+| `Clone` | `clone(self) -> Self` | a copy | the scalars, `Text`, `List<T>`, `Map<V>` |
+| `Add`, `Sub`, `Mul`, `Div`, `Rem` | `add(self, other: Self) -> Self`, ... | `+ - * / %` | `Int`, `Float`; `Add` also `Text`, `List<T>` |
+| `Neg` | `neg(self) -> Self` | `-x` | `Int`, `Float` |
+| `Index` | `index(self, key: Any) -> Any` | `x[k]` | `List<T>`, `Map<V>` |
+| `Json` | `to_json(self) -> Text` | `x.to_json()`, and `T.from_json(text)` | only by `derive(Json)` |
+
+`Path` is text, and has the `Text` impls. The arithmetic interfaces take and
+give `Self`, and `Index` gives `Any`, until interfaces have associated types.
+An `impl` of a standard interface for a record of the file is never an orphan;
+one for a built-in type overlaps the prelude's (`E1231`).
+
+- **Operators.** On a record or an enum, `a + b` is `add(a, b)`, `-a` is
+  `neg(a)`, `a < b` is `cmp(a, b) < 0`, `a == b` is `eq(a, b)` and `a[k]` is
+  `index(a, k)`. A record with no `impl` is `E1230` at the operator ("`Vec2`
+  doesn't implement `Add`, which `+` needs"), except `==` and `!=`, which
+  compare a record with no `impl Eq` field by field, as they always have. On a
+  bounded `T` the operator goes through the bound (`E1230` without it); on an
+  unbounded `T` and on the built-in types it is CigScript's operator, so a
+  `.cig` file means what it meant. Inside `${...}` an operator on a record is
+  not lowered yet (`E1102`): work it out in a `stick` first.
+- **`derive`.** `record Point derive(Eq, Ord, Hash, Show, Debug, Default, Clone) { ... }`
+  (and the same on an enum) writes each `impl`, field by field in declaration
+  order: `Ord` is lexicographic by field, an enum's by variant order and then
+  payload; `Hash` joins each field's key with its length in front; `Show` and
+  `Debug` are the text `exhale` gives; `Default` takes each field's default;
+  `Clone` clones each field. A generic record's `impl` asks its type
+  parameters for the interface. Every field must implement the interface, an
+  optional field its inner type: `E1232` names the one that does not. An enum
+  has no default variant, so `derive(Default)` on one is `E1232`.
+  `derive(Copy)` makes a copy type ([below](#stick-copy-types-and-calls-from-medium-into-full)).
+- **`derive(Json)`.** `x.to_json()` gives JSON text: a record is an object
+  of its fields, an enum is tagged by its variant (`"dot"`,
+  `{"circle": {"r": 1.5}}`), an empty optional is `null`.
+  `Config.from_json(text)` gives a `Result<Config, Text>`: `Ok` of the value,
+  or `Err` naming the path of the first mismatch from `value`, as a checked
+  boundary does (`E1210 value.tags[0] should be Text and is Int 1`). A key
+  the record does not have is refused (`E1206 value.extra: ...`) unless it
+  says `derive(Json(lenient))`; a missing key takes the field's default, and
+  without one is `E1205`; a variant the enum does not have is `E1207`; text
+  that is not JSON gives cig's own message. Nested records and enums are read
+  by their own `derive(Json)`. A field with no JSON form (a record or enum
+  without `derive(Json)`, a `Set`, a map with keys that are not text, a
+  function) is `E1232`.
+- **Field defaults.** `retries: Int = 3`: a value written out (a number, a
+  text, `true`, `false`, `null`, `[]` or `{}`). A record literal may leave the
+  field out, and `Default` and `from_json` use it. A default that does not fit
+  its field is `E1201`.
+- **Maps with keys that are not text, and sets.** `Map<V>` and
+  `Map<Text, V>` are cig's maps, with text keys, as always. `Map<K, V>` with
+  any other `K`, and `Set<T>`, need their key or element type to implement
+  `Hash` and `Eq` (`E1230` otherwise; `derive(Hash, Eq)` gives both). They
+  are held in cig maps keyed by `hash()`, two keys with one hash told apart
+  by `Eq`, and keys read back are the keys themselves, in the order they were
+  first added.
+  - A `Map<K, V>` starts as `{}` (one written out with entries is `E1201`):
+    `m[k]` (a missing key coughs `E505`, as a cig map's does), `m[k] = v`,
+    `get` (a `V?`), `has`, `set`, `remove`, `keys`, `values`, `len`, `copy`,
+    `for k in m`, and `exhale m` shows `{Point { x: 1, y: 2 }: "a"}`.
+    `m[k] += x` is not built yet (`E1102`): write `m[k] = m[k] + x`.
+  - A `Set<T>` is `Set.new()` or `Set.of(list)`: `add`, `remove` (a `Bool`),
+    `has`, `len`, `items` (a `List<T>`), `union`, `intersection`,
+    `difference`, `copy`, `for x in s`, and `exhale s` shows `Set {1, 2}`.
+  - A loop over either reads the keys as they are when it starts, as a loop
+    over a cig map does: what the body adds is not visited, what it removes
+    still is. Both are non-copy values, and a `stick` one cannot be changed
+    (`E1215`).
+- **Nothing generated is hidden.** `cigar explain --derive shapes.cigar:Point`
+  prints the `impl`s `derive` wrote, as the CigScript they lower to.
+
+```cigar
+strength medium
+
+record Vec2 derive(Eq, Show) { x: Int, y: Int = 0 }
+
+impl Add for Vec2 {
+  pull add(self, other: Vec2) -> Vec2 {
+    snuff Vec2 { x: self.x + other.x, y: self.y + other.y }
+  }
+}
+
+stick a = Vec2 { x: 1 }
+exhale a + Vec2 { x: 2, y: 3 }, a == Vec2 { x: 1, y: 0 }
+```
 
 ### Modules (medium; #10)
 
@@ -429,7 +591,9 @@ limit, `within timeout() { ... }`, is `E1405`.
 
 **Moves** (#22 S5 to S7; the same rules as Rust's, in a smaller model). A
 *non-copy* value is a list, a map, a record or a channel; ints, floats, bools,
-text and `null` are copies. The check knows a name holds one from a literal,
+text and `null` are copies (the list, and what a medium file's call into a
+full function does, are under
+[calls from medium into full](#stick-copy-types-and-calls-from-medium-into-full)). The check knows a name holds one from a literal,
 a call whose result is declared as one, an annotation, an `owned` parameter,
 `.copy()` of one, or another such name; a name it cannot tell is treated as a
 copy, so it never reports a use that is fine.
@@ -564,6 +728,16 @@ type system are written; each rule has programs in `tests/corpus` and
   `ListView` are `E1215`, and a `ListView` does not fit a `List`. A value of
   type `List<Any>` still fits a `List<Int>` place; it is checked there when
   the program runs.
+- **`stick` is deeply immutable (#22, D2).** A `stick` binding does not
+  change, and neither does anything reached through its name: no field write
+  (`p.x = 2`), no element write (`xs[0] = 1`), and no mutating method
+  (`.push`, `.pop`, `.insert`, `.remove`, `.set`, `.delete`, `.clear`) on a
+  list or map reached from a `stick` root. All of those are `E1215`, with a
+  hint to declare it `roll`, or to `.copy()` it into a fresh `roll`. The rule
+  applies at medium and full; a mild `.cigar` file keeps CigScript's own
+  acceptance, where a `stick` is a non-reassigning binding only. A `.cig`
+  file is never held to this rule: reading it as medium turns the find
+  into a hint, as the superset rule requires.
 - **Functions are contravariant in their parameters.** `(A) -> R` fits
   `(B) -> S` when `B` fits `A` and `R` fits `S`. `(Int) -> Int` is not a
   `(Any) -> Int` (it would be handed a text), and `Any` is not a stand-in
@@ -664,6 +838,21 @@ type system are written; each rule has programs in `tests/corpus` and
   checker elides none of them yet; what it can prove wrong it reports first.
 - **Generics** are checked, then erased: at run time a type parameter is
   `Any`.
+- **Bounds** (#38). A function's type parameter may name the interfaces it
+  needs: `pull max<T: Ord>(xs: List<T>) -> T?`, or the same after the result,
+  `pull top<T>(xs: List<T>) -> Text where T: Ord + Show`. Each bound names an
+  interface (`E1202` otherwise). Inside the function a `T` has the methods
+  of its bounds, checked with their signatures, and a method none of them
+  declares is `E1313`; a `T` with no bound is as before, any interface's
+  method picked by the value when it runs. At each call, the type the call
+  gives `T` must have an `impl` of every bound: `E1230` ("`Point` doesn't
+  implement `Ord`, which `max` needs for `T`"), with a hint naming the bound
+  and the `impl` to write. A type parameter of the calling function has the
+  bounds it declares, and a value the checker cannot see (`Any`) is not
+  judged. Bounds are erased, like every type: a method on a `T` dispatches
+  by the value. A bound on a record's or enum's type parameter is `E1202`
+  (bounds go on functions), and operators on a bounded `T` wait on the
+  standard interfaces.
 - **Standard library.** Every function and method of CigScript's standard
   library has a signature the checker knows, including whether it is an
   effect. Anything it does not know is `Any`, never a guess that rejects a
@@ -702,6 +891,111 @@ type system are written; each rule has programs in `tests/corpus` and
   order does not change the result: an empty loop reduces to `null`), or
   goes through a channel.
   `within retry(n)` runs its block up to `n` tries in all.
+
+## `stick`, copy types and calls from medium into full
+
+*(Decided: #22, D2 and D3. This is the rule the checker holds, written down
+before more code depends on it.)*
+
+**What `stick` means at each strength.**
+
+| strength | `stick x = e` |
+|---|---|
+| mild | CigScript's rule: `x` is never assigned again (`x = 2` is cig's own error). What `x` holds may still be changed through it (`x.push(3)`, `x.k = 2`) |
+| medium | deeply immutable through the name: no assignment, no field or element write, no mutating method (`.push`, `.set`, ...) on anything reached from `x`. Each is `E1215`. `roll` is the name that changes; `x.copy()` into a `roll` is the way to a changed copy |
+| full | as medium, and binding is a move: `stick y = x` gives a non-copy `x` away (`E1501` on a later use) |
+
+A `.cig` file is never held to the medium rule: read as medium, the find is a
+hint.
+
+**Copy types.** A copy type is copied where a non-copy value would move:
+binding it, storing it, or giving it to an `owned` parameter leaves the
+original usable.
+
+- Copy types: every scalar (`Bool`, `Int`, `Float`, the sized integers), `Text`,
+  `Path` and `null`. Text is immutable, so a copy is never seen to differ.
+- A record or an enum that carries `derive(Copy)` is a copy type. It may only
+  when every field is a copy type; a field that is not is `E1232`, named. Its
+  value is copied for real wherever a name, a field or an element holding it
+  is bound, assigned, passed, put in a list, map or record, or returned, so a
+  write through one copy is never seen through another, at medium and at full.
+  At full it never moves; an `owned` parameter of a copy type takes a copy,
+  with no `move` at medium.
+- Not copy types: `List<T>`, `ListView<T>`, `Map<V>`, `Map<K, V>`, `Set<T>`, `Channel<T>`, and every
+  record and enum without `derive(Copy)`.
+
+**A medium file calling a full function.** Strength belongs to a file, so a
+call crosses strengths where a medium file calls a function of a full module
+it `use`s (`plan.take(xs)`, or `take(xs)` after `use tools.plan.{take}`).
+
+- The value is **lent**, as `borrow`: the medium caller keeps it after the
+  call. This is so for a full parameter written `borrow` and for one written
+  with no mode.
+- A parameter the full function takes **`owned`** takes the value only when
+  the call says so: `move xs` gives it away, and `xs` is gone after the call
+  (a later use is `E1501`, a use after a branch that moved it `E1503`, as at
+  full); `xs.copy()` gives a copy and keeps `xs`. A bare name of a non-copy
+  value there is `E1502`, with a hint naming both. A value made at the call
+  (a literal, another call's result) and a copy type need neither.
+- **Only what the caller can give.** A part of a value the caller holds, a
+  field or an element at any depth (`plan.take(r.items)`, `plan.take(xs[0])`),
+  given to an `owned` parameter is `E1502` at medium and at full: the caller
+  still reaches it through `r` or `xs`, and a part cannot be moved out of what
+  holds it, so the way is `.copy()`. A non-copy name put inside a list, map
+  or record written at the call (`plan.nest([xs])`) is `E1502` at medium (put
+  a copy in it); at full, putting a name in a literal is already a move.
+- **Called by name only.** A function type carries no parameter modes, so a
+  function with an `owned` parameter cannot be a function value: binding it
+  (`stick f = plan.take`), passing it (`apply(plan.take, xs)`) or writing it
+  anywhere but as the callee of a call is `E1502`, at medium and at full. A
+  function value that calls it by name says what it gives:
+  `pack(v) => plan.take(v.copy())`. A function whose parameters are `borrow`
+  or plain is a value like any other.
+- `move` is a full word: in a medium file it is written only as the argument
+  of an `owned` parameter. Anywhere else it is `E1101`.
+- **Not covered, and why.** A mild file that `use`s a full module is not
+  checked at the call: mild is CigScript, and the value is shared. A field or
+  element written *inside* a literal given to `owned` (`plan.nest([r.items])`)
+  is not judged at medium, because the ownership check does not see element
+  types and would otherwise refuse copy-type fields too. Going the other way,
+  a value crossing from full into medium is copied or wrapped by the run time
+  ([Memory](#memory)).
+
+```cigar tools/plan.cigar
+strength full
+pub pull take(owned xs: List<Int>) -> Int {
+  snuff xs.len()
+}
+pub pull look(borrow xs: List<Int>) -> Int {
+  snuff xs.len()
+}
+```
+
+```cigar
+strength medium
+use tools.plan
+
+stick xs: List<Int> = [1, 2]
+exhale plan.look(xs)
+exhale plan.take(xs.copy())
+exhale plan.take(move xs)
+```
+
+```cigar tools/plan.cigar
+strength full
+pub pull take(owned xs: List<Int>) -> Int {
+  snuff xs.len()
+}
+```
+
+```cigar
+# expect: E1502
+strength medium
+use tools.plan
+
+stick xs: List<Int> = [1, 2]
+exhale plan.take(xs)
+```
 
 ## Memory
 

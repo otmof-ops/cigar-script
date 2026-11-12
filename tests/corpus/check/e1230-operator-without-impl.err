@@ -1,0 +1,2 @@
+E1230
+`Vec2` doesn't implement `Add`, which `+` needs

@@ -1,0 +1,10 @@
+strength medium
+use boundary.plan
+
+# A full function that borrows, or takes its parameter plainly, is lent
+# the value: the medium caller keeps it.
+stick xs: List<Int> = [1, 2]
+exhale plan.look(xs)
+exhale plan.plain(xs)
+exhale plan.look(xs)
+exhale xs.len()

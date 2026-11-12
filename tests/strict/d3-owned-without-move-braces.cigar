@@ -1,0 +1,5 @@
+strength medium
+use boundary.plan.{take}
+
+stick xs = [1, 2]
+exhale take(xs)

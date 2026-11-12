@@ -110,3 +110,61 @@ docs/LANGUAGE.md ("Types, values and checks"):
 18. **`attempt(call)` of a plain-text cough** gives `Err` of cig's cough map; the
     corpus reads `e.message`, never prints the map (it carries a line number).
 19. **`?` and `?.`**: `f()?.x` is safe navigation. The corpus writes `(f()?).x`.
+
+## Bounds on type parameters (#38, constraints)
+
+| file | what it holds |
+|---|---|
+| `check/e1230-bound-not-implemented` | `max<T: Ord>` given a record with no `impl Ord` |
+| `check/e1230-where-clause` | the same through `where T: Show` |
+| `check/e1230-second-bound` | `T: Ord + Show`, with only the `impl Ord` written |
+| `check/e1230-caller-type-parameter` | an unbounded `U` passed on to a `T: Ord` |
+| `check/e1313-method-not-in-bound` | a method on a `T` that its bound does not declare |
+| `check/e1202-bound-not-an-interface` | a bound that names no interface |
+| `run/generic-bounded` | the bound's methods on a `T`, a bounded call inside a `where` function, and dispatch by value |
+
+## Generic implementations and default methods (#38)
+
+| file | what it holds |
+|---|---|
+| `check/e1231-overlap` | `impl Show for List<Int>` and `impl<T> Show for List<T>` |
+| `check/e1231-same-type-twice` | one `impl` written twice |
+| `check/e1231-orphan-built-in` | a module's interface implemented for `Int` |
+| `check/e1231-orphan-module-record` | a module's interface implemented for the module's record |
+| `check/e1230-blanket-bound` | `impl<T: Show> Show for List<T>` on a list of a record without `Show` |
+| `run/generic-impl-blanket` | a blanket `impl` for `List<Point>` and `List<List<Point>>` |
+| `run/default-method` | a default method used, overridden, and called through a bounded `T` |
+| `run/dispatch-by-element-type` | `List<Int>` and `List<Text>` impls picked by the elements of an `Any` |
+
+## The standard interfaces, operators and `derive` (#38)
+
+| file | what it holds |
+|---|---|
+| `run/operators-on-records` | `+`, `-x`, `==`, `!=`, `<`, `>=` and `[k]` on records; a bounded `T`; built-in operators unchanged |
+| `run/standard-interfaces-built-in` | bounded functions over numbers, text and lists through the prelude's impls |
+| `check/e1230-operator-without-impl` | `+` on a record with no `impl Add` |
+| `check/e1230-comparison-without-ord` | `<` on a record with no `impl Ord` |
+| `check/e1230-operator-on-bounded-t` | `+` on a `T` bounded only by `Show` |
+| `check/e1231-standard-impl-for-built-in` | `impl Eq for Int` beside the prelude's |
+| `run/derive-standard` | every standard derive on a record and an enum, field defaults, `Point.default()` |
+| `run/derive-copy` | a copy record bound, passed, given `owned`, and nested, at full |
+| `check/e1232-field-without-impl`, `e1232-nested-record` | a field that does not implement the derived interface |
+| `check/e1232-copy-with-list-field` | `derive(Copy)` with a list field |
+| `check/e1232-enum-default` | `derive(Default)` on an enum |
+| `check/e1201-field-default` | a default that does not fit its field |
+
+## Maps with keys that are not text, sets, and `derive(Json)` (#38)
+
+| file | what it holds |
+|---|---|
+| `run/records-as-map-keys` | `Map<Point, Text>` and `Map<Int, Text>`: set, replace, read, remove, iterate (and change while iterating), show |
+| `run/set-operations` | `Set<Int>` and `Set<Point>`: add, remove, has, items, union, intersection, difference |
+| `check/e1230-map-key-without-hash` | a key type with no `Hash` |
+| `check/e1230-set-element-without-eq` | an element type with `Hash` and no `Eq` |
+| `check/e1201-keyed-map-written-out` | a `Map<Int, Text>` written out with entries |
+| `check/e1201-map-key-type` | a key of the wrong type |
+| `check/e1215-set-through-stick` | `add` on a `stick` set |
+| `run/derive-json` | a round trip through `to_json` and `from_json`, defaults, `lenient`, and every refusal `from_json` gives |
+| `check/e1232-json-field-without-json`, `e1232-json-set-field` | a field with no JSON form |
+| `check/e1202-json-option` | `derive(Json(...))` with an option other than `lenient` |
+| `check/e1201-from-json-not-text` | `from_json` given a number |
