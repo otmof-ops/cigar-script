@@ -32,8 +32,8 @@ issue behind each step. It changes as the work does.
 | **11. calling Rust and C** | `foreign` blocks and how the burn rule applies | [#5](https://github.com/otmof-ops/cigar-script/issues/5) | not built |
 | **12. running** | `cigar run`: check, then run as a cig program, with plans, journals and rollback | | **built** |
 | **13. carton** | packages, with no install scripts by design | [#15](https://github.com/otmof-ops/cigar-script/issues/15) | not built |
-| **14. the language server** | `cigar-lsp`, a formatter, editor extensions | [#16](https://github.com/otmof-ops/cigar-script/issues/16) | not built |
-| **15. benchmarks** | each strength's checking cost, the superset no slower than CigScript, what types buy | [#17](https://github.com/otmof-ops/cigar-script/issues/17) | started: `bench/bench.toml` measures the checker; the other groups come with the features they measure |
+| **14. the language server** | `cigar-lsp`, `cigar fmt`, editor extensions | [#16](https://github.com/otmof-ops/cigar-script/issues/16) | **built**: `cigar fmt` (idempotent, over cigscript's lexer), `cigar-lsp` (LSP over stdio, from the checker's own crates), the tree-sitter grammar and the VS Code extension are in `editors/`. Not published to a marketplace yet |
+| **15. benchmarks** | each strength's checking cost, the superset no slower than CigScript, what types buy | [#17](https://github.com/otmof-ops/cigar-script/issues/17) | **built**: `bench/bench.toml` measures `cigar check` at every strength, the superset against `cig run`, generics-heavy inference and exhaustive `match`, the examples corpus, and today's runtime against the memory decision's three programs. The nightly posts to `bench-history` |
 
 ## What is next
 
@@ -42,7 +42,6 @@ issue behind each step. It changes as the work does.
   `cig explain --layers` (#13), and cross-script reads (#14).
 - Real threads for `parallel`, with the kernel's per-thread journal
   segments. A program written now does not change when they arrive.
-- The experience warning that asks before a file goes to full.
 - Run-time errors inside modules and the lowering's helpers reported where
   they happened.
 - Compiling a `.cigar` file, and the decisions #1 to #5 in final form.

@@ -6,8 +6,28 @@
 All notable changes to CigarScript. The format follows Keep a Changelog; the
 project follows semantic versioning.
 
-## Unreleased
+## 0.1.0 — 2026-11-12
 
+The first release: three strengths of CigarScript (mild, medium and
+most of full), the checker and runner, the formatter, the language
+server, the editor packages, the benchmark suite, releases that ship
+`cigar` and `cigar-lsp` together, and the licensing move to
+FSL-1.1-ALv2.
+
+- **Releases ship `cigar-lsp` beside `cigar`, in one archive per machine
+  (#16).** The `release.yml` workflow runs on a tag `vX.Y.Z` and builds
+  `cigar` and `cigar-lsp` for Linux x86_64 and aarch64 (musl, static),
+  macOS x86_64 and aarch64, and Windows x86_64 (MSVC). Each build is one
+  archive, `cigar-vX.Y.Z-<os>-<arch>.tar.gz`, holding `bin/cigar` and
+  `bin/cigar-lsp` (`.exe` on Windows), with a `.sha256` beside it; the
+  draft release also carries `SHA256SUMS`, build attestations
+  (`actions/attest-build-provenance@v2`), `LICENSE`, `NOTICE` and
+  `THIRD-PARTY-NOTICES.md`. A tag is the only trigger; the workflow checks
+  that the tag matches `Cargo.toml` before it builds, and leaves the release
+  as a DRAFT for a human to read, run the licence gate on, and publish. The
+  installer's manifest reads each archive with a shim for both programs, so
+  an editor that starts `cigar-lsp` from `PATH` gets the server of the cigar
+  the project resolves to (cig-installer#1).
 - **The benchmark suite on `cig bench` (#17).** `bench/bench.toml` measures `cigar
   check` at mild, medium and full on generated programs of 100, 1,000, 10,000 and
   100,000 lines, generics-heavy code and exhaustive `match`, and runs cig's shared

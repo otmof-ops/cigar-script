@@ -20,7 +20,7 @@ jobs:
 
       - name: Check out CigScript (for the superset tests)
         run: |
-          git clone --depth 1 --branch v1.18.0 https://github.com/otmof-ops/cig-script ../CigScript
+          git clone --depth 1 --branch v1.20.0 https://github.com/otmof-ops/cig-script ../CigScript
 
       - name: Install Rust (stable)
         run: |

@@ -9,17 +9,25 @@ program yet; the [roadmap](roadmap.md) says when that comes.
 
 ## 1. Install cigar
 
-`cigar` has no release yet, so today it is built from source, with Rust 1.82
-or newer:
+Three ways. Pick one.
+
+**From the release archive.** Each 0.1.0 release carries one
+`cigar-v0.1.0-<os>-<arch>.tar.gz` per machine, holding `bin/cigar` and
+`bin/cigar-lsp`. Verify the sha256 and the build attestation before you
+run it:
 
 ```sh
-git clone https://github.com/otmof-ops/cigar-script
-cd cigar-script
-cargo build --release
+ver=0.1.0
+asset=cigar-v$ver-linux-x86_64.tar.gz           # or your machine
+gh release download v$ver -R otmof-ops/cigar-script -p "$asset" -p "$asset.sha256"
+sha256sum -c "$asset.sha256"
+gh attestation verify "$asset" -R otmof-ops/cigar-script
+tar -xzf "$asset"
+./bin/cigar --version
 ```
 
-That writes `target/release/cigar`; put it on your `PATH`. Once the first
-release is out, the way to install it is the installer:
+**With `ciginstaller`.** Once carton 1.0.0 is published, the installer
+takes care of the download and the sha256:
 
 ```sh
 ciginstaller install carton
@@ -30,6 +38,17 @@ one). No `ciginstaller` yet? It is at
 <https://github.com/otmof-ops/cig-installer#install>. To remove `cigar`, run
 `ciginstaller uninstall cigar`; that also clears its run cache, the programs
 `cigar run` built, which it makes again when needed.
+
+**From source**, with Rust 1.82 or newer:
+
+```sh
+git clone https://github.com/otmof-ops/cigar-script
+cd cigar-script
+cargo build --release
+```
+
+That writes `target/release/cigar` and `target/release/cigar-lsp`; put them
+on your `PATH`.
 
 ```sh
 $ cigar --version
@@ -349,10 +368,10 @@ file that is not `.cig` or `.cigar`, a bad `--strength`: each `E800` or
 cigar check .
 ```
 
-The job needs `cigar` on its `PATH` first. Until there is a release, build it
-in the job (`cargo build --release`, then `target/release/cigar check .`);
-after, install it with `ciginstaller install carton`, which the installer's
-page shows how to fetch on a runner:
+The job needs `cigar` on its `PATH` first. The lightest way is to download
+the release archive for the runner's platform and verify its sha256; once
+carton 1.0.0 is published, `ciginstaller install carton` does the same with
+one command, which the installer's page shows how to fetch on a runner:
 <https://github.com/otmof-ops/cig-installer#install>.
 
 `cigar check .` checks the `.cig` and `.cigar` files at the top of the

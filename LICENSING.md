@@ -15,9 +15,11 @@ records the history and says where to ask for anything else.
 
 ## The Apache-2.0 period
 
-CigarScript was published on 2026-11-10 under Apache-2.0 and has not had a release. The commit before the licensing change is marked by the tag
+CigarScript was published on 2026-11-10 under Apache-2.0 and had no release
+in that period. The commit before the licensing change is marked by the tag
 `apache-2.0-last`. That grant is permanent for any copy taken in that period.
-On 2026-11-11 GitHub recorded no forks of the repository.
+On 2026-11-11 GitHub recorded no forks of the repository. The first release,
+0.1.0 on 2026-11-12, is under FSL-1.1-ALv2.
 
 ## Terms the license does not give
 
