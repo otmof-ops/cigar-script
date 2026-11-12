@@ -1,0 +1,5 @@
+strength medium
+
+record Blob { n: Int }
+
+roll counts: Map<Blob, Int> = {}

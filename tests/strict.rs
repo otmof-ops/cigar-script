@@ -699,7 +699,7 @@ fn operators_on_records() {
 /// records and enums writes each `impl` field by field (`Ord` lexicographic,
 /// an enum by variant order), field defaults fill a record literal and
 /// `Default`, a bounded `T` uses what was derived, and a field that does not
-/// implement the interface is `E1232`, named. `derive(Json)` is not built.
+/// implement the interface is `E1232`, named.
 #[test]
 fn derive_writes_the_standard_impls() {
     let f = corpus("run/derive-standard.cigar");
@@ -719,11 +719,6 @@ fn derive_writes_the_standard_impls() {
             "check/e1232-enum-default.cigar",
             "E1232",
             "no default variant",
-        ),
-        (
-            "check/e1102-derive-json.cigar",
-            "E1102",
-            "`derive(Json)` is not built yet",
         ),
         (
             "check/e1201-field-default.cigar",
@@ -795,5 +790,112 @@ fn explain_derive_prints_the_impls() {
         "_cg_impl_Ord_Point_cmp",
     ] {
         assert!(text.contains(want), "{want} missing from:\n{text}");
+    }
+}
+
+/// #38, section 2: `Map<Point, Text>` with `derive(Hash, Eq)` on the record,
+/// and `Map<Int, Text>`: entries set, replaced, read, removed and iterated,
+/// keys read back as the keys themselves, a map changed while it is
+/// iterated behaving as a cig map does, and `Map<Text, V>` unchanged. A key
+/// type without `Hash` or `Eq` is `E1230`; a `Map<K, V>` written out with
+/// entries, and a key of the wrong type, are `E1201`.
+#[test]
+fn records_as_map_keys() {
+    let f = corpus("run/records-as-map-keys.cigar");
+    assert_eq!(first_error(&f), None);
+    assert_eq!(
+        run_file(&f),
+        std::fs::read_to_string(corpus("run/records-as-map-keys.out")).unwrap()
+    );
+    for (rel, code, part) in [
+        (
+            "check/e1230-map-key-without-hash.cigar",
+            "E1230",
+            "`Blob` doesn't implement `Hash`, which a `Map` key needs",
+        ),
+        (
+            "check/e1201-keyed-map-written-out.cigar",
+            "E1201",
+            "starts empty",
+        ),
+        ("check/e1201-map-key-type.cigar", "E1201", "expected `Int`"),
+    ] {
+        let (c, msg) = first_error(&corpus(rel)).unwrap_or_else(|| panic!("{rel} checks"));
+        assert_eq!(c, code, "{rel}: {msg}");
+        assert!(msg.contains(part), "{rel}: {msg}");
+    }
+}
+
+/// #38, section 2: `Set<T>` holds each value once (records by their `Hash`
+/// and `Eq`), with `add`, `remove`, `has`, `len`, `items`, `union`,
+/// `intersection` and `difference`; a loop over a set changed inside it reads
+/// the elements as they were; an element type without `Eq` is `E1230`; and a
+/// `stick` set cannot be added to (`E1215`).
+#[test]
+fn sets_hold_each_value_once() {
+    let f = corpus("run/set-operations.cigar");
+    assert_eq!(first_error(&f), None);
+    assert_eq!(
+        run_file(&f),
+        std::fs::read_to_string(corpus("run/set-operations.out")).unwrap()
+    );
+    for (rel, code, part) in [
+        (
+            "check/e1230-set-element-without-eq.cigar",
+            "E1230",
+            "which a `Set` element needs",
+        ),
+        ("check/e1215-set-through-stick.cigar", "E1215", "`.add`"),
+    ] {
+        let (c, msg) = first_error(&corpus(rel)).unwrap_or_else(|| panic!("{rel} checks"));
+        assert_eq!(c, code, "{rel}: {msg}");
+        assert!(msg.contains(part), "{rel}: {msg}");
+    }
+}
+
+/// #38, section 2: `derive(Json)`. `to_json` and `from_json` round-trip a
+/// record with nested records, lists, maps, optionals and enums; a field
+/// default fills a missing key; `from_json` gives `Err` naming the path of
+/// the first mismatch (`value.tags[0]`), an unknown key (refused unless
+/// `derive(Json(lenient))`), a missing key, an unknown variant and text that
+/// is not JSON. A field with no JSON form is `E1232`.
+#[test]
+fn derive_json_round_trips() {
+    let f = corpus("run/derive-json.cigar");
+    assert_eq!(first_error(&f), None);
+    let out = run_file(&f);
+    assert_eq!(
+        out,
+        std::fs::read_to_string(corpus("run/derive-json.out")).unwrap()
+    );
+    for want in [
+        "\ntrue\n",
+        "retries: 3",
+        "E1210 value.retries should be Int and is Text",
+        "E1206 value.extra",
+        "E1205 value.name",
+        "E1210 value.tags[0] should be Text",
+        "E1207 value.shape",
+        "Loose { a: 1 }",
+    ] {
+        assert!(out.contains(want), "{want} missing from:\n{out}");
+    }
+    for (rel, code, part) in [
+        (
+            "check/e1232-json-field-without-json.cigar",
+            "E1232",
+            "no JSON form",
+        ),
+        ("check/e1232-json-set-field.cigar", "E1232", "`Set<Int>`"),
+        ("check/e1202-json-option.cigar", "E1202", "`lenient` only"),
+        (
+            "check/e1201-from-json-not-text.cigar",
+            "E1201",
+            "expected `Text`",
+        ),
+    ] {
+        let (c, msg) = first_error(&corpus(rel)).unwrap_or_else(|| panic!("{rel} checks"));
+        assert_eq!(c, code, "{rel}: {msg}");
+        assert!(msg.contains(part), "{rel}: {msg}");
     }
 }

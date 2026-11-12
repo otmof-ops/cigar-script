@@ -1,3 +1,0 @@
-strength medium
-
-record Config derive(Json) { name: Text }

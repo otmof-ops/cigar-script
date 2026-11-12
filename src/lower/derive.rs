@@ -20,8 +20,8 @@ use super::{impl_fn_name, L, T};
 use crate::types::{At, ImplDecl, Ty};
 
 /// What `derive` takes: the standard interfaces it writes, and `Copy`.
-pub const DERIVABLE: [&str; 8] = [
-    "Eq", "Ord", "Hash", "Show", "Debug", "Default", "Clone", "Copy",
+pub const DERIVABLE: [&str; 9] = [
+    "Eq", "Ord", "Hash", "Show", "Debug", "Default", "Clone", "Copy", "Json",
 ];
 
 impl L<'_> {
@@ -43,15 +43,22 @@ impl L<'_> {
                 } else {
                     k
                 };
-                if n == "Json" {
-                    self.err_hint(
-                        "E1102",
-                        "`derive(Json)` is not built yet (otmof-ops/cigar-script#38)",
-                        at.start,
-                        self.sp(end).end,
-                        "write `to_json` and `from_json` by hand until it is",
-                    );
-                } else if !DERIVABLE.contains(&n.as_str()) {
+                if n == "Json" && end > k {
+                    // `Json(lenient)`: unknown keys are read past (#38).
+                    match self.ident(k + 2) {
+                        Some(o) if o == "lenient" && end == k + 3 => {
+                            out.push(("Json(lenient)".to_string(), at));
+                        }
+                        _ => self.err_hint(
+                            "E1202",
+                            "`derive(Json(...))` takes `lenient` only",
+                            at.start,
+                            self.sp(end).end,
+                            "write `derive(Json)` to refuse unknown keys, or `derive(Json(lenient))` to read past them",
+                        ),
+                    }
+                }
+                if !DERIVABLE.contains(&n.as_str()) {
                     self.err_hint(
                         "E1202",
                         format!("`{n}` cannot be derived"),
@@ -150,6 +157,31 @@ impl L<'_> {
         true
     }
 
+    /// `Config.from_json(text)` (#38): the type's reader, written in place of
+    /// `Config.from_json`.
+    pub(super) fn type_from_json(&mut self, j: usize, name: &str) -> bool {
+        let derives = self
+            .prog
+            .records
+            .get(name)
+            .map(|r| r.derives.clone())
+            .or_else(|| self.prog.enums.get(name).map(|e| e.derives.clone()))
+            .unwrap_or_default();
+        if !(matches!(self.k(j + 1), T::Dot)
+            && self.is_word(j + 2, "from_json")
+            && matches!(self.k(j + 3), T::LParen)
+            && derives.iter().any(|(i, _)| i == "Json"))
+        {
+            return false;
+        }
+        self.e.replace(
+            self.sp(j).start,
+            self.sp(j + 2).end,
+            format!("_cg_json_from_{name}"),
+        );
+        true
+    }
+
     /// The type an `impl` for the record or enum `name` is written for: its
     /// own type parameters as they are declared.
     fn pattern_of(&self, name: &str) -> Ty {
@@ -187,6 +219,7 @@ impl L<'_> {
     pub(super) fn derive_impls(&mut self) {
         let mut made: Vec<(ImplDecl, String)> = Vec::new();
         let mut copies = false;
+        let mut json_from: Vec<String> = Vec::new();
         for r in self.prog.records.values() {
             let me = self.pattern_of(&r.name);
             for (iface, at) in &r.derives {
@@ -224,6 +257,10 @@ impl L<'_> {
                         format!("{{ {b}snuff out }}")
                     }
                     "Show" | "Debug" => "{ snuff _cg_show(self) }".to_string(),
+                    "Json" => {
+                        json_from.push(r.name.clone());
+                        "{ snuff json.stringify(_cg_json_out(self)) }".to_string()
+                    }
                     "Default" => {
                         let vals: Vec<String> = r
                             .fields
@@ -296,6 +333,10 @@ impl L<'_> {
                         ))
                     ),
                     "Show" | "Debug" => "{ snuff _cg_show(self) }".to_string(),
+                    "Json" => {
+                        json_from.push(e.name.clone());
+                        "{ snuff json.stringify(_cg_json_out(self)) }".to_string()
+                    }
                     "Clone" => "{ snuff self.copy() }".to_string(),
                     // `Default` on an enum: the checker says why not (E1232).
                     _ => continue,
@@ -318,6 +359,23 @@ impl L<'_> {
                 .push((im.for_ty.to_string(), im.interface.clone(), text.clone()));
             self.appended.push_str(&text);
             self.prog.impls.push(im);
+        }
+        // `Config.from_json(text)`: a `Result` of the value, or the path of
+        // the first mismatch.
+        for name in json_from {
+            let d = if self.prog.enums.contains_key(&name) && !self.prog.records.contains_key(&name)
+            {
+                "enum"
+            } else {
+                "record"
+            };
+            let text = format!(
+                "pull _cg_json_from_{name}(text) {{ try {{ snuff _cg_Result_Ok(_cg_json_in(json.parse(text), {{k: \"{d}\", name: \"{name}\"}}, \"value\")) }} ashtray e {{ if type_of(e) == \"map\" and e.has(\"message\") {{ snuff _cg_Result_Err(e.message) }}; snuff _cg_Result_Err(str(e)) }} }}\n"
+            );
+            self.prog
+                .derived
+                .push((name.clone(), "Json.from_json".into(), text.clone()));
+            self.appended.push_str(&text);
         }
         if copies {
             // A copy type's value is copied where it is bound or passed: its

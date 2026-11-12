@@ -1,0 +1,10 @@
+{"name":"app","retries":5,"tags":["a","b"],"limits":{"cpu":2},"note":null,"inner":{"tag":"x"},"shape":{"circle":{"r":1.5}},"shapes":["dot",{"square":{"s":2.0}}]}
+true
+Result.Ok(value: Config { name: "x", retries: 3, tags: [], limits: {}, note: "n", inner: Inner { tag: "t" }, shape: Shape.dot, shapes: [] })
+Result.Err(error: "E1210 value.retries should be Int and is Text \"three\"")
+Result.Err(error: "E1206 value.extra: `Config` has no field `extra`")
+Result.Err(error: "E1205 value.name: `Config` is missing the field `name`")
+Result.Err(error: "E1210 value.tags[0] should be Text and is Int 1")
+Result.Err(error: "E1207 value.shape: `Shape` has no variant `hexagon`")
+Result.Err(error: "json.parse: expected ident at line 1 column 2")
+Result.Ok(value: Loose { a: 1 })

@@ -1,0 +1,5 @@
+strength medium
+
+record Tag derive(Hash) { name: Text }
+
+roll tags: Set<Tag> = Set.new()

@@ -626,7 +626,12 @@ pub fn run_derive(ctx: &Ctx, spec: &str) -> i32 {
         return exit::OK;
     }
     for (t, i, text) in written {
-        println!("{}", ctx.bold(&format!("impl {i} for {t}")));
+        let head = if i == "Json.from_json" {
+            format!("{t}.from_json (derive(Json))")
+        } else {
+            format!("impl {i} for {t}")
+        };
+        println!("{}", ctx.bold(&head));
         println!("  {}", text.trim_end());
         println!();
     }

@@ -195,7 +195,7 @@ type Moved = HashMap<String, Gone>;
 fn is_heavy_ty(t: &Ty) -> bool {
     matches!(
         t,
-        Ty::List(_) | Ty::Map(_) | Ty::Record(..) | Ty::Channel(_)
+        Ty::List(_) | Ty::Map(_) | Ty::KeyMap(..) | Ty::Set(_) | Ty::Record(..) | Ty::Channel(_)
     )
 }
 

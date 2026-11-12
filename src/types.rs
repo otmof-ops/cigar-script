@@ -52,6 +52,11 @@ pub enum Ty {
     ListView(Box<Ty>),
     /// Keys are text in cig; `Map<V>` and `Map<Text, V>` are the same.
     Map(Box<Ty>),
+    /// `Map<K, V>` whose keys are not text (#38): `K` implements `Hash` and
+    /// `Eq`, and the map is lowered through `K`'s `hash()`.
+    KeyMap(Box<Ty>, Box<Ty>),
+    /// `Set<T>` (#38): `T` implements `Hash` and `Eq`.
+    Set(Box<Ty>),
     /// `T?`: a `T` or `null`.
     Opt(Box<Ty>),
     /// A function: parameters, result.
@@ -145,6 +150,8 @@ impl fmt::Display for Ty {
             Ty::List(t) => write!(f, "List<{t}>"),
             Ty::ListView(t) => write!(f, "ListView<{t}>"),
             Ty::Map(t) => write!(f, "Map<{t}>"),
+            Ty::KeyMap(k, v) => write!(f, "Map<{k}, {v}>"),
+            Ty::Set(t) => write!(f, "Set<{t}>"),
             Ty::Opt(t) => write!(f, "{t}?"),
             Ty::Fn(ps, r) => {
                 write!(f, "(")?;
@@ -347,6 +354,8 @@ pub fn subst_self(t: &Ty, with: &Ty) -> Ty {
         Ty::List(a) => Ty::List(Box::new(go(a))),
         Ty::ListView(a) => Ty::ListView(Box::new(go(a))),
         Ty::Map(a) => Ty::Map(Box::new(go(a))),
+        Ty::KeyMap(k, v) => Ty::KeyMap(Box::new(go(k)), Box::new(go(v))),
+        Ty::Set(a) => Ty::Set(Box::new(go(a))),
         Ty::Opt(a) => Ty::Opt(Box::new(go(a))),
         Ty::Channel(a) => Ty::Channel(Box::new(go(a))),
         Ty::Fn(ps, r) => Ty::Fn(ps.iter().map(go).collect(), Box::new(go(r))),
@@ -408,7 +417,11 @@ pub const BUILTIN_TYPES: &[(&str, &str)] = &[
         "ListView",
         "ListView<T>: a list read through, never written (covariant)",
     ),
-    ("Map", "Map<V> or Map<Text, V>: text keys to V"),
+    (
+        "Map",
+        "Map<V> or Map<Text, V>: text keys to V; Map<K, V>: keys of a Hash + Eq type",
+    ),
+    ("Set", "Set<T>: values of a Hash + Eq type, each once"),
     ("Channel", "Channel<T>: a channel of T (full)"),
     (
         "Result",

@@ -16,6 +16,30 @@ use super::{Ck, Resolution};
 use crate::types::{At, Ty};
 use cigscript::syntax::ast::{Expr, ExprKind};
 
+/// Does a value of type `t` have a JSON form: a scalar, text, `null`, a list,
+/// a text-keyed map or an optional of one, or a record or enum that carries
+/// `derive(Json)`?
+fn json_form(prog: &crate::types::Program, t: &Ty, generics: &[String]) -> bool {
+    match t {
+        Ty::Any
+        | Ty::Null
+        | Ty::Bool
+        | Ty::Int
+        | Ty::Float
+        | Ty::Text
+        | Ty::Path
+        | Ty::Sized(_) => true,
+        Ty::List(a) | Ty::ListView(a) | Ty::Map(a) | Ty::Opt(a) => json_form(prog, a, generics),
+        Ty::Param(p) => generics.contains(p),
+        Ty::Record(n, _) | Ty::Enum(n, _) => {
+            let says = |d: &[(String, At)]| d.iter().any(|(i, _)| i == "Json");
+            prog.records.get(n).is_some_and(|r| says(&r.derives))
+                || prog.enums.get(n).is_some_and(|e| says(&e.derives))
+        }
+        _ => false,
+    }
+}
+
 impl Ck<'_> {
     /// `E1232` for every derive a field cannot have.
     pub(super) fn check_derives(&mut self) {
@@ -41,8 +65,12 @@ impl Ck<'_> {
                         Ty::Opt(i) => i.as_ref(),
                         t => t,
                     };
-                    let ok = if iface == "Copy" {
+                    let ok = if iface == "Json(lenient)" {
+                        true
+                    } else if iface == "Copy" {
                         prog.copy_type(t)
+                    } else if iface == "Json" {
+                        json_form(prog, t, generics)
                     } else if matches!(inner, Ty::Param(p) if generics.contains(p)) {
                         true
                     } else {
@@ -51,6 +79,8 @@ impl Ck<'_> {
                     if !ok {
                         let why = if iface == "Copy" {
                             "which is not a copy type".to_string()
+                        } else if iface == "Json" {
+                            "which has no JSON form".to_string()
                         } else {
                             format!("which doesn't implement `{iface}`")
                         };

@@ -9,6 +9,7 @@
 mod bounds;
 mod derive;
 mod impls;
+mod keyed;
 pub mod lint;
 mod operators;
 pub mod stdlib;
@@ -177,6 +178,8 @@ fn norm_ty(t: &Ty, p: &types::Program) -> Ty {
         Ty::List(a) => Ty::List(Box::new(go(a))),
         Ty::ListView(a) => Ty::ListView(Box::new(go(a))),
         Ty::Map(a) => Ty::Map(Box::new(go(a))),
+        Ty::KeyMap(k, v) => Ty::KeyMap(Box::new(go(k)), Box::new(go(v))),
+        Ty::Set(a) => Ty::Set(Box::new(go(a))),
         Ty::Opt(a) => Ty::Opt(Box::new(go(a))),
         Ty::Channel(a) => Ty::Channel(Box::new(go(a))),
         Ty::Fn(ps, r) => Ty::Fn(ps.iter().map(go).collect(), Box::new(go(r))),
@@ -272,6 +275,8 @@ fn invariant(from: &Ty, to: &Ty) -> bool {
         (_, Any) => false,
         (Opt(a), Opt(b)) => invariant(a, b),
         (List(a), List(b)) | (Map(a), Map(b)) | (Channel(a), Channel(b)) => invariant(a, b),
+        (Set(a), Set(b)) => invariant(a, b),
+        (KeyMap(ka, va), KeyMap(kb, vb)) => invariant(ka, kb) && invariant(va, vb),
         (ListView(a), ListView(b)) => invariant(a, b),
         (Fn(pa, ra), Fn(pb, rb)) => {
             pa.len() == pb.len()
@@ -326,6 +331,11 @@ fn fits(from: &Ty, to: &Ty, cov: bool) -> bool {
         (Bool, Bool) => true,
         (List(a) | ListView(a), ListView(b)) => fits(a, b, cov),
         (List(a), List(b)) | (Map(a), Map(b)) | (Channel(a), Channel(b)) => args(a, b),
+        (Set(a), Set(b)) => args(a, b),
+        (KeyMap(ka, va), KeyMap(kb, vb)) => args(ka, kb) && args(va, vb),
+        // `{}` written out starts a `Map<K, V>` (a map with entries is refused
+        // where it is bound).
+        (Map(_), KeyMap(..)) => cov,
         (Fn(pa, ra), Fn(pb, rb)) => {
             pa.len() == pb.len()
                 && pa.iter().zip(pb).all(|(a, b)| param_fits(b, a, cov))
@@ -346,6 +356,9 @@ fn fits(from: &Ty, to: &Ty, cov: bool) -> bool {
 fn is_fresh(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::List(_) | ExprKind::Map(_) => true,
+        ExprKind::Call { callee, .. } => {
+            matches!(&callee.kind, ExprKind::Ident(f) if f == "_cg_set_new" || f == "_cg_set_of")
+        }
         ExprKind::Binary {
             op: BinOp::Range, ..
         } => true,
@@ -807,6 +820,15 @@ impl<'a> Ck<'a> {
         match t {
             Ty::List(a) | Ty::ListView(a) | Ty::Map(a) | Ty::Opt(a) | Ty::Channel(a) => {
                 self.validate_ty(a, at, span, generics)
+            }
+            Ty::KeyMap(k, v) => {
+                self.validate_ty(k, at, span, generics);
+                self.validate_ty(v, at, span, generics);
+                self.key_type_ok(k, "a `Map` key", at, span);
+            }
+            Ty::Set(a) => {
+                self.validate_ty(a, at, span, generics);
+                self.key_type_ok(a, "a `Set` element", at, span);
             }
             Ty::Fn(ps, r) => {
                 for p in ps {
@@ -1307,6 +1329,21 @@ impl<'a> Ck<'a> {
                         false,
                     )
                 };
+                // A `Map<K, V>` starts empty: its entries go in through
+                // `m[k] = v`, which hashes the key (#38).
+                if let (Ty::KeyMap(..), ExprKind::Map(entries)) = (&ty, &value.kind) {
+                    if !entries.is_empty() {
+                        self.err(
+                            "E1201",
+                            format!("a `{ty}` written out starts empty: `{{}}`"),
+                            value.span,
+                            Some(
+                                "add each entry with `m[k] = v`; a map written out has text keys"
+                                    .into(),
+                            ),
+                        );
+                    }
+                }
                 // A copy record bound from a place is a copy (#22 D3 (i)).
                 let given = self.unwrap_check(value).map(|(i, _)| i).unwrap_or(value);
                 self.copy_out(given, &ty);
@@ -1355,7 +1392,8 @@ impl<'a> Ck<'a> {
             }
             Stmt::Exhale { values, .. } => {
                 for v in values {
-                    self.infer(v);
+                    let t = self.infer(v);
+                    self.keyed_show(v, &t);
                 }
             }
             Stmt::Cough { value, .. } => {
@@ -1420,7 +1458,9 @@ impl<'a> Ck<'a> {
             } => {
                 self.reset_narrowing(&assigned(&body.stmts));
                 let it = self.infer(iter);
+                let keyed = self.keyed_iter(iter, &strip_opt(&it));
                 let el = match strip_opt(&it) {
+                    _ if keyed.is_some() => keyed.unwrap_or(Ty::Any),
                     Ty::List(t) | Ty::ListView(t) => *t,
                     Ty::Map(_) => Ty::Text,
                     Ty::Text | Ty::Path => Ty::Text,
@@ -1678,6 +1718,10 @@ impl<'a> Ck<'a> {
             }
             AssignTarget::Index { object, index } => {
                 let ot = self.infer(object);
+                // `m[k] = v` on a `Map<K, V>` (#38).
+                if self.keyed_assign(object, index, value, op, span, &strip_opt(&ot), &vt) {
+                    return;
+                }
                 self.infer(index);
                 self.must_narrow(object, &ot, "indexed", span);
                 if let Ty::ListView(_) = strip_opt(&ot) {
@@ -1911,6 +1955,10 @@ impl<'a> Ck<'a> {
                 let ot = self.infer(object);
                 self.infer(index);
                 self.must_narrow(object, &ot, "indexed", e.span);
+                // `m[k]` on a `Map<K, V>` (#38).
+                if let Some(t) = self.keyed_index(e, object, index, &strip_opt(&ot)) {
+                    return t;
+                }
                 // `x[k]` on a record: `Index` (#38).
                 if let Some(t) = self.user_index(e, object, index, &ot) {
                     return t;
@@ -2169,6 +2217,35 @@ impl<'a> Ck<'a> {
                         }
                     }
                     return Ty::Bool;
+                }
+                if let Some(t) = self.set_constructor(name, args, span) {
+                    return t;
+                }
+                // `Config.from_json(text)` (#38): `Result<Config, Text>`.
+                if let Some(ty) = name.strip_prefix("_cg_json_from_") {
+                    for a in args {
+                        let t = self.infer(a);
+                        self.expect(
+                            a,
+                            &t,
+                            &Ty::Text,
+                            "E1201",
+                            format!("`{ty}.from_json` reads JSON text"),
+                        );
+                    }
+                    let me = if prog.enums.contains_key(ty) && !prog.records.contains_key(ty) {
+                        Ty::Enum(ty.to_string(), Vec::new())
+                    } else {
+                        Ty::Record(ty.to_string(), Vec::new())
+                    };
+                    return Ty::Enum("Result".into(), vec![me, Ty::Text]);
+                }
+                // `exhale m` and `str(m)`, lowered through `_cg_show`: a keyed
+                // map or a set shows its keys (#38).
+                if name == "_cg_show" && args.len() == 1 {
+                    let t = self.infer(&args[0]);
+                    self.keyed_show(&args[0], &t);
+                    return Ty::Text;
                 }
                 if name == "_cg_try" && args.len() == 1 {
                     return self.try_operator(&args[0]);
@@ -2886,6 +2963,10 @@ impl<'a> Ck<'a> {
             self.must_narrow(receiver, &rt, &format!("`.{name}` is called on it"), span);
         }
         let recv = strip_opt(&rt);
+        // A `Map<K, V>` or a `Set<T>` (#38).
+        if let Some(t) = self.keyed_method(receiver, name, args, safe, span, &recv) {
+            return if safe { opt(t) } else { t };
+        }
         let bounded = match &recv {
             Ty::Param(p) => self.bounds_of(p).cloned().map(|b| (p.clone(), b)),
             _ => None,

@@ -27,14 +27,16 @@ pub fn apply(text: &str, rs: &[Resolution]) -> Applied {
         .iter()
         .filter(|r| matches!(r, Resolution::Method { .. } | Resolution::Wrap { .. }))
         .collect();
+    // Over the same text, a wrapper goes outside a method call: it wraps the
+    // whole call (`exhale s.union(t)` shows the union).
     opening.sort_by_key(|r| match r {
         Resolution::Method {
             recv_start,
             call_end,
             ..
-        } => (*recv_start, std::cmp::Reverse(*call_end)),
-        Resolution::Wrap { start, end, .. } => (*start, std::cmp::Reverse(*end)),
-        _ => (0, std::cmp::Reverse(0)),
+        } => (*recv_start, std::cmp::Reverse(*call_end), 1),
+        Resolution::Wrap { start, end, .. } => (*start, std::cmp::Reverse(*end), 0),
+        _ => (0, std::cmp::Reverse(0), 0),
     });
     for r in opening {
         match r {

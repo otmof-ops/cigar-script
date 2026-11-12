@@ -8,6 +8,16 @@ project follows semantic versioning.
 
 ## Unreleased
 
+- **Maps with keys that are not text, and sets (#38).** `Map<K, V>` with a
+  key that is not text, and `Set<T>`, for any `Hash + Eq` type (`E1230`
+  otherwise), held in cig maps keyed by `hash()`, with the keys read back as
+  themselves. `Map<V>` and `Map<Text, V>` are cig's maps as before. Tests:
+  `records_as_map_keys`, `sets_hold_each_value_once`.
+- **`derive(Json)` (#38).** `to_json`, and `Type.from_json(text)` giving a
+  `Result` whose `Err` names the path of the first mismatch; unknown keys are
+  refused unless `derive(Json(lenient))`, field defaults fill missing keys,
+  and nested records, lists, maps, optionals and enums round-trip. A field
+  with no JSON form is `E1232`. Test: `derive_json_round_trips`.
 - **The standard interfaces and operators (#38, section 2).** `Eq`, `Ord`,
   `Hash`, `Show`, `Debug`, `Default`, `Clone`, `Add`, `Sub`, `Mul`, `Div`,
   `Rem`, `Neg` and `Index` are in the prelude, with the built-in types' impls
@@ -20,8 +30,7 @@ project follows semantic versioning.
   Default, Clone)` on a record or an enum writes the impls field by field; a
   field that does not implement the interface is the new `E1232`.
   `retries: Int = 3` declares a default a record literal may leave out.
-  `cigar explain --derive file:Type` prints what was written. `derive(Json)`
-  is not built yet (`E1102`). Tests: `derive_writes_the_standard_impls`,
+  `cigar explain --derive file:Type` prints what was written. Tests: `derive_writes_the_standard_impls`,
   `explain_derive_prints_the_impls`.
 - **`derive(Copy)` (#22, D3).** A record or enum that carries it, with every
   field a copy type, is a copy type: binding, passing, storing and returning

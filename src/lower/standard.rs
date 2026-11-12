@@ -63,6 +63,8 @@ pub fn interfaces() -> Vec<InterfaceDecl> {
         ("Clone", sig("clone", true, &[], this())),
         ("Neg", sig("neg", true, &[], this())),
         ("Index", sig("index", true, &[("key", Ty::Any)], Ty::Any)),
+        // What `derive(Json)` writes (#38); the reader is `Type.from_json`.
+        ("Json", sig("to_json", true, &[], Ty::Text)),
     ];
     for (i, m) in ARITH {
         out.push((i, sig(m, true, &other(), this())));
@@ -220,7 +222,7 @@ impl L<'_> {
     /// The standard interfaces this file names and does not declare itself,
     /// with the built-in types' impls and their functions.
     pub(super) fn standard_interfaces(&mut self) {
-        let named: std::collections::BTreeSet<String> = self
+        let mut named: std::collections::BTreeSet<String> = self
             .toks
             .iter()
             .filter_map(|t| match &t.kind {
@@ -228,6 +230,13 @@ impl L<'_> {
                 _ => None,
             })
             .collect();
+        // A `Set` or a map keyed by something other than text needs its keys'
+        // `Hash` and `Eq`, and the functions it is lowered to.
+        if self.writes_keyed() {
+            named.insert("Hash".into());
+            named.insert("Eq".into());
+            self.appended.push_str(super::keyed::KEYED);
+        }
         for iface in interfaces() {
             if !named.contains(&iface.name) || self.prog.interfaces.contains_key(&iface.name) {
                 continue;

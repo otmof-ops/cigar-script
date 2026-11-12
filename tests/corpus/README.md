@@ -151,5 +151,20 @@ docs/LANGUAGE.md ("Types, values and checks"):
 | `check/e1232-field-without-impl`, `e1232-nested-record` | a field that does not implement the derived interface |
 | `check/e1232-copy-with-list-field` | `derive(Copy)` with a list field |
 | `check/e1232-enum-default` | `derive(Default)` on an enum |
-| `check/e1102-derive-json` | `derive(Json)`, not built yet |
 | `check/e1201-field-default` | a default that does not fit its field |
+
+## Maps with keys that are not text, sets, and `derive(Json)` (#38)
+
+| file | what it holds |
+|---|---|
+| `run/records-as-map-keys` | `Map<Point, Text>` and `Map<Int, Text>`: set, replace, read, remove, iterate (and change while iterating), show |
+| `run/set-operations` | `Set<Int>` and `Set<Point>`: add, remove, has, items, union, intersection, difference |
+| `check/e1230-map-key-without-hash` | a key type with no `Hash` |
+| `check/e1230-set-element-without-eq` | an element type with `Hash` and no `Eq` |
+| `check/e1201-keyed-map-written-out` | a `Map<Int, Text>` written out with entries |
+| `check/e1201-map-key-type` | a key of the wrong type |
+| `check/e1215-set-through-stick` | `add` on a `stick` set |
+| `run/derive-json` | a round trip through `to_json` and `from_json`, defaults, `lenient`, and every refusal `from_json` gives |
+| `check/e1232-json-field-without-json`, `e1232-json-set-field` | a field with no JSON form |
+| `check/e1202-json-option` | `derive(Json(...))` with an option other than `lenient` |
+| `check/e1201-from-json-not-text` | `from_json` given a number |

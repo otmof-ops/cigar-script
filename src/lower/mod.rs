@@ -10,6 +10,8 @@
 mod bounds;
 mod derive;
 mod impls;
+mod json;
+mod keyed;
 mod standard;
 pub use impls::SELF;
 pub use standard::{arith_op, ARITH};
@@ -809,7 +811,9 @@ impl<'a> L<'a> {
     /// Does the file write about a `Result`: the word, `Ok(`, `Err(`,
     /// `attempt(`, or a `?` straight after a `)` or `]` (a call's `?`)?
     fn wants_result(&self) -> bool {
-        let named = |n: &str| n == "Result" || n == "Ok" || n == "Err" || n == "attempt";
+        // `derive(Json)` gives `from_json`, whose value is a `Result`.
+        let named =
+            |n: &str| n == "Result" || n == "Ok" || n == "Err" || n == "attempt" || n == "Json";
         let words = self.toks.iter().enumerate().any(|(i, t)| {
             matches!(&t.kind, T::Ident(n) if named(n))
                 && !matches!(
@@ -2275,9 +2279,14 @@ impl<'a> L<'a> {
                             );
                         }
                     }
+                    // `Set.new()`, `Set.of(xs)` (#38).
+                    if self.set_constructor(j) {
+                        j += 3;
+                        continue;
+                    }
                     // `Point.default()` (#38).
                     if (self.record_names.contains(&name) || self.enum_names.contains(&name))
-                        && self.type_default(j, &name)
+                        && (self.type_default(j, &name) || self.type_from_json(j, &name))
                     {
                         j += 3;
                         continue;
@@ -3838,6 +3847,11 @@ impl<'a> L<'a> {
             "pull _cg_records() {{ snuff {{{}}} }}\n",
             records.join(", ")
         ));
+        // `derive(Json)` (#38): what each type reads, and the reader.
+        if json::any(&self.prog) {
+            text.push_str(&json::specs(&self.prog));
+            text.push_str(json::JSON);
+        }
         // Each record's field types, for the path a boundary failure names.
         let rdescs: Vec<String> = self
             .prog

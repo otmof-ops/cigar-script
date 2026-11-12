@@ -1,0 +1,4 @@
+strength medium
+
+record Plain { n: Int }
+record Wrapper derive(Json) { p: Plain }

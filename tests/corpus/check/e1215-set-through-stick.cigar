@@ -1,0 +1,4 @@
+strength medium
+
+stick s = Set.of([1, 2])
+s.add(3)
