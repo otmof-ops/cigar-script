@@ -1,0 +1,2392 @@
+{
+ "format": 1,
+ "kind": "baseline",
+ "date": "2026-11-13",
+ "product": "cigar",
+ "measured": "cigar 0.1.0 (carton 0.1.0, the released binaries)",
+ "manifest_tree": "main at 3136868",
+ "notes": [],
+ "conditions": {
+  "cpu": "Intel(R) Core(TM) i5-8265U CPU @ 1.60GHz",
+  "cores_physical": 4,
+  "cores_logical": 8,
+  "memory_gib": 7.4,
+  "os": "Parrot Security 7.4 (echo)",
+  "kernel": "7.2.11+parrot7.1-amd64",
+  "governor": "powersave",
+  "power_profile": "balanced",
+  "power": "mains",
+  "filesystem": "btrfs",
+  "storage": "NVMe SSD",
+  "page_cache": "warm (one untimed warm-up per case), except the `cold` group, which drops the page cache before every sample",
+  "machine": "a 2018 laptop: Intel Core i5-8265U (4 cores, 8 threads, 1.6 to 3.9 GHz), 7.4 GiB RAM, NVMe SSD",
+  "rounds": [
+   {
+    "round": "r1",
+    "job": "startup",
+    "date": "2026-11-13T08:33:41+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "0.15 1.09 1.27"
+   },
+   {
+    "round": "r1",
+    "job": "cig",
+    "date": "2026-11-13T08:36:19+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.19 1.18 1.27"
+   },
+   {
+    "round": "r1",
+    "job": "cigo",
+    "date": "2026-11-13T08:37:03+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.05 1.14 1.25"
+   },
+   {
+    "round": "r1",
+    "job": "cigcompile",
+    "date": "2026-11-13T08:37:55+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.02 1.11 1.24"
+   },
+   {
+    "round": "r1",
+    "job": "cigar",
+    "date": "2026-11-13T08:41:32+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.11 1.10 1.20"
+   },
+   {
+    "round": "r1",
+    "job": "installer",
+    "date": "2026-11-13T08:46:33+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.00 1.02 1.13"
+   },
+   {
+    "round": "r1",
+    "job": "compute",
+    "date": "2026-11-13T08:35:15+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.39 1.20 1.29"
+   },
+   {
+    "round": "r1",
+    "job": "instr",
+    "date": "2026-11-13T08:36:13+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.21 1.18 1.27"
+   },
+   {
+    "round": "r2",
+    "job": "startup",
+    "date": "2026-11-13T08:58:14+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "5.21 2.62 1.65"
+   },
+   {
+    "round": "r2",
+    "job": "cig",
+    "date": "2026-11-13T09:00:52+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.32 1.95 1.55"
+   },
+   {
+    "round": "r2",
+    "job": "cigo",
+    "date": "2026-11-13T09:01:38+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.15 1.82 1.52"
+   },
+   {
+    "round": "r2",
+    "job": "cigcompile",
+    "date": "2026-11-13T09:02:30+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.06 1.69 1.49"
+   },
+   {
+    "round": "r2",
+    "job": "cigar",
+    "date": "2026-11-13T09:06:08+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.03 1.34 1.39"
+   },
+   {
+    "round": "r2",
+    "job": "installer",
+    "date": "2026-11-13T09:11:08+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.01 1.14 1.28"
+   },
+   {
+    "round": "r2",
+    "job": "compute",
+    "date": "2026-11-13T08:59:49+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.97 2.19 1.59"
+   },
+   {
+    "round": "r2",
+    "job": "instr",
+    "date": "2026-11-13T09:00:46+00:00",
+    "battery_percent": "77",
+    "power": "mains",
+    "loadavg_at_start": "1.38 1.99 1.55"
+   }
+  ],
+  "versions": {
+   "cig": "cig 1.21.0",
+   "cigo": "cig-orchestrator 1.19.0 (cig 1.21.0)",
+   "cigcompile": "cigcompile 0.4.0 (makes programs for cig 1.21.0)",
+   "cigar": "cigar 0.1.0",
+   "ciginstaller": "ciginstaller 0.1.0",
+   "python3": "Python 3.13.5",
+   "node": "v20.19.2",
+   "go": "go version go1.27.3 linux/amd64",
+   "make": "GNU Make 4.4.1",
+   "bash": "GNU bash, version 5.2.37(1)-release (x86_64-pc-linux-gnu)",
+   "just": "just 1.40.0",
+   "tsc": "Version 4.9.5",
+   "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+   "rustup": "rustup 1.29.3 (edbc831ce 2026-11-02)",
+   "perf": "perf version 7.2.11",
+   "task": "not installed",
+   "mise": "not installed"
+  },
+  "sizes_bytes": {
+   "cig": 15799128,
+   "cigcompile": 16644096,
+   "cigar": 14439720,
+   "cigo": 10609,
+   "cigo orchestrate.cig": 933043,
+   "ciginstaller": 8169728,
+   "shim (cigi-shim)": 455344
+  },
+  "load": "the test laptop ran one job at a time under a lock; nothing else ran during a timing job",
+  "versions_round_2_same": true
+ },
+ "suites": [
+  {
+   "suite": "bench/bench.toml",
+   "harness": "cig bench (cig 1.21.0), --json",
+   "exit_round_1": 0,
+   "exit_round_2": 0,
+   "cases": [
+    {
+     "name": "cigar check: 100 lines at mild",
+     "group": "check-100",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 1.3408318000000001,
+      "p10_ms": 1.3301092,
+      "p90_ms": 1.3569676,
+      "cv": 0.009697211540360125,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13852672,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 1.3614346,
+      "p10_ms": 1.3309576,
+      "p90_ms": 1.4057314,
+      "cv": 0.02191925104934292,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13660160,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0154,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar check: 100 lines at medium",
+     "group": "check-100",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 4.9022576,
+      "p10_ms": 4.8869094,
+      "p90_ms": 4.9349854,
+      "cv": 0.004149297217577721,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13852672,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 4.6946588,
+      "p10_ms": 4.6693376,
+      "p90_ms": 4.7069204000000004,
+      "cv": 0.005403379148213568,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13660160,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0442,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar check: 100 lines at full",
+     "group": "check-100",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 5.1100736,
+      "p10_ms": 5.10481,
+      "p90_ms": 5.135007,
+      "cv": 0.002521016734129394,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13852672,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 4.7349294,
+      "p10_ms": 4.707223,
+      "p90_ms": 4.7570738,
+      "cv": 0.00483471002081324,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13660160,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0792,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar check: 1,000 lines at mild",
+     "group": "check-1k",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 4.5224582,
+      "p10_ms": 4.509226,
+      "p90_ms": 4.554286200000001,
+      "cv": 0.0050656405970444796,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13852672,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 4.2058592,
+      "p10_ms": 4.196768199999999,
+      "p90_ms": 4.2465922,
+      "cv": 0.005241473005423858,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13660160,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0753,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar check: 1,000 lines at medium",
+     "group": "check-1k",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 11.815546399999999,
+      "p10_ms": 11.493407399999999,
+      "p90_ms": 11.9066206,
+      "cv": 0.029053371491799967,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13852672,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 9.995951999999999,
+      "p10_ms": 9.929824,
+      "p90_ms": 10.0371386,
+      "cv": 0.004745141536812481,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13660160,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.182,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar check: 1,000 lines at full",
+     "group": "check-1k",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 11.0803272,
+      "p10_ms": 11.0596414,
+      "p90_ms": 11.113254600000001,
+      "cv": 0.0021647967032672848,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13852672,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 10.0867024,
+      "p10_ms": 10.001365199999999,
+      "p90_ms": 10.118967600000001,
+      "cv": 0.019832491889723726,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13660160,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0985,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar check: 10,000 lines at mild",
+     "group": "check-10k",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 33.754928,
+      "p10_ms": 33.368927,
+      "p90_ms": 34.163954000000004,
+      "cv": 0.011259065046257665,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 13852672,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 30.504315000000002,
+      "p10_ms": 30.225943,
+      "p90_ms": 31.122231,
+      "cv": 0.017968208582073382,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14376960,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1066,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar check: 10,000 lines at medium",
+     "group": "check-10k",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 68.931246,
+      "p10_ms": 67.891613,
+      "p90_ms": 69.203159,
+      "cv": 0.011089381343326807,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 25001984,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 62.278051,
+      "p10_ms": 62.178893,
+      "p90_ms": 66.198317,
+      "cv": 0.042997892673699134,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 24997888,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1068,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar check: 10,000 lines at full",
+     "group": "check-10k",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 72.19270499999999,
+      "p10_ms": 70.977294,
+      "p90_ms": 74.865832,
+      "cv": 0.024264106434242535,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 24997888,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 65.557471,
+      "p10_ms": 65.155885,
+      "p90_ms": 66.260559,
+      "cv": 0.008554822684188982,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 24993792,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1012,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar check: 100,000 lines at mild",
+     "group": "check-100k",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 307.153787,
+      "p10_ms": 293.02749900000003,
+      "p90_ms": 311.931888,
+      "cv": 0.028447992499286364,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 102510592,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 282.152698,
+      "p10_ms": 276.340292,
+      "p90_ms": 297.05141299999997,
+      "cv": 0.03021649559450099,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 102469632,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0886,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar check: 100,000 lines at medium",
+     "group": "check-100k",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 619.712859,
+      "p10_ms": 587.661656,
+      "p90_ms": 628.302382,
+      "cv": 0.03136979764922893,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 168120320,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 571.214261,
+      "p10_ms": 555.288331,
+      "p90_ms": 601.745812,
+      "cv": 0.033707044789844695,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 167948288,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0849,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar check: 100,000 lines at full",
+     "group": "check-100k",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 651.6372289999999,
+      "p10_ms": 604.951904,
+      "p90_ms": 676.815842,
+      "cv": 0.045978581088488873,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 170283008,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 616.429716,
+      "p10_ms": 591.866683,
+      "p90_ms": 666.3541710000001,
+      "cv": 0.053439392837412523,
+      "noisy": true,
+      "samples": 9,
+      "rss_bytes": 168914944,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0571,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar check: 1,000 lines of generics-heavy at medium",
+     "group": "inference",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 29.9330372,
+      "p10_ms": 29.299863799999997,
+      "p90_ms": 30.1777194,
+      "cv": 0.012916407682268032,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 15196160,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 29.285044399999997,
+      "p10_ms": 28.684824599999995,
+      "p90_ms": 29.9676794,
+      "cv": 0.01811013498957772,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 15196160,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0221,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar check: 1,000 lines of generics-heavy at full",
+     "group": "inference",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 30.6463868,
+      "p10_ms": 30.147783800000003,
+      "p90_ms": 30.7050094,
+      "cv": 0.010320541201643463,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 15196160,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 30.825006000000002,
+      "p10_ms": 30.0778212,
+      "p90_ms": 30.859791199999997,
+      "cv": 0.010620149878264828,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 15200256,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0058,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar check: 10,000 lines of generics-heavy at medium",
+     "group": "inference",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 321.270153,
+      "p10_ms": 313.828906,
+      "p90_ms": 330.645246,
+      "cv": 0.02661038739281609,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 98635776,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 322.36478400000004,
+      "p10_ms": 310.74661,
+      "p90_ms": 332.64947,
+      "cv": 0.034627777240329644,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 100995072,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0034,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar check: 10,000 lines of generics-heavy at full",
+     "group": "inference",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 334.153208,
+      "p10_ms": 318.92220599999996,
+      "p90_ms": 337.528586,
+      "cv": 0.026751693041034853,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 100777984,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 326.26671,
+      "p10_ms": 319.520815,
+      "p90_ms": 334.69190599999996,
+      "cv": 0.02046918068685229,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 98779136,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0242,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar check: 1,000 lines of exhaustive `match` at medium",
+     "group": "exhaustiveness",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 111.0974524,
+      "p10_ms": 110.71278040000001,
+      "p90_ms": 114.4880092,
+      "cv": 0.031274428852208574,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 38096896,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 111.3829926,
+      "p10_ms": 110.4710286,
+      "p90_ms": 111.86443319999998,
+      "cv": 0.007405148286452145,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 38027264,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0026,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar check: 1,000 lines of exhaustive `match` at full",
+     "group": "exhaustiveness",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 113.89152199999998,
+      "p10_ms": 112.81509759999999,
+      "p90_ms": 114.36394560000001,
+      "cv": 0.005771475345800694,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 38100992,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 114.429998,
+      "p10_ms": 113.83666079999998,
+      "p90_ms": 117.85907460000001,
+      "cv": 0.01537962438810173,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 38084608,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0047,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar check: 10,000 lines of exhaustive `match` at medium",
+     "group": "exhaustiveness",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 3887.5168540000004,
+      "p10_ms": 3858.842015,
+      "p90_ms": 3971.936835,
+      "cv": 0.012411713118327183,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 309166080,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 3952.877596,
+      "p10_ms": 3906.851364,
+      "p90_ms": 3985.510711,
+      "cv": 0.008716155755578193,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 309518336,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0168,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar check: 10,000 lines of exhaustive `match` at full",
+     "group": "exhaustiveness",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 3940.014308,
+      "p10_ms": 3897.5462150000003,
+      "p90_ms": 3958.725704,
+      "cv": 0.01013223788380414,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 309547008,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 3957.669587,
+      "p10_ms": 3911.073985,
+      "p90_ms": 3980.842671,
+      "cv": 0.01183285889871146,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 309121024,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0045,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cig run: closures",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 52.116449,
+      "p10_ms": 50.972715,
+      "p90_ms": 52.993473,
+      "cv": 0.01697160273920532,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14729216,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 52.06155,
+      "p10_ms": 51.099642,
+      "p90_ms": 52.413726000000004,
+      "cv": 0.013928199797429265,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14729216,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0011,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar run: closures",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 125.645957,
+      "p10_ms": 124.041214,
+      "p90_ms": 125.93245399999999,
+      "cv": 0.008988049725828154,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33148928,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 125.697801,
+      "p10_ms": 124.577446,
+      "p90_ms": 126.19755799999999,
+      "cv": 0.01008732527464323,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33148928,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0004,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cig run: csv",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 103.0981,
+      "p10_ms": 97.52946399999999,
+      "p90_ms": 106.691552,
+      "cv": 0.0369641568504355,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 40718336,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 103.087583,
+      "p10_ms": 96.87729300000001,
+      "p90_ms": 105.187005,
+      "cv": 0.10157273767071494,
+      "noisy": true,
+      "samples": 9,
+      "rss_bytes": 40714240,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0001,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar run: csv",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 158.933831,
+      "p10_ms": 157.771104,
+      "p90_ms": 159.943253,
+      "cv": 0.010051618350188172,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33161216,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 159.219671,
+      "p10_ms": 158.62691900000002,
+      "p90_ms": 160.160173,
+      "cv": 0.003879130394228776,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33210368,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0018,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cig run: deltablue",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 10.235748,
+      "p10_ms": 10.215187,
+      "p90_ms": 10.429282,
+      "cv": 0.014173451995234374,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14725120,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 10.285116,
+      "p10_ms": 10.258435,
+      "p90_ms": 10.726559,
+      "cv": 0.02460647843934815,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14725120,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0048,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar run: deltablue",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 31.604022000000004,
+      "p10_ms": 31.436777,
+      "p90_ms": 32.011646999999996,
+      "cv": 0.011671287963370648,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33214464,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 29.154256,
+      "p10_ms": 28.981935,
+      "p90_ms": 29.300342999999998,
+      "cv": 0.005120830864301621,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33157120,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.084,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cig run: dispatch",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 73.619098,
+      "p10_ms": 71.772691,
+      "p90_ms": 77.401422,
+      "cv": 0.031147401910010197,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14708736,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 77.691233,
+      "p10_ms": 75.52803800000001,
+      "p90_ms": 79.95410799999999,
+      "cv": 0.025315316602171647,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14708736,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0553,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar run: dispatch",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 187.828793,
+      "p10_ms": 186.567388,
+      "p90_ms": 193.339694,
+      "cv": 0.022081713350042522,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33157120,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 186.81750599999998,
+      "p10_ms": 186.696478,
+      "p90_ms": 199.475044,
+      "cv": 0.027781042503289034,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33157120,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0054,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cig run: fannkuch",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 344.38359099999997,
+      "p10_ms": 342.22333199999997,
+      "p90_ms": 347.228025,
+      "cv": 0.007221285356141416,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14729216,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 345.13594800000004,
+      "p10_ms": 343.663169,
+      "p90_ms": 346.300734,
+      "cv": 0.0029680439907729646,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14725120,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0022,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar run: fannkuch",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 679.84691,
+      "p10_ms": 676.5869359999999,
+      "p90_ms": 685.715598,
+      "cv": 0.01783454711800818,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33169408,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 683.090648,
+      "p10_ms": 680.699402,
+      "p90_ms": 691.572362,
+      "cv": 0.017924186108775265,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33169408,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0048,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cig run: fib",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 59.210634999999996,
+      "p10_ms": 59.070423,
+      "p90_ms": 59.395143,
+      "cv": 0.0026642194141577166,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14712832,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 59.159591,
+      "p10_ms": 58.967019,
+      "p90_ms": 59.265864,
+      "cv": 0.0022063509884607257,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14712832,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0009,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar run: fib",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 158.09267699999998,
+      "p10_ms": 157.548568,
+      "p90_ms": 158.745252,
+      "cv": 0.005266570417988755,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33181696,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 159.12603000000001,
+      "p10_ms": 158.003015,
+      "p90_ms": 159.77604300000002,
+      "cv": 0.008668959145816052,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33144832,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0065,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cig run: json-deep",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 7.529133000000001,
+      "p10_ms": 7.199979,
+      "p90_ms": 7.737342,
+      "cv": 0.03182785215812335,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14712832,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 7.5336170000000005,
+      "p10_ms": 7.207375,
+      "p90_ms": 7.80208,
+      "cv": 0.032445702654488345,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14712832,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0006,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar run: json-deep",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 23.604172,
+      "p10_ms": 23.570059,
+      "p90_ms": 23.944229,
+      "cv": 0.008269357292306505,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33161216,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 23.84929,
+      "p10_ms": 21.869903,
+      "p90_ms": 26.959463,
+      "cv": 0.09783995036871085,
+      "noisy": true,
+      "samples": 9,
+      "rss_bytes": 33198080,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0104,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cig run: json",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 71.00474399999999,
+      "p10_ms": 69.865027,
+      "p90_ms": 73.775872,
+      "cv": 0.026320612596612846,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 69263360,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 73.617769,
+      "p10_ms": 72.241416,
+      "p90_ms": 75.424878,
+      "cv": 0.018444773937293286,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 69259264,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0368,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar run: json",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 169.254831,
+      "p10_ms": 167.072377,
+      "p90_ms": 171.389208,
+      "cv": 0.010981440049239004,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 51671040,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 171.877818,
+      "p10_ms": 170.991225,
+      "p90_ms": 172.95523300000002,
+      "cv": 0.006277438167949141,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 53436416,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0155,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cig run: lists",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 37.573713000000005,
+      "p10_ms": 37.313672,
+      "p90_ms": 37.697914,
+      "cv": 0.005439472929979575,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 25219072,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 37.413478,
+      "p10_ms": 37.304583,
+      "p90_ms": 37.491113,
+      "cv": 0.0034399373101102913,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 25214976,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0043,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar run: lists",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 92.361551,
+      "p10_ms": 92.239528,
+      "p90_ms": 92.50968499999999,
+      "cv": 0.007034413739419151,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33157120,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 92.17824800000001,
+      "p10_ms": 91.968093,
+      "p90_ms": 92.789321,
+      "cv": 0.009257946949003634,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33210368,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.002,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cig run: loop",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 66.90638899999999,
+      "p10_ms": 66.749153,
+      "p90_ms": 67.02472499999999,
+      "cv": 0.0029424824838572964,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14729216,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 66.904448,
+      "p10_ms": 66.789322,
+      "p90_ms": 67.02022000000001,
+      "cv": 0.0025249978068971166,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14725120,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar run: loop",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 176.940585,
+      "p10_ms": 175.22822299999999,
+      "p90_ms": 182.995965,
+      "cv": 0.024653231981048334,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33206272,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 175.428355,
+      "p10_ms": 173.73845,
+      "p90_ms": 176.118003,
+      "cv": 0.00996317845285052,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33140736,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0086,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cig run: mandel",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 387.334989,
+      "p10_ms": 384.079765,
+      "p90_ms": 388.577439,
+      "cv": 0.005586031544571041,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14729216,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 388.893308,
+      "p10_ms": 384.814934,
+      "p90_ms": 393.001576,
+      "cv": 0.01640577489368754,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14725120,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.004,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar run: mandel",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 717.756426,
+      "p10_ms": 714.034122,
+      "p90_ms": 726.960667,
+      "cv": 0.016756660005525125,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33157120,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 716.0619419999999,
+      "p10_ms": 712.820664,
+      "p90_ms": 730.9312150000001,
+      "cv": 0.01968942558490984,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33153024,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0024,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cig run: maps",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 55.143083000000004,
+      "p10_ms": 55.101072,
+      "p90_ms": 55.331002999999995,
+      "cv": 0.0030311665944880986,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 23117824,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 55.193428000000004,
+      "p10_ms": 55.097106,
+      "p90_ms": 55.401025,
+      "cv": 0.008097344636734827,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 23117824,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0009,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar run: maps",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 113.770301,
+      "p10_ms": 111.261233,
+      "p90_ms": 115.857124,
+      "cv": 0.020608244815479352,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33153024,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 114.236141,
+      "p10_ms": 112.100825,
+      "p90_ms": 116.348569,
+      "cv": 0.019456222391962482,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33153024,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0041,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cig run: nbody",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 503.594215,
+      "p10_ms": 502.48646500000007,
+      "p90_ms": 506.966538,
+      "cv": 0.006080040045891161,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14708736,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 506.66443699999996,
+      "p10_ms": 503.393644,
+      "p90_ms": 510.024658,
+      "cv": 0.005407218726248579,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14708736,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0061,
+     "noisy_between_rounds": false
+    },
+    {
+     "name": "cigar run: nbody",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 971.446063,
+      "p10_ms": 966.985899,
+      "p90_ms": 978.634822,
+      "cv": 0.008589825022940844,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33185792,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 1108.498005,
+      "p10_ms": 1102.698903,
+      "p90_ms": 1123.154069,
+      "cv": 0.01866679835634265,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33189888,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1411,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cig run: regex-ish",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 52.999013,
+      "p10_ms": 52.903857,
+      "p90_ms": 53.255868,
+      "cv": 0.0032080423508814033,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 29409280,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 59.158260999999996,
+      "p10_ms": 59.039562,
+      "p90_ms": 59.239511,
+      "cv": 0.0075832689846095334,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 29409280,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1162,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar run: regex-ish",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 109.395401,
+      "p10_ms": 107.98423,
+      "p90_ms": 116.38712299999999,
+      "cv": 0.0299609256215564,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33173504,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 120.03367,
+      "p10_ms": 116.761137,
+      "p90_ms": 127.571782,
+      "cv": 0.037990023821313536,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33181696,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0972,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cig run: richards",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 22.172119000000002,
+      "p10_ms": 22.071231,
+      "p90_ms": 22.399191,
+      "cv": 0.006412424996591267,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14725120,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 24.81061,
+      "p10_ms": 24.559134,
+      "p90_ms": 24.885170000000002,
+      "cv": 0.008274692146280958,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14725120,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.119,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar run: richards",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 51.979766,
+      "p10_ms": 51.513448000000004,
+      "p90_ms": 52.339388,
+      "cv": 0.007918367659164446,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33161216,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 56.190004,
+      "p10_ms": 55.997063,
+      "p90_ms": 56.292709,
+      "cv": 0.002246729050217397,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33161216,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.081,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cig run: sieve",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 181.618089,
+      "p10_ms": 181.383033,
+      "p90_ms": 182.009906,
+      "cv": 0.0012415118429880312,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 50384896,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 202.405531,
+      "p10_ms": 199.187266,
+      "p90_ms": 203.39665300000001,
+      "cv": 0.008382621559607397,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 50384896,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1145,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar run: sieve",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 406.190355,
+      "p10_ms": 405.30849800000004,
+      "p90_ms": 408.729504,
+      "cv": 0.0037149321082028453,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33206272,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 460.64592700000003,
+      "p10_ms": 458.897484,
+      "p90_ms": 461.29279099999997,
+      "cv": 0.0021799001130831863,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33157120,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1341,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cig run: spectral",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 195.510738,
+      "p10_ms": 195.348571,
+      "p90_ms": 196.184915,
+      "cv": 0.002529515714190876,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14708736,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 227.401978,
+      "p10_ms": 221.40616799999998,
+      "p90_ms": 241.027411,
+      "cv": 0.03498747282225945,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14708736,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1631,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar run: spectral",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 438.938188,
+      "p10_ms": 437.795906,
+      "p90_ms": 440.767052,
+      "cv": 0.014217606667672689,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33157120,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 497.42132399999997,
+      "p10_ms": 491.393484,
+      "p90_ms": 501.376227,
+      "cv": 0.010014997212932693,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33157120,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1332,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cig run: strbuild",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 10.025862,
+      "p10_ms": 9.918709,
+      "p90_ms": 10.039009,
+      "cv": 0.00681467697091341,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14852096,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 11.191180000000001,
+      "p10_ms": 10.971987,
+      "p90_ms": 11.292881,
+      "cv": 0.01819075001735488,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14725120,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1162,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar run: strbuild",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 51.561349,
+      "p10_ms": 51.046013,
+      "p90_ms": 51.918579,
+      "cv": 0.006436675675089986,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33222656,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 55.686896,
+      "p10_ms": 54.73524200000001,
+      "p90_ms": 56.707923,
+      "cv": 0.015440630119415804,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33222656,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.08,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cig run: strings",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 33.082013,
+      "p10_ms": 33.015055000000004,
+      "p90_ms": 33.093902,
+      "cv": 0.001125397180431464,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 18923520,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 35.779446,
+      "p10_ms": 35.534503,
+      "p90_ms": 36.592293,
+      "cv": 0.013713474958043755,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 18923520,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0815,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar run: strings",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 71.43592,
+      "p10_ms": 71.237914,
+      "p90_ms": 72.64079199999999,
+      "cv": 0.009275872264420719,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33153024,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 78.056432,
+      "p10_ms": 76.37285800000001,
+      "p90_ms": 78.797526,
+      "cv": 0.015173830100099095,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33153024,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0927,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cig run: trees",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 335.053989,
+      "p10_ms": 334.427521,
+      "p90_ms": 336.570643,
+      "cv": 0.0036946601823320173,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14712832,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 385.28767200000004,
+      "p10_ms": 384.58979700000003,
+      "p90_ms": 401.456106,
+      "cv": 0.021680592449860342,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 14712832,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1499,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar run: trees",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 743.056054,
+      "p10_ms": 738.574022,
+      "p90_ms": 744.9563099999999,
+      "cv": 0.011537342503335015,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33161216,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 837.946572,
+      "p10_ms": 830.898276,
+      "p90_ms": 845.537232,
+      "cv": 0.010523226252303447,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33161216,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1277,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cig run: words",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 47.19419,
+      "p10_ms": 47.023264000000005,
+      "p90_ms": 47.223286,
+      "cv": 0.0018302803091378756,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 27312128,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 52.003752,
+      "p10_ms": 51.05208,
+      "p90_ms": 52.386723,
+      "cv": 0.011151992110154474,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 27312128,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1019,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar run: words",
+     "group": "superset",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 89.983534,
+      "p10_ms": 89.656679,
+      "p90_ms": 90.380011,
+      "cv": 0.004405473042992705,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33161216,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 102.258669,
+      "p10_ms": 100.81707,
+      "p90_ms": 107.23065199999999,
+      "cv": 0.027777413409170504,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 33161216,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1364,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cigar check: CigScript examples, as mild",
+     "group": "check-corpus",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 31.496258599999997,
+      "p10_ms": 31.476395000000004,
+      "p90_ms": 31.578041000000002,
+      "cv": 0.0031316402288316483,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 9084928,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 35.0260522,
+      "p10_ms": 34.3836438,
+      "p90_ms": 35.1092202,
+      "cv": 0.009892768585767008,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 9080832,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1121,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "cig check: CigScript examples, for comparison",
+     "group": "check-corpus",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 49.019703199999995,
+      "p10_ms": 30.239749,
+      "p90_ms": 51.717492400000005,
+      "cv": 0.2689195252268885,
+      "noisy": true,
+      "samples": 9,
+      "rss_bytes": 13578240,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 51.8853602,
+      "p10_ms": 31.3076684,
+      "p90_ms": 51.940141,
+      "cv": 0.24218025704256588,
+      "noisy": true,
+      "samples": 9,
+      "rss_bytes": 13582336,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.0585,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "memory: binary trees, the CigarScript runtime today",
+     "group": "memory-trees",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 852.1025956000001,
+      "p10_ms": 757.9670566,
+      "p90_ms": 856.0007922000001,
+      "cv": 0.0562666658173157,
+      "noisy": true,
+      "samples": 9,
+      "rss_bytes": 34123776,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 757.9495174,
+      "p10_ms": 753.8632778,
+      "p90_ms": 851.7832238000001,
+      "cv": 0.05229736731532838,
+      "noisy": true,
+      "samples": 9,
+      "rss_bytes": 34127872,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1242,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "memory: n-body, the CigarScript runtime today",
+     "group": "memory-nbody",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 1097.9412207999999,
+      "p10_ms": 1077.2954842000001,
+      "p90_ms": 1103.5686828,
+      "cv": 0.010748986225083773,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 34197504,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 968.7201590000001,
+      "p10_ms": 960.3333753999999,
+      "p90_ms": 1093.7800454,
+      "cv": 0.060231977795737524,
+      "noisy": true,
+      "samples": 9,
+      "rss_bytes": 34148352,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.1334,
+     "noisy_between_rounds": true
+    },
+    {
+     "name": "memory: lists: sort, filter, map, the CigarScript runtime today",
+     "group": "memory-lists",
+     "budget": null,
+     "outcome": {
+      "state": "timed",
+      "median_ms": 84.54090260000001,
+      "p10_ms": 83.96535859999999,
+      "p90_ms": 88.77427159999999,
+      "cv": 0.024945052816098833,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 34181120,
+      "metrics": []
+     },
+     "outcome_round_2": {
+      "state": "timed",
+      "median_ms": 84.0332446,
+      "p10_ms": 83.9139402,
+      "p90_ms": 85.07690260000001,
+      "cv": 0.007723027146994176,
+      "noisy": false,
+      "samples": 9,
+      "rss_bytes": 34123776,
+      "metrics": []
+     },
+     "spread_between_rounds": 0.006,
+     "noisy_between_rounds": false
+    }
+   ]
+  }
+ ],
+ "start_up": [
+  {
+   "name": "true",
+   "group": "floor",
+   "budget": null,
+   "outcome": {
+    "state": "timed",
+    "median_ms": 0.5115928,
+    "p10_ms": 0.49481505,
+    "p90_ms": 0.5481612499999999,
+    "cv": 0.05777725161183104,
+    "noisy": true,
+    "samples": 15,
+    "rss_bytes": 9084928,
+    "metrics": []
+   },
+   "outcome_round_2": {
+    "state": "timed",
+    "median_ms": 0.73444705,
+    "p10_ms": 0.5917943,
+    "p90_ms": 0.7427504,
+    "cv": 0.06980133436139116,
+    "noisy": true,
+    "samples": 15,
+    "rss_bytes": 9084928,
+    "metrics": []
+   },
+   "spread_between_rounds": 0.4356,
+   "noisy_between_rounds": true
+  },
+  {
+   "name": "tsc --version",
+   "group": "floor",
+   "budget": null,
+   "outcome": {
+    "state": "timed",
+    "median_ms": 225.3960982,
+    "p10_ms": 222.6762354,
+    "p90_ms": 229.03867099999997,
+    "cv": 0.009724768995235143,
+    "noisy": false,
+    "samples": 15,
+    "rss_bytes": 88879104,
+    "metrics": []
+   },
+   "outcome_round_2": {
+    "state": "timed",
+    "median_ms": 223.76341279999997,
+    "p10_ms": 222.62169699999998,
+    "p90_ms": 229.01641679999997,
+    "cv": 0.010326213445618928,
+    "noisy": false,
+    "samples": 15,
+    "rss_bytes": 88977408,
+    "metrics": []
+   },
+   "spread_between_rounds": 0.0073,
+   "noisy_between_rounds": false
+  },
+  {
+   "name": "cig --version",
+   "group": "cig",
+   "budget": null,
+   "outcome": {
+    "state": "timed",
+    "median_ms": 5.1627241999999995,
+    "p10_ms": 5.00112745,
+    "p90_ms": 5.18572345,
+    "cv": 0.021491407111021866,
+    "noisy": false,
+    "samples": 15,
+    "rss_bytes": 12222464,
+    "metrics": []
+   },
+   "outcome_round_2": {
+    "state": "timed",
+    "median_ms": 4.0471278,
+    "p10_ms": 2.2633094999999996,
+    "p90_ms": 5.1689457,
+    "cv": 0.2969698974561956,
+    "noisy": true,
+    "samples": 15,
+    "rss_bytes": 12222464,
+    "metrics": []
+   },
+   "spread_between_rounds": 0.2757,
+   "noisy_between_rounds": true
+  },
+  {
+   "name": "cig check, a 39-line file",
+   "group": "cig",
+   "budget": null,
+   "outcome": {
+    "state": "timed",
+    "median_ms": 6.0596742500000005,
+    "p10_ms": 6.023908950000001,
+    "p90_ms": 6.0788026,
+    "cv": 0.0036470633180602846,
+    "noisy": false,
+    "samples": 15,
+    "rss_bytes": 13529088,
+    "metrics": []
+   },
+   "outcome_round_2": {
+    "state": "timed",
+    "median_ms": 6.06439965,
+    "p10_ms": 6.04485655,
+    "p90_ms": 6.07777305,
+    "cv": 0.0027907765451913643,
+    "noisy": false,
+    "samples": 15,
+    "rss_bytes": 13582336,
+    "metrics": []
+   },
+   "spread_between_rounds": 0.0008,
+   "noisy_between_rounds": false
+  },
+  {
+   "name": "cigar check, a 39-line file",
+   "group": "cigar",
+   "budget": null,
+   "outcome": {
+    "state": "timed",
+    "median_ms": 4.7025416,
+    "p10_ms": 4.68614945,
+    "p90_ms": 4.71775695,
+    "cv": 0.0025040857373995877,
+    "noisy": false,
+    "samples": 15,
+    "rss_bytes": 9093120,
+    "metrics": []
+   },
+   "outcome_round_2": {
+    "state": "timed",
+    "median_ms": 4.7079701,
+    "p10_ms": 4.690514500000001,
+    "p90_ms": 5.0376781,
+    "cv": 0.02522705242822613,
+    "noisy": false,
+    "samples": 15,
+    "rss_bytes": 9080832,
+    "metrics": []
+   },
+   "spread_between_rounds": 0.0012,
+   "noisy_between_rounds": false
+  },
+  {
+   "name": "cigar --version",
+   "group": "cigar",
+   "budget": null,
+   "outcome": {
+    "state": "timed",
+    "median_ms": 1.02577315,
+    "p10_ms": 0.7922193,
+    "p90_ms": 1.06419395,
+    "cv": 0.09593736925042054,
+    "noisy": true,
+    "samples": 15,
+    "rss_bytes": 9093120,
+    "metrics": []
+   },
+   "outcome_round_2": {
+    "state": "timed",
+    "median_ms": 0.8144264,
+    "p10_ms": 0.7896927,
+    "p90_ms": 0.8333731999999999,
+    "cv": 0.017060064970819803,
+    "noisy": false,
+    "samples": 15,
+    "rss_bytes": 9084928,
+    "metrics": []
+   },
+   "spread_between_rounds": 0.2595,
+   "noisy_between_rounds": true
+  }
+ ],
+ "peak_rss": [
+  {
+   "name": "true",
+   "runs": 5,
+   "median_bytes": 1286144,
+   "max_bytes": 1339392,
+   "how": "ru_maxrss from wait4, forked from a small C parent (harness maxrss.c), five runs",
+   "median_bytes_round_2": 1294336
+  },
+  {
+   "name": "cigar check, a 39-line file",
+   "runs": 5,
+   "median_bytes": 6524928,
+   "max_bytes": 6524928,
+   "how": "ru_maxrss from wait4, forked from a small C parent (harness maxrss.c), five runs",
+   "median_bytes_round_2": 6524928
+  },
+  {
+   "name": "cig check, a 39-line file",
+   "runs": 5,
+   "median_bytes": 13524992,
+   "max_bytes": 13524992,
+   "how": "ru_maxrss from wait4, forked from a small C parent (harness maxrss.c), five runs",
+   "median_bytes_round_2": 13524992
+  }
+ ],
+ "instructions": [
+  {
+   "name": "true",
+   "tool": "perf stat -e instructions:u",
+   "runs": 5,
+   "median": 146246,
+   "min": 146245,
+   "max": 146248,
+   "exit": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "median_round_2": 146248,
+   "spread_between_rounds": 1e-05
+  },
+  {
+   "name": "cig check, a 39-line file",
+   "tool": "perf stat -e instructions:u",
+   "runs": 5,
+   "median": 1982025,
+   "min": 1981973,
+   "max": 1982302,
+   "exit": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "median_round_2": 1981990,
+   "spread_between_rounds": 2e-05
+  },
+  {
+   "name": "cigar check, a 39-line file",
+   "tool": "perf stat -e instructions:u",
+   "runs": 5,
+   "median": 11668640,
+   "min": 11668476,
+   "max": 11670712,
+   "exit": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "median_round_2": 11668893,
+   "spread_between_rounds": 2e-05
+  }
+ ]
+}
