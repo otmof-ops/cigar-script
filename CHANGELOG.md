@@ -8,9 +8,11 @@ project follows semantic versioning.
 
 ## Unreleased
 
-- **cig 1.24.0.** The `cigscript` dependency moved from tag `v1.21.0` to
-  `v1.24.0`. Nothing in CigarScript's source or output changed; the CI
-  checkout and the nightly benchmark use the same cig.
+- **cig 1.25.0.** The `cigscript` dependency moved from tag `v1.21.0` to
+  `v1.24.0`, and from there to `v1.25.0`. Nothing in CigarScript's source
+  or output changed; the CI checkout and the nightly benchmark use the same
+  cig. `cigar run` still runs a script on its own built-in runtime, on the
+  tree-walker: cig 1.25.0's `cig run --engine vm` is not reached from here.
 - **Maps with keys that are not text, and sets (#38).** `Map<K, V>` with a
   key that is not text, and `Set<T>`, for any `Hash + Eq` type (`E1230`
   otherwise), held in cig maps keyed by `hash()`, with the keys read back as
